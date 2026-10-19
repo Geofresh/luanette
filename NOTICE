@@ -1,0 +1,63 @@
+Luanette
+Copyright (c) 2026 Geofresh
+Licensed under the MIT License (see LICENSE).
+
+The MIT license covers the code and documentation written for this project.
+The material below keeps its own license.
+
+Lua
+---
+Lua 5.4.7 in engine/lua/ (the core and the base, string, table, math and
+coroutine libraries) is from https://www.lua.org/ftp/lua-5.4.7.tar.gz
+(sha256 9fbf5e28ef86c69858f6d3d34eccc32e911c1a28b4120ff3e84aaa70cfbf1e30),
+Copyright (C) 1994-2024 Lua.org, PUC-Rio, MIT License. It is unmodified except
+luaconf.h, where the build may set LUA_32BITS (the firmware uses 32-bit
+integers and floats). License: LICENSES/Lua-MIT.txt.
+
+Jet
+---
+Jet in engine/jet/ (a software 3D rasteriser; Sample.cpp, Example.cpp and the
+example config left out) is from https://github.com/CubeCoders/Jet at commit
+c56dfc0c012ba7a09a6e49b4123340ec24981441, Copyright (c) 2026 CubeCoders Limited,
+MIT License. It is modified, each change marked "carts patch": Rasterizer gains
+setBandBuffers and a column range (xBandMin, xBandMax); Scene gains
+rasterizeBandInto and rasterizeListInto (drawing a band, or a binned list of
+its triangles, into caller buffers, from two cores at once), drawOrder,
+triangleRows and queuedTriangle, and rasterizeBand calls the shared
+rasterizeBandWith; the trig tables are allocated by the first
+initializeTrigTables (were static arrays); a frontend's JetConfig.hpp may
+define PERF_CRITICAL (code placement). engine/stage.cpp adapts Jet's lighting
+arithmetic (jetShadeBrightness, jetModulateRGB565) for its own pipeline.
+License: LICENSES/Jet-MIT.txt.
+
+Fonts
+-----
+engine/hd_fonts.cpp holds glyph bitmaps rendered (tools/hd_fonts.py) from
+JetBrains Mono Medium and Bold, Copyright 2020 The JetBrains Mono Project
+Authors (https://github.com/JetBrains/JetBrainsMono), and VT323, Copyright 2011
+The VT323 Project Authors. Both are under the SIL Open Font License 1.1:
+LICENSES/OFL-JetBrainsMono.txt, LICENSES/OFL-VT323.txt.
+
+Hermes Gadget SDK
+-----------------
+The board drivers in board/ (axp2101.*, battery_curve.hpp, pcf85063.hpp,
+speaker_pa.hpp, and the panel, touch and speaker code adapted in panel.cpp,
+touch.cpp and speaker.cpp) and the helpers in support/ come from the Hermes
+Gadget SDK, Copyright (c) 2026 Hermes Gadget SDK contributors, MIT License
+(the same terms as LICENSE). The carts engine was first written inside a fork
+of that SDK and moved here.
+
+Waveshare
+---------
+The CO5300 start-up commands for the 410x502 module (board/panel.cpp) and the
+ESP32-S3-Touch-AMOLED-2.06 pin map (board/board.hpp) follow Waveshare's board
+support package for the ESP32-S3-Touch-AMOLED-2.06, version 2.0.0,
+https://github.com/waveshareteam/Waveshare-ESP32-components/tree/9daffb7168b3c093a330da700988a22092294eef/bsp/esp32_s3_touch_amoled_2_06,
+Apache License 2.0 (LICENSES/Apache-2.0.txt), checked against the
+manufacturer's schematic.
+
+Fetched at build time
+---------------------
+ESP-IDF, esp_codec_dev and esp_lcd_touch_ft5x06 (Apache License 2.0, Espressif
+Systems) are downloaded by the build and keep their own licenses. The Python
+tools use pyserial, Pillow and lupa, each under its own license.

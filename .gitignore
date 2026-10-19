@@ -1,0 +1,11 @@
+firmware/.pio/
+firmware/build/
+firmware/managed_components/
+firmware/sdkconfig
+firmware/sdkconfig.*
+!firmware/sdkconfig.defaults
+firmware/dependencies.lock
+host/build/
+__pycache__/
+*.pyc
+web/build/

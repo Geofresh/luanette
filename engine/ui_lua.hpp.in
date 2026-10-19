@@ -1,0 +1,7 @@
+// engine/ui.lua, made into a string by the build (configure_file): the helpers loaded before every
+// cart (Cart::start). Edit ui.lua, not this.
+#pragma once
+
+namespace carts {
+inline constexpr char kUiLua[] = R"hgui(@HG_UI_LUA@)hgui";
+}  // namespace carts

@@ -1,0 +1,39 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  host:
+    # The engine on a desktop: unit tests, every example and the launcher through check.py, and the
+    # parity test (check.py against the device runtime, pixel for pixel).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r tools/requirements.txt
+      - run: python tools/build_lupa32.py
+      - run: cmake -S host -B host/build && cmake --build host/build -j
+      - run: host/build/host_tests
+      - run: for c in examples/*.lua engine/builtin/launcher.lua; do python tools/check.py "$c" > /dev/null || { python tools/check.py "$c"; exit 1; }; done
+      - run: for c in tests/carts/primitives.lua tests/carts/triangles.lua tests/carts/lazy.lua; do python tests/parity.py "$c"; done
+
+  firmware:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-${{ hashFiles('firmware/platformio.ini', 'firmware/main/idf_component.yml') }}
+      - run: pip install platformio==6.2.0
+      - run: pio run -d firmware

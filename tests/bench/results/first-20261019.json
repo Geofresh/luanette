@@ -1,0 +1,232 @@
+{
+ "hb_3d": {
+  "fps": 59.6,
+  "late": 0,
+  "lua_ms": 0.71,
+  "lua_max": 0.78,
+  "prepare_ms": 2.14,
+  "draw_ms": 6.92,
+  "sent_ms": 12.47,
+  "rows": 0.0
+ },
+ "hb_3d0": {
+  "fps": 59.6,
+  "late": 0,
+  "lua_ms": 0.72,
+  "lua_max": 0.78,
+  "prepare_ms": 1.89,
+  "draw_ms": 3.63,
+  "sent_ms": 10.18,
+  "rows": 0.0
+ },
+ "hb_3de": {
+  "fps": 59.7,
+  "late": 0,
+  "lua_ms": 0.74,
+  "lua_max": 0.81,
+  "prepare_ms": 1.92,
+  "draw_ms": 3.71,
+  "sent_ms": 10.2,
+  "rows": 0.0
+ },
+ "hb_3do": {
+  "fps": 59.7,
+  "late": 0,
+  "lua_ms": 0.72,
+  "lua_max": 0.79,
+  "prepare_ms": 2.13,
+  "draw_ms": 6.8,
+  "sent_ms": 12.36,
+  "rows": 0.0
+ },
+ "hb_blend": {
+  "fps": 14.9,
+  "late": 75,
+  "lua_ms": 48.48,
+  "lua_max": 48.62,
+  "rows": 0.0,
+  "sent_ms": 0.51,
+  "kpx": 0.0,
+  "publish_ms": 8.53
+ },
+ "hb_blend2": {
+  "fps": 29.9,
+  "late": 0,
+  "lua_ms": 14.51,
+  "lua_max": 14.66,
+  "rows": 0.0,
+  "sent_ms": 0.45,
+  "kpx": 0.0,
+  "publish_ms": 5.64
+ },
+ "hb_card": {
+  "fps": 29.9,
+  "late": 0,
+  "lua_ms": 3.08,
+  "lua_max": 3.21,
+  "rows": 0.0,
+  "sent_ms": 0.46,
+  "kpx": 0.0,
+  "publish_ms": 2.23
+ },
+ "hb_circ": {
+  "fps": 29.9,
+  "late": 0,
+  "lua_ms": 2.07,
+  "lua_max": 2.24,
+  "rows": 0.0,
+  "sent_ms": 0.45,
+  "kpx": 0.0,
+  "publish_ms": 1.06
+ },
+ "hb_clear": {
+  "fps": 29.9,
+  "late": 0,
+  "lua_ms": 6.3,
+  "lua_max": 6.41,
+  "rows": 0.0,
+  "sent_ms": 0.45,
+  "kpx": 0.0,
+  "publish_ms": 5.65
+ },
+ "hb_clear0": {
+  "fps": 29.9,
+  "late": 0,
+  "lua_ms": 15.88,
+  "lua_max": 16.03,
+  "rows": 0.0,
+  "sent_ms": 0.45,
+  "kpx": 0.0,
+  "publish_ms": 5.66
+ },
+ "hb_glass_clear": {
+  "fps": 29.9,
+  "late": 0,
+  "lua_ms": 9.01,
+  "lua_max": 9.12,
+  "rows": 0.0,
+  "sent_ms": 0.45,
+  "kpx": 0.0,
+  "publish_ms": 8.06
+ },
+ "hb_glass_flip": {
+  "fps": 29.8,
+  "late": 0,
+  "lua_ms": 18.51,
+  "lua_max": 19.39,
+  "rows": 227.4,
+  "sent_ms": 17.8,
+  "kpx": 198.2,
+  "publish_ms": 8.36
+ },
+ "hb_glass_list": {
+  "fps": 29.9,
+  "late": 0,
+  "lua_ms": 14.26,
+  "lua_max": 14.44,
+  "rows": 0.0,
+  "sent_ms": 0.49,
+  "kpx": 0.0,
+  "publish_ms": 7.96
+ },
+ "hb_glass_tick": {
+  "fps": 29.9,
+  "late": 0,
+  "lua_ms": 1.55,
+  "lua_max": 2.13,
+  "rows": 15.8,
+  "sent_ms": 1.76,
+  "kpx": 7.7,
+  "publish_ms": 1.36
+ },
+ "hb_grad": {
+  "fps": 29.9,
+  "late": 0,
+  "lua_ms": 7.15,
+  "lua_max": 7.29,
+  "rows": 0.0,
+  "sent_ms": 0.45,
+  "kpx": 0.0,
+  "publish_ms": 5.65
+ },
+ "hb_img": {
+  "fps": 29.9,
+  "late": 0,
+  "lua_ms": 1.57,
+  "lua_max": 1.73,
+  "rows": 0.0,
+  "sent_ms": 0.45,
+  "kpx": 0.0,
+  "publish_ms": 2.93
+ },
+ "hb_imgalpha": {
+  "fps": 29.9,
+  "late": 0,
+  "lua_ms": 12.14,
+  "lua_max": 12.31,
+  "rows": 0.0,
+  "sent_ms": 0.46,
+  "kpx": 0.0,
+  "publish_ms": 4.31
+ },
+ "hb_imgscale": {
+  "fps": 29.8,
+  "late": 0,
+  "lua_ms": 6.97,
+  "lua_max": 7.14,
+  "rows": 0.0,
+  "sent_ms": 0.45,
+  "kpx": 0.0,
+  "publish_ms": 5.68
+ },
+ "hb_line": {
+  "fps": 29.9,
+  "late": 0,
+  "lua_ms": 1.92,
+  "lua_max": 2.07,
+  "rows": 0.0,
+  "sent_ms": 0.45,
+  "kpx": 0.0,
+  "publish_ms": 2.38
+ },
+ "hb_noop": {
+  "fps": 29.9,
+  "late": 0,
+  "lua_ms": 0.14,
+  "lua_max": 0.26,
+  "rows": 0.0,
+  "sent_ms": 0.29,
+  "kpx": 0.0,
+  "publish_ms": 0.03
+ },
+ "hb_ring": {
+  "fps": 29.9,
+  "late": 0,
+  "lua_ms": 3.04,
+  "lua_max": 3.15,
+  "rows": 0.0,
+  "sent_ms": 0.45,
+  "kpx": 0.0,
+  "publish_ms": 2.76
+ },
+ "hb_shapes": {
+  "fps": 29.9,
+  "late": 0,
+  "lua_ms": 10.07,
+  "lua_max": 10.27,
+  "rows": 0.0,
+  "sent_ms": 0.45,
+  "kpx": 0.0,
+  "publish_ms": 6.1
+ },
+ "hb_text": {
+  "fps": 29.9,
+  "late": 0,
+  "lua_ms": 3.61,
+  "lua_max": 3.79,
+  "rows": 0.0,
+  "sent_ms": 0.46,
+  "kpx": 0.0,
+  "publish_ms": 1.86
+ }
+}

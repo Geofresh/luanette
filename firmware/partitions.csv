@@ -1,0 +1,11 @@
+# The board's 32 MB flash: two 4 MB app slots, NVS (carts' saves, the timezone), the `assets`
+# partition where sent carts and their images are kept (engine/esp32/cart_store.cpp), and room for
+# a crash's core dump.
+# Name,     Type, SubType, Offset,    Size
+nvs,        data, nvs,     0x9000,    0x10000
+otadata,    data, ota,     0x19000,   0x2000
+phy_init,   data, phy,     0x1b000,   0x1000
+ota_0,      app,  ota_0,   0x20000,   0x400000
+ota_1,      app,  ota_1,   0x420000,  0x400000
+assets,     data, spiffs,  0x820000,  0x400000
+coredump,   data, coredump,0xC20000,  0x40000

@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Luanette playground</title>
+<meta name="description" content="Play and edit Luanette carts in your browser: the same engine that runs on ESP32-S3 boards, compiled to WebAssembly.">
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --line: #30363d; --text: #e6edf3; --muted: #8b949e;
+    --accent: #f0b429; --danger: #ff7b72;
+    --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, sans-serif; }
+  a { color: var(--accent); }
+  header { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; padding: 16px 24px 0; }
+  header h1 { margin: 0; font-size: 20px; font-weight: 600; }
+  header p { margin: 0; color: var(--muted); }
+  main { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 24px; padding: 16px 24px 32px; align-items: start; }
+  @media (max-width: 860px) { main { grid-template-columns: minmax(0, 1fr); padding: 16px; } header { padding: 16px 16px 0; } }
+  .device { justify-self: center; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .bezel { background: #000; padding: 14px; border-radius: 34% / 27%; border: 1px solid var(--line); }
+  canvas { display: block; width: min(370px, 82vw); aspect-ratio: 410 / 502; border-radius: 24.4% / 19.9%;
+           touch-action: none; cursor: pointer; image-rendering: auto; }
+  .keys { color: var(--muted); font-size: 13px; text-align: center; max-width: 380px; }
+  kbd { font: 12px var(--mono); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; color: var(--text); }
+  .side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .carts { display: flex; flex-wrap: wrap; gap: 8px; }
+  button { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+           padding: 6px 12px; cursor: pointer; }
+  button:hover { border-color: var(--muted); }
+  button.on { border-color: var(--accent); color: var(--accent); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #1a1300; font-weight: 600; }
+  .bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .bar .hint { color: var(--muted); font-size: 13px; margin-left: auto; }
+  textarea { width: 100%; min-height: 420px; resize: vertical; background: var(--panel); color: var(--text);
+             border: 1px solid var(--line); border-radius: 8px; padding: 12px; font: 13px/1.5 var(--mono); tab-size: 2; }
+  textarea:focus { outline: none; border-color: var(--muted); }
+  #status { font: 13px/1.5 var(--mono); color: var(--muted); white-space: pre-wrap; min-height: 1.5em; }
+  #status.error { color: var(--danger); }
+  @media (pointer: coarse) { .desk { display: none; } }
+  footer { color: var(--muted); font-size: 13px; padding: 0 24px 24px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Luanette playground</h1>
+  <p>A tiny Lua game console for ESP32-S3 boards, running here on the same engine compiled to WebAssembly.
+     <a href="https://github.com/Geofresh/luanette">Source and docs</a></p>
+</header>
+<main>
+  <section class="device">
+    <div class="bezel"><canvas id="glass" width="410" height="502" aria-label="The console's screen"></canvas></div>
+    <div class="keys">
+      Tap or click is <kbd>A</kbd>, drag is the d-pad.<span class="desk"> Keys: arrows, <kbd>Z</kbd> for A,
+      <kbd>X</kbd> for B, <kbd>Shift</kbd>+arrows to tilt.</span>
+    </div>
+    <button id="tilt" hidden>Use this phone's tilt</button>
+  </section>
+  <section class="side">
+    <div class="carts" id="carts"></div>
+    <div class="bar">
+      <button class="primary" id="run">Run</button>
+      <button id="reset">Reset to original</button>
+      <span class="hint desk"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> runs your edits</span>
+    </div>
+    <textarea id="code" spellcheck="false" aria-label="The cart's Lua source"></textarea>
+    <div id="status"></div>
+  </section>
+</main>
+<footer>
+  The API is in <a href="https://github.com/Geofresh/luanette/blob/main/docs/api.md">docs/api.md</a>. Edits stay in
+  this browser; to put a cart on a board, save it as a .lua file and send it with <code>tools/push.py</code>.
+</footer>
+<script src="luanette.js"></script>
+<script src="playground.js"></script>
+</body>
+</html>

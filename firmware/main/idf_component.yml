@@ -1,0 +1,4 @@
+dependencies:
+  idf: ">=6.0"
+  espressif/esp_codec_dev: "~1.5"       # the ES8311 speaker codec
+  espressif/esp_lcd_touch_ft5x06: "^1"  # the FT3168 touch controller (FT5x06 reports)
