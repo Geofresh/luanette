@@ -11,9 +11,9 @@ The name is Lua plus *lunette*, French for a little moon or a small window.
 **[Try it in your browser](https://geofresh.github.io/luanette/).** The five example carts run
 there on the same engine, compiled to WebAssembly, next to an editor.
 
-![The launcher, Lock & Load, Bubbles, Night Swarm, Dice and Mochi](docs/images/screens.png)
+<img src="docs/images/board.jpg" width="320" alt="Luanette's launcher on the Waveshare ESP32-S3-Touch-AMOLED-2.06">
 
-<!-- a photo of the board running Lock & Load would go here -->
+![The launcher, Lock & Load, Bubbles, Night Swarm, Dice and Mochi](docs/images/screens.png)
 
 It's in the spirit of PICO-8 but not compatible with it; the API is its own (`docs/api.md`).
 One board is supported so far, the Waveshare ESP32-S3-Touch-AMOLED-2.06 (410x502 AMOLED,
