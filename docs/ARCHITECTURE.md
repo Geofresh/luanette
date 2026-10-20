@@ -4,7 +4,7 @@ This is for people changing the engine or moving it to another board. To write c
 `api.md` (the API) and `DESIGN.md` (how to make one run well) instead.
 
 A cart is one Lua 5.4 file with `_init`, `_update` and `_draw`. It draws into a 128x128
-picture of 16 colours, and optionally into a full-colour layer and a lit 3D scene. The firmware
+picture of 16 colors, and optionally into a full-color layer and a lit 3D scene. The firmware
 runs it at up to 60 frames a second on an ESP32-S3. Each frame, only the pixels that changed are
 sent to the panel, timed so that a frame never shows half drawn.
 
@@ -16,14 +16,14 @@ controller over QSPI, FT3168 touch, QMI8658 IMU, ES8311 speaker codec, 8 MB PSRA
 ```
 engine/                   the engine; no board code
   cart.hpp, cart.cpp      the runtime: the Lua sandbox, its heap and frame deadline, the whole API
-  hd.hpp, hd.cpp          the full-colour layer (hd.*): RGB565 rows in PSRAM, change tracking
+  hd.hpp, hd.cpp          the full-color layer (hd.*): RGB565 rows in PSRAM, change tracking
   hd_pie.S                the layer's two hottest loops in the S3's vector (PIE) instructions
   hd_fonts.*              the layer's fonts (JetBrains Mono, a bold face, VT323)
   stage.hpp, stage.cpp    the 3D stage: meshes, lighting, depth-buffered rasteriser
   stage_pie.S             the stage's span loop in PIE instructions
   jet/                    Jet (CubeCoders, MIT), vendored and patched; the stage builds on it
   lua/                    Lua 5.4.7, vendored, built with LUA_32BITS
-  sfx.hpp, sfx.cpp        the eight built-in sounds, synthesised
+  sfx.hpp, sfx.cpp        the eight built-in sounds, synthesized
   ui.lua                  helpers every cart gets (ui.changed, ui.scroller); compiled in
   builtin/                the launcher, itself a cart
   host/                   cartrun (the runtime on a PC), sfx_wav and stagerun
@@ -60,7 +60,7 @@ each vertical blank. Everything is scheduled around those passes.
 
 1. **Lua runs** (core 1, the firmware's task). One panel pass before the frame is due, the
    player calls the cart's `_update` and `_draw`. They draw into the 128x128
-   picture (palette indices, internal RAM) and, if the cart uses them, the full-colour layer
+   picture (palette indices, internal RAM) and, if the cart uses them, the full-color layer
    and the 3D scene. A frame that runs past 100 ms is stopped: a hardware timer interrupts the
    Lua VM, so a runaway loop can't hang the board.
 2. **Handoff.** The picture is copied to the sender's buffer. The layer publishes: rows drawn
@@ -205,7 +205,7 @@ The log shares the port, so a reader takes only lines that start with `@` as ans
 
 ## Sound (`sfx.cpp`, `esp32/sound.*`)
 
-`sfx_render` synthesises the eight effects as 16 kHz PCM, from square, triangle and noise
+`sfx_render` synthesizes the eight effects as 16 kHz PCM, from square, triangle and noise
 voices with pitch slides and linear envelopes. The same code runs on the board and in
 `host/sfx_wav`, which writes them as WAV files for listening. On the board a task on core 0
 mixes up to four at once in 10 ms frames, opens the speaker for them, and lets it go after;

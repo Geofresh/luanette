@@ -1,4 +1,4 @@
-// The carts' built-in sounds (sfx(n), docs/api.md): eight short effects synthesised as 16-bit
+// The carts' built-in sounds (sfx(n), docs/api.md): eight short effects synthesized as 16-bit
 // mono PCM, in the spirit of an 8-bit console's sound chip (square, triangle and noise voices with
 // pitch slides and envelopes). Portable: the board plays them (esp32/sound.hpp), and the desktop
 // build renders them to WAV files to listen to (host/sfx_wav.cpp).

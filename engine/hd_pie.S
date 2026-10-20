@@ -1,4 +1,4 @@
-// The full-colour layer's blend in the ESP32-S3's vector instructions (PIE: 128-bit registers,
+// The full-color layer's blend in the ESP32-S3's vector instructions (PIE: 128-bit registers,
 // eight 16-bit lanes): front rows blended over what the panel row has, by their alpha. Bit for
 // bit what hd.cpp's scalar code gives (compose()'s over_px): hd_pie_selftest() checks that on the
 // board. (Baking rows for the panel is hg::finish_run, support/hg/panel_pixels.hpp.)

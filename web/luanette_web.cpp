@@ -84,21 +84,21 @@ uint16_t pack(uint32_t r, uint32_t g, uint32_t b) {
   return static_cast<uint16_t>(v >> 8 | v << 8);
 }
 
-// The cart's 16 colours, and its scanline rows a quarter darker (as cartrun and the board).
-void set_colours(const carts::Cart& c) {
+// The cart's 16 colors, and its scanline rows a quarter darker (as cartrun and the board).
+void set_colors(const carts::Cart& c) {
   for (int i = 0; i < 16; ++i) {
-    const uint32_t rgb = c.colours()[i];
+    const uint32_t rgb = c.colors()[i];
     g_pal[i] = pack(rgb >> 16 & 255, rgb >> 8 & 255, rgb & 255);
     g_dim[i] = pack((rgb >> 16 & 255) * 3 / 4, (rgb >> 8 & 255) * 3 / 4, (rgb & 255) * 3 / 4);
   }
-  g_pal_ver = c.colours_version();
+  g_pal_ver = c.colors_version();
 }
 
-// The whole glass as the board shows it: the window's rows band by band (the scene or colour 0,
+// The whole glass as the board shows it: the window's rows band by band (the scene or color 0,
 // the layer under, the picture, the layer over), and on a full canvas the rows around it.
 void compose() {
   carts::Cart& cart = *g_cart;
-  if (cart.colours_version() != g_pal_ver) set_colours(cart);
+  if (cart.colors_version() != g_pal_ver) set_colors(cart);
   carts::Stage* st = cart.stage();
   carts::Hd* hd = cart.hd();
   const carts::Caps caps = g_host.caps();

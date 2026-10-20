@@ -64,7 +64,7 @@ Object* ring(int big_r, int small_r, int segs, Material* m) {
 
 // Jet's lighting model (Renderer.cpp's jetShadeBrightness and jetModulateRGB565), split in two: the
 // light-dependent part (lambert, and the view-facing term the specular scales) and the material's
-// (brightness()), both per vertex (an object has one material); the colour by brightness is the
+// (brightness()), both per vertex (an object has one material); the color by brightness is the
 // material's table (make_lut), looked up per pixel.
 struct Lit {
   uint16_t lambert;  // 0..255: Jet's squared Lambert, times the light's intensity
@@ -86,12 +86,12 @@ Lit light_vertex(float nx, float ny, float nz, const float* l, uint32_t intensit
   return {static_cast<uint16_t>(lambert), static_cast<uint16_t>(facing)};
 }
 
-// A surface: an RGB565 colour, a shine (Jet's specular, 0..255) and unlit (the colour as is).
+// A surface: an RGB565 color, a shine (Jet's specular, 0..255) and unlit (the color as is).
 struct Mat {
   uint16_t color;
   uint8_t shine;
   bool unlit;
-  int16_t tex = -1;  // a texture's colours instead of one (its colour unused)
+  int16_t tex = -1;  // a texture's colors instead of one (its color unused)
   bool operator==(const Mat& o) const { return color == o.color && shine == o.shine && unlit == o.unlit && tex == o.tex; }
 };
 
@@ -117,7 +117,7 @@ uint16_t modulate(uint16_t color, uint32_t b, const Color& amb, uint32_t max_b) 
 
 constexpr uint16_t panel(uint16_t c) { return static_cast<uint16_t>(c >> 8 | c << 8); }
 
-// A material's colours by brightness, in the panel's byte order, with kLutPad entries either side
+// A material's colors by brightness, in the panel's byte order, with kLutPad entries either side
 // (rounding can step a pixel's brightness a little past its vertices').
 constexpr int kLutPad = 8, kLutSize = 512 + 2 * kLutPad;
 void make_lut(uint16_t* c, const Mat& m, const Color& amb) {
@@ -128,7 +128,7 @@ void make_lut(uint16_t* c, const Mat& m, const Color& amb) {
   }
 }
 
-// A textured material's colours: its texture's 16 at each of 64 brightness levels (8 apart: Jet's
+// A textured material's colors: its texture's 16 at each of 64 brightness levels (8 apart: Jet's
 // 0..511), a level either side for rounding: row L + 1 holds level L, 16 entries a row. A pixel's
 // entry: (brightness >> 3) * 16 + its texel, from row 0 (the table + 16).
 constexpr int kTexLevels = 64, kTexLutSize = 16 * (kTexLevels + 2);
@@ -177,7 +177,7 @@ struct V {
 };
 
 // A triangle ready for the span loop, made on core 1 as the frame is prepared. Positions in 1/16
-// pixels, sorted by y; a pixel is drawn when its centre is inside (left and top edges inclusive,
+// pixels, sorted by y; a pixel is drawn when its center is inside (left and top edges inclusive,
 // right and bottom exclusive). Each edge is walked from its upper end with its own slope, so two
 // triangles sharing an edge compute the same x on every row: no gaps, no double-drawn seams.
 // 64 bytes (the frame's triangles are written and read back through PSRAM's cache): what the span
@@ -185,18 +185,18 @@ struct V {
 struct Tri {
   int32_t x0, y0, x1, y1;  // v0 (the long edge's and first short edge's upper end) and v1 (the second's)
   int32_t s02, s01, s12;   // x per unit of y along each edge, 16.16
-  int32_t zs, dzx, dzy;    // depth (z * 16, 24.8) at (xb, row r0)'s centre, and per pixel / row
+  int32_t zs, dzx, dzy;    // depth (z * 16, 24.8) at (xb, row r0)'s center, and per pixel / row
   int32_t bs, dbx, dby;    // brightness (16.16) likewise
   int16_t r0, r1, r2;      // rows [r0, r1) use the v0-v1 edge, [r1, r2) the v1-v2 edge
   int16_t xb;              // its leftmost pixel
-  uint8_t mat;             // its material (the frame's colour table)
+  uint8_t mat;             // its material (the frame's color table)
   uint8_t flags;           // kLongLeft: the v0-v2 edge is the left end of every row; kFlat: one brightness; kTextured
   uint16_t tex;            // textured: its TexRec in the frame
 };
 constexpr uint8_t kLongLeft = 1, kFlat = 2, kTextured = 4;
 
 // A textured triangle's texture coordinates (texels, 16.16; v times the width, so a texel's index is
-// (v >> 16 & vm) | (u >> 16 & um)) at (xb, row r0)'s centre and per pixel / row, affine across it
+// (v >> 16 & vm) | (u >> 16 & um)) at (xb, row r0)'s center and per pixel / row, affine across it
 // (the PS1's mapping), and its texels (powers of two each way: they repeat).
 struct TexRec {
   uint32_t us;
@@ -207,7 +207,7 @@ struct TexRec {
   uint16_t um, vm;
 };
 
-// A texture: colour indices into its palette (as RGB565), w = 1 << wbits by h = 1 << hbits.
+// A texture: color indices into its palette (as RGB565), w = 1 << wbits by h = 1 << hbits.
 struct Texture {
   int wbits, hbits;
   std::vector<uint8_t> texels;
@@ -268,7 +268,7 @@ STAGE_INLINE float fdiv(float a, float b) {
 
 constexpr int kSub = 16;            // vertex positions: 1/16 pixel
 int g_prep_skip = 0;  // selftest's timing: 1 skips emit(), 2 the whole triangle loop
-constexpr int kAlignCells = 8;      // work cells' slack: the depth rows moved to the colour rows' alignment (band())
+constexpr int kAlignCells = 8;      // work cells' slack: the depth rows moved to the color rows' alignment (band())
 constexpr float kMaxCoord = 30000;  // pixels: farther vertices are clamped (int64 edges, int32 positions)
 
 }  // namespace
@@ -283,7 +283,7 @@ struct Mesh {
 
 // One frame's worth of state. Two of them: core 1 prepares the next frame into one while the
 // sender draws the other's bands on core 0. The meshes are shared (preparing only reads them);
-// drawing reads only the frame's own triangles and colour tables. The Jet scene, camera and sun
+// drawing reads only the frame's own triangles and color tables. The Jet scene, camera and sun
 // serve the comparison path (Jet's own pipeline and rasteriser).
 struct Frame {
   Scene scene;
@@ -294,7 +294,7 @@ struct Frame {
   // zeroed as they're added (6% of a frame's preparing), and every field is written anyway.
   std::unique_ptr<Tri[]> tris;
   int ntris = 0, cap = 0;
-  // Each material's colours (kLutSize), made for this frame's lighting (lut_key: what they were made for).
+  // Each material's colors (kLutSize), made for this frame's lighting (lut_key: what they were made for).
   std::vector<std::unique_ptr<uint16_t[]>> luts;
   std::vector<uint64_t> lut_key;
   std::vector<TexRec> texrecs;  // its textured triangles' (Tri::tex)
@@ -333,7 +333,7 @@ struct TrigTables {
 // An object: a mesh placed with a material. euler: the angles place() gave (the comparison path's).
 struct Node {
   int mesh, mat;
-  uint32_t rgb = 0;  // its colour, shine and unlit (its material, with tex)
+  uint32_t rgb = 0;  // its color, shine and unlit (its material, with tex)
   int shine = 0;
   bool unlit = false;
   int tex = -1;              // skin()'s texture, repeated ru x rv times across the shape's (u, v)
@@ -353,7 +353,7 @@ struct Stage::Impl {
   int scale, rw, rh;  // what the next prepare() draws at, and its rendered size (each frame has its own)
   int want_scale;     // set_scale()'s, from the next prepare()
   bool auto_res = false;
-  const float centre;             // the window's centre in the output (the projection's)
+  const float center;             // the window's center in the output (the projection's)
   float fov_deg = 60, near = 2, far = 4000;  // depth is stored as z * 16 in 16 bits
   float cam_pos[3] = {0, 0, -420}, yaw = 0, pitch = 0;
   float light_dir[3];  // world, toward the sun
@@ -362,7 +362,7 @@ struct Stage::Impl {
   uint32_t sky_top = 0x16224E, sky_bottom = 0x060812;
   float ground_y = 0;
   int shadow_mat = -1;  // the shadows' material (unlit), once ground() is called
-  uint32_t scene_version = 1;  // light or sky changed: the frames' colour tables and sky are remade
+  uint32_t scene_version = 1;  // light or sky changed: the frames' color tables and sky are remade
   Frame frames[2];
   int front = 0;  // the frame band() draws; prepare() fills the other
   std::vector<Mesh> meshes;
@@ -387,7 +387,7 @@ struct Stage::Impl {
   // (410 -> 206: the last column doubled runs past the output's edge and is clipped).
   static int rw_of(int w, int s) { return s == 1 ? w : (w + 3) / 4 * 2; }
   Impl(int s, int w, float c)
-      : out_w(w), scale(s), rw(rw_of(w, s)), rh(kH / s), want_scale(s), centre(c),
+      : out_w(w), scale(s), rw(rw_of(w, s)), rh(kH / s), want_scale(s), center(c),
         frames{{s, rw_of(w, s), kH / s}, {s, rw_of(w, s), kH / s}} {
     camera.setPosition(static_cast<int32_t>(cam_pos[0]), static_cast<int32_t>(cam_pos[1]), static_cast<int32_t>(cam_pos[2]));
     camera.setFOV(fov_deg, rw);
@@ -423,7 +423,7 @@ struct Stage::Impl {
                   " triangles; the limits are " + std::to_string(kMaxVertices) + " and " + std::to_string(kMaxTriangles)), -1;
     vertices += nv;
     tris += nt;
-    // its bounding sphere: the box's centre, the farthest vertex from it
+    // its bounding sphere: the box's center, the farthest vertex from it
     float lo[3] = {m.p[0], m.p[1], m.p[2]}, hi[3] = {m.p[0], m.p[1], m.p[2]};
     for (int i = 0; i < nv; ++i)
       for (int k = 0; k < 3; ++k) {
@@ -456,7 +456,7 @@ struct Stage::Impl {
     for (size_t i = 0; i < mats.size(); ++i)
       if (mats[i] == m) return static_cast<int>(i);
     if (static_cast<int>(mats.size()) >= kMaxMaterials)
-      return fail("too many colours in the scene (the limit is " + std::to_string(kMaxMaterials) + " colour and shine pairs)"), -1;
+      return fail("too many colors in the scene (the limit is " + std::to_string(kMaxMaterials) + " color and shine pairs)"), -1;
     mats.push_back(m);
     return static_cast<int>(mats.size()) - 1;
   }
@@ -475,7 +475,7 @@ struct Stage::Impl {
   void emit(Frame& f, const V& a, const V& b, const V& c, int mat, const float* uv, const Texture* tex) { emit_t<true>(f, a, b, c, mat, uv, tex); }
 };
 
-Stage::Stage(int scale, int width, float centre_x) : p_(new Impl(scale == 2 ? 2 : 1, width, centre_x)) {}
+Stage::Stage(int scale, int width, float center_x) : p_(new Impl(scale == 2 ? 2 : 1, width, center_x)) {}
 Stage::~Stage() = default;
 
 // ---- meshes ----
@@ -603,12 +603,12 @@ void lathe(Mesh& m, float rt, float rb, float h, int segs) {
     const float r = cap ? rt : rb, y = cap ? y1 : y0, ny = cap ? 1.0f : -1.0f;
     if (r <= 0) continue;
     const float out[3] = {0, ny, 0};
-    const int centre = vert(m, 0, y, 0, 0, ny, 0, 0.5f, 0.5f);
+    const int center = vert(m, 0, y, 0, 0, ny, 0, 0.5f, 0.5f);
     for (int j = 0; j <= segs; ++j) {
       const float a = 2 * kPi * j / segs;
       vert(m, r * std::cos(a), y, r * std::sin(a), 0, ny, 0, 0.5f + 0.5f * std::cos(a), 0.5f + 0.5f * std::sin(a));
     }
-    for (int j = 0; j < segs; ++j) tri_out(m, centre, centre + 1 + j, centre + 2 + j, out);
+    for (int j = 0; j < segs; ++j) tri_out(m, center, center + 1 + j, center + 2 + j, out);
   }
 }
 }  // namespace
@@ -634,7 +634,7 @@ int Stage::mesh(const std::vector<float>& xyz, const std::vector<int>& idx, bool
   auto uv_of = [&](int i, int k) { return uv ? (*uv)[static_cast<size_t>(i) * 2 + k] : 0.0f; };
   for (const int i : idx)
     if (i < 0 || i >= nv) return p_->fail("a face uses vertex " + std::to_string(i + 1) + "; the shape has " + std::to_string(nv)), -1;
-  // Faces turned outward from the shape's centre (meant for convex shapes, as dice are).
+  // Faces turned outward from the shape's center (meant for convex shapes, as dice are).
   float c[3] = {0, 0, 0};
   for (int i = 0; i < nv; ++i)
     for (int k = 0; k < 3; ++k) c[k] += xyz[i * 3 + k] / nv;
@@ -719,7 +719,7 @@ bool Stage::hide(int obj, bool hidden) {
   return true;
 }
 
-bool Stage::recolour(int obj, uint32_t rgb, int shine, bool unlit) {
+bool Stage::recolor(int obj, uint32_t rgb, int shine, bool unlit) {
   Node* n = p_->node(obj);
   if (!n) return false;
   const int mat = p_->mat_for(rgb, shine, unlit, n->tex);
@@ -808,7 +808,7 @@ bool Stage::project(float x, float y, float z, float* sx, float* sy, float* dept
   p.view_m3().apply(rel, q);
   if (q[2] <= p.near) return false;
   const float focal = (kW * 0.5f) / std::tan(p.fov_deg * kPi / 360.0f);  // fov spans the window
-  *sx = q[0] * focal / q[2] + p.centre;
+  *sx = q[0] * focal / q[2] + p.center;
   *sy = kH * 0.5f - q[1] * focal / q[2];
   *depth = q[2];
   return true;
@@ -877,7 +877,7 @@ void Stage::Impl::prepare_jet(Frame& f) {
 void Stage::Impl::prepare_ours(Frame& f) {
   f.ntris = 0;
   drawn_nodes = 0;
-  // The frame's colour tables and sky, remade when the light, the sky or the materials changed.
+  // The frame's color tables and sky, remade when the light, the sky or the materials changed.
   f.luts.resize(mats.size());
   f.lut_key.resize(mats.size(), 0);
   for (size_t i = 0; i < mats.size(); ++i) {
@@ -895,9 +895,9 @@ void Stage::Impl::prepare_ours(Frame& f) {
   float l[3];
   cam.apply(light_dir, l);
   const float focal = fdiv(static_cast<float>(kW) / scale * 0.5f, std::tan(fov_deg * kPi / 360.0f));  // Jet's fovFactor; fov spans the window
-  const float cx = centre / scale, cy = rh * 0.5f;
+  const float cx = center / scale, cy = rh * 0.5f;
   // The view's four side planes, for objects' bounding spheres: what shows has x / z in [xl, xr] and
-  // y / z in [yb, yt]; a sphere is out past a plane when its centre is more than r beyond it (the
+  // y / z in [yb, yt]; a sphere is out past a plane when its center is more than r beyond it (the
   // planes' normals' lengths: sqrt(1 + slope^2)).
   const float xl = fdiv(-cx, focal), xr = fdiv(rw - cx, focal), yt = fdiv(cy, focal), yb = fdiv(cy - rh, focal);
   const float kl = std::sqrt(1 + xl * xl), kr = std::sqrt(1 + xr * xr), kt = std::sqrt(1 + yt * yt), kb = std::sqrt(1 + yb * yb);
@@ -1073,7 +1073,7 @@ void Stage::Impl::emit_t(Frame& f, const V& a, const V& b, const V& c, int mat, 
     if constexpr (kTex) std::swap(ord[0], ord[1]);
   }
   const int r0 = std::max(ceil16(v[0]->y - 8), 0), r2 = std::min(ceil16(v[2]->y - 8), rh);
-  if (r0 >= r2) return;  // no pixel centre between its top and bottom
+  if (r0 >= r2) return;  // no pixel center between its top and bottom
   const int x0 = v[0]->x, y0 = v[0]->y, x1 = v[1]->x, y1 = v[1]->y, x2 = v[2]->x, y2 = v[2]->y;
   const float ax = (x1 - x0) * (1.0f / kSub), ay = (y1 - y0) * (1.0f / kSub);
   const float bx = (x2 - x0) * (1.0f / kSub), by = (y2 - y0) * (1.0f / kSub);
@@ -1093,7 +1093,7 @@ void Stage::Impl::emit_t(Frame& f, const V& a, const V& b, const V& c, int mat, 
   const float z[3] = {v[0]->z, v[1]->z, v[2]->z}, br[3] = {v[0]->b, v[1]->b, v[2]->b};
   const bool flat = br[0] == br[1] && br[1] == br[2];
   t.flags = static_cast<uint8_t>((cross > 0 ? kLongLeft : 0) | (flat ? kFlat : 0));
-  // The span loop's start: depth and brightness at the centre of (its leftmost column, row r0), so a
+  // The span loop's start: depth and brightness at the center of (its leftmost column, row r0), so a
   // row's first pixel is a short multiply away (the products stay within the triangle's own ranges).
   const int xb = std::min({x0, x1, x2}) >> 4;
   t.xb = static_cast<int16_t>(xb);
@@ -1182,7 +1182,7 @@ void Stage::prepare() {
 void Stage::publish() { p_->front ^= 1; }
 
 int Stage::band_rows() const { return kPiece * 2; }  // a piece at half size (two at full)
-int Stage::work_cells() const {  // depth, and a colour piece at half size: whichever scale needs more
+int Stage::work_cells() const {  // depth, and a color piece at half size: whichever scale needs more
   return kAlignCells + std::max(Impl::rw_of(p_->out_w, 1) * kPiece, Impl::rw_of(p_->out_w, 2) * kPiece * 2);
 }
 
@@ -1196,7 +1196,7 @@ struct alignas(16) PieSpan {
   int32_t z[8];         // the first group's depths
   int32_t dz8;          // 8 x depth per pixel
   uint32_t bias = 0x80008000u;
-  uint32_t colour;      // a flat triangle's, both halves
+  uint32_t color;      // a flat triangle's, both halves
   int32_t flat;
   uint16_t gather[8];
   uint16_t *zr, *cr;    // the rows at the first group (aligned to 16 bytes)
@@ -1227,7 +1227,7 @@ STAGE_INLINE void fill32(uint32_t* w, int n, uint32_t v) {
 }
 
 // A textured triangle's rows: as draw_tri's walk, each pixel's texel looked up at its (u, v) (16.16,
-// wrapped: the texture repeats) and its colour at its brightness level (the table's rows of 16).
+// wrapped: the texture repeats) and its color at its brightness level (the table's rows of 16).
 STAGE_HOT void draw_tex(const Tri& t, const TexRec& x, const uint16_t* lut, int ra, int rb, int c0, int c1, uint16_t* depth, uint16_t* col,
                         int rw) {
   const int top = std::max<int>(t.r0, ra), end = std::min<int>(t.r2, rb);
@@ -1277,7 +1277,7 @@ STAGE_HOT void draw_tex(const Tri& t, const TexRec& x, const uint16_t* lut, int 
     uint16_t* __restrict zr = depth + (y - ra) * rw + x0;
     uint16_t* __restrict cr = col + (y - ra) * rw + x0;
     const int n = x1 - x0;
-    if (flat) {  // one level: the row's colours by texel
+    if (flat) {  // one level: the row's colors by texel
       for (int i = 0; i < n; ++i, z += dzx, u += dux, v += dvx) {
         const uint32_t zz = static_cast<uint32_t>(z) >> 8;
         if (zz < zr[i]) {
@@ -1298,15 +1298,15 @@ STAGE_HOT void draw_tex(const Tri& t, const TexRec& x, const uint16_t* lut, int 
   }
 }
 
-// One triangle's rows [ra, rb) and columns [c0, c1) of a piece: depth and colour rows of width rw,
-// row ra at index 0. Per pixel: a depth test, a table lookup (a flat triangle: one colour), two adds;
+// One triangle's rows [ra, rb) and columns [c0, c1) of a piece: depth and color rows of width rw,
+// row ra at index 0. Per pixel: a depth test, a table lookup (a flat triangle: one color), two adds;
 // on the S3 a long run 8 pixels at a time (stage_pie.S). depth and col: the same alignment (band()).
 STAGE_HOT void draw_tri(const Tri& t, const uint16_t* lut, int ra, int rb, int c0, int c1, uint16_t* depth, uint16_t* col, int rw) {
   const int top = std::max<int>(t.r0, ra), end = std::min<int>(t.r2, rb);
   if (top >= end) return;
-  // Each edge walked in 32 bits. Its exact x at a row's centre, E (1/16 px, 16 fraction bits: 64-bit),
+  // Each edge walked in 32 bits. Its exact x at a row's center, E (1/16 px, 16 fraction bits: 64-bit),
   // is X * 16 + r with r the same on every row (a row adds 16 x the slope), so X steps by the slope,
-  // exactly, and the first pixel whose centre (16 px + 8) is at or right of the edge, E + 2^19 - 1 >> 20,
+  // exactly, and the first pixel whose center (16 px + 8) is at or right of the edge, E + 2^19 - 1 >> 20,
   // is X + k >> 16 with k = r + 2^19 - 1 >> 4. (An edge gives the same x on a row whichever triangle
   // walks it; on its rows |x| stays under 2^15 px, so X fits.)
   struct Edge {
@@ -1330,11 +1330,11 @@ STAGE_HOT void draw_tri(const Tri& t, const uint16_t* lut, int ra, int rb, int c
   const bool long_left = t.flags & kLongLeft, flat = t.flags & kFlat;
   int32_t zrow = t.zs + (top - t.r0) * t.dzy, brow = t.bs + (top - t.r0) * t.dby;
   const int32_t dzx = t.dzx, dbx = t.dbx;
-  const uint16_t fc = flat ? lut[t.bs >> 16] : 0;  // a flat triangle's colour
+  const uint16_t fc = flat ? lut[t.bs >> 16] : 0;  // a flat triangle's color
 #ifdef HD_PIE
   PieSpan pie;
   pie.flat = flat;
-  pie.colour = fc * 0x10001u;
+  pie.color = fc * 0x10001u;
   pie.dz8 = 8 * dzx;
   pie.dbx = dbx;
   pie.lut = lut;
@@ -1420,9 +1420,9 @@ int Stage::band(int y0, int y1, uint16_t* out, uint16_t* work, int x0, int x1) {
   const TexRec* texrecs = f.texrecs.data();
   int drawn = 0;
   for (int a = y0 / sc; a < y1 / sc; a += kPiece) {  // rendered rows [a, a + kPiece)
-    // The piece's colour: straight into out at full size, else a piece of work to be doubled.
+    // The piece's color: straight into out at full size, else a piece of work to be doubled.
     uint16_t* col = sc == 1 ? out + (a - y0) * W : work + kAlignCells + rw * kPiece;
-    // Its depth: where its rows have the colour rows' alignment (the vector span loop's 16 bytes).
+    // Its depth: where its rows have the color rows' alignment (the vector span loop's 16 bytes).
     uint16_t* depth = work + ((reinterpret_cast<uintptr_t>(col) - reinterpret_cast<uintptr_t>(work)) & 15) / 2;
     for (int r = 0; r < kPiece; ++r)  // the sky, two pixels a word
       fill32(reinterpret_cast<uint32_t*>(col + r * rw) + c0 / 2, (c1 - c0) / 2, (ours ? f.sky[a + r] : panel(f.sky[a + r])) * 0x10001u);

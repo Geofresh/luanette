@@ -18,13 +18,13 @@ cart that stays in the window leaves about 30% of the screen dark. Give a cart
 `-- canvas: full` and lay it out on the whole glass:
 
 - Lay out from `caps()` (`w`, `h`, `picture_x`, `picture_y`), not fixed numbers.
-- An app (text, lists, cards, clocks, photos) draws on the full-colour layer, edge to edge: the
+- An app (text, lists, cards, clocks, photos) draws on the full-color layer, edge to edge: the
   launcher's list spans the glass, rows and clock alike.
 - A pixel game keeps its 128x128 picture whole in the window, with no score bar inside it.
   Put the title, the score, what to do and "game over" on the layer above and below it. In Night
   Swarm the whole picture is the night.
 - Draw borders and frames around the picture on the layer, not in the picture: the picture's
-  edge columns carry on out to the glass's sides, so a coloured edge there becomes two bars.
+  edge columns carry on out to the glass's sides, so a colored edge there becomes two bars.
 - The corners are rounded: keep headers, footers and anything near the top or bottom
   `hd.inset(y, h)` in from the sides. The top 24 rows swipe the cart away.
 
@@ -62,7 +62,7 @@ end
 
 ## 4. The screen keeps what you drew: draw only what changed
 
-The full-colour layer (`hd`) keeps its pixels between frames. Clearing and redrawing all of it
+The full-color layer (`hd`) keeps its pixels between frames. Clearing and redrawing all of it
 every frame costs most of a frame on its own: redrawing the whole glass is about 18 ms of Lua,
 plus 8 ms to find the rows that changed. Drawing nothing costs almost nothing.
 
@@ -107,10 +107,10 @@ used to run on every fetch, and now runs only when the data actually differs.
 
 ## 7. Two surfaces, two jobs
 
-- The full-colour layer is for what stays: text, cards, photos, logos. Draw it once, repaint on
+- The full-color layer is for what stays: text, cards, photos, logos. Draw it once, repaint on
   change.
 - The 128x128 picture is redrawn every frame and costs little to draw: use it for what moves
-  every frame (a sprite, a blinking dot, a cursor) over the layer (`hd.order("under")`, colour 0
+  every frame (a sprite, a blinking dot, a cursor) over the layer (`hd.order("under")`, color 0
   shows the layer through).
 
 ## 8. Measure it

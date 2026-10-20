@@ -1,4 +1,4 @@
-// The full-colour layer's fonts (hd.hpp): glyph tables made by tools/hd_fonts.py.
+// The full-color layer's fonts (hd.hpp): glyph tables made by tools/hd_fonts.py.
 // Portable data; the board and the desktop runtime compile the same tables.
 #pragma once
 

@@ -5,7 +5,7 @@
 
 Runs the cart in check.py (Lua through lupa) dumping each frame's input and picture, replays the
 input through the board's runtime built for the host (engine/host/cartrun.cpp, built in host/build), and
-compares every frame; the full-colour layer's front buffer is checked against its back after each
+compares every frame; the full-color layer's front buffer is checked against its back after each
 frame too ("hd_bad" in cartrun's output: frame * 1000 + row). Carts that use rnd() differ by
 design (each side has its own generator).
 """

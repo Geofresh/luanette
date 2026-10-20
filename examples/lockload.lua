@@ -12,11 +12,11 @@
 --   loop is most of both cores), so the ground is the sky's gradient carried below the horizon
 --   (free: the band's clear) with 7 thin stripes sliding past as you walk and a far strip for the
 --   horizon, camera-facing so none ever crosses the near plane and drops out.
--- - The HUD (score, lives, the magazine) is on the full-colour layer in the glass's bands above and
+-- - The HUD (score, lives, the magazine) is on the full-color layer in the glass's bands above and
 --   below the scene, repainted only when what it shows changes (ui.changed). Cards and tags over
 --   the scene are drawn once and cleared once; the layer blends them over each frame's scene.
 -- - What moves every frame (lock-on rings, sparks, score pops, the hit flash) is the 128x128
---   picture over the scene: cheap to redraw, colour 0 shows the scene through.
+--   picture over the scene: cheap to redraw, color 0 shows the scene through.
 -- - Every motion is by time; nothing is allocated per frame; menus run at 30 fps, play at 60.
 
 local sin, cos, rad, deg, atan, sqrt, floor = math.sin, math.cos, math.rad, math.deg, math.atan, math.sqrt, math.floor
@@ -47,14 +47,14 @@ local SH = {
   blade = {"box",700,6,40},pod = {"cylinder",26,140,8},
 }
 local S = {}
-local function half(k)                          -- a shape's half height: a prop's centre above the ground
+local function half(k)                          -- a shape's half height: a prop's center above the ground
   local s = SH[k]
   if s[1] == "box" then return (s[3] or s[2]) / 2 end
   return s[1] == "sphere" and s[2] or s[3] / 2
 end
 
 -- ---- the stages ----
--- props: {shape, colour, x, z, [y], [turn]}. path: {x, z, yaw, wave}: the camera's rail; it stops
+-- props: {shape, color, x, z, [y], [turn]}. path: {x, z, yaw, wave}: the camera's rail; it stops
 -- at a node with a wave. A spawn: {t, kind, x, z, y, dx, dz, dy}: at t seconds into the wave,
 -- at (x, y, z), arriving from (dx, dy, dz) away (left out: 0). Kinds: g grunt, r runner, h heavy (4 hits),
 -- c civilian (don't shoot; {t, "c", x, z, y, 1 or -1}: walks right or left), d drone, b barrel, p pickup ({t, "p", x, z, y, kind}), B boss.
@@ -157,7 +157,7 @@ local MEN, DRONES, ORBS, BARRELS, BOOMS = {}, {}, {}, {}, {}
 local PU, BOSS = nil, nil
 
 -- Flat quads at y 0 facing up, from z0 to z1 (2100 either side); a vertex far below (in no face)
--- makes "up" the outside, as the shape's centre is then under them.
+-- makes "up" the outside, as the shape's center is then under them.
 local function flat(z0, depth, step, n)
   local v, f = {0, -1000, 0}, {}
   for i = 0, n - 1 do

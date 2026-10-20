@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Packs a cart's images for the full-colour layer (docs/api.md, "hd").
+"""Packs a cart's images for the full-color layer (docs/api.md, "hd").
 
     python tools/pack_images.py path/to/CART.lua [OUT.hdb]
 
@@ -57,7 +57,7 @@ def load(path: Path) -> Image.Image:
 
 def to565(img: Image.Image, dither: bool) -> tuple[list[int], list[int]]:
     """Each pixel's RGB565 and alpha. With dither, a 4x4 ordered dither spreads each channel's
-    rounding (hides banding in photos); without, the nearest colour (keeps flat art flat)."""
+    rounding (hides banding in photos); without, the nearest color (keeps flat art flat)."""
     w, h = img.size
     px = img.load()
     cols, alphas = [], []
@@ -65,7 +65,7 @@ def to565(img: Image.Image, dither: bool) -> tuple[list[int], list[int]]:
         for x in range(w):
             r, g, b, a = px[x, y]
             if a == 0:
-                cols.append(0)  # its colour never shows: 0 keeps the runs long
+                cols.append(0)  # its color never shows: 0 keeps the runs long
                 alphas.append(0)
                 continue
             if dither:
@@ -92,7 +92,7 @@ def encode(img: Image.Image) -> bytes:
     if w > MAX_W or h > MAX_H:
         raise PackError(f"{w}x{h} is bigger than the glass ({MAX_W}x{MAX_H}); make it smaller first")
     alpha = img.getchannel("A").getextrema()[0] < 255
-    # Photos (many colours) dithered; flat art (logos, icons, pixel art) as it is.
+    # Photos (many colors) dithered; flat art (logos, icons, pixel art) as it is.
     dither = len(img.convert("RGB").getcolors(4096) or ()) == 0
     cols, alphas = to565(img, dither)
     pix = [(c, a) for c, a in zip(cols, alphas)] if alpha else [(c, 255) for c in cols]

@@ -136,21 +136,21 @@ int main(int argc, char** argv) {
       while (*p && *p != ',') ++p;
       if (*p) ++p;
     }
-  // The picture's colours over a scene (RGB565, the panel's byte order as the stage draws), and
+  // The picture's colors over a scene (RGB565, the panel's byte order as the stage draws), and
   // its scanline rows a quarter darker: from the cart's palette, made again when it changes it.
   uint16_t pal[16], dim[16];
   uint32_t pal_ver = UINT32_MAX;
-  auto set_colours = [&](const carts::Cart& c) {
+  auto set_colors = [&](const carts::Cart& c) {
     auto pack = [](uint32_t r, uint32_t g, uint32_t b) {
       const uint16_t v = static_cast<uint16_t>((r >> 3) << 11 | (g >> 2) << 5 | b >> 3);
       return static_cast<uint16_t>(v >> 8 | v << 8);
     };
     for (int i = 0; i < 16; ++i) {
-      const uint32_t rgb = c.colours()[i];
+      const uint32_t rgb = c.colors()[i];
       pal[i] = pack(rgb >> 16 & 255, rgb >> 8 & 255, rgb & 255);
       dim[i] = pack((rgb >> 16 & 255) * 3 / 4, (rgb >> 8 & 255) * 3 / 4, (rgb & 255) * 3 / 4);
     }
-    pal_ver = c.colours_version();
+    pal_ver = c.colors_version();
   };
   bool any3d = false, anyhd = false;
   TestHost host;
@@ -233,17 +233,17 @@ int main(int argc, char** argv) {
         }
       }
       if ((st || hd || std::getenv("HG_SHOT_ALL")) && shots.count(n)) {  // (HG_SHOT_ALL: a picture-only cart too, for tools)
-        // As the board composes a band: the scene (or the picture's colour 0), the layer if under,
-        // the 16-colour picture (colour 0 see-through), the layer if over; scanline rows a quarter darker.
+        // As the board composes a band: the scene (or the picture's color 0), the layer if under,
+        // the 16-color picture (color 0 see-through), the layer if over; scanline rows a quarter darker.
         // A full canvas ("-- canvas: full"): the whole glass, its rows around the window the layer
-        // over colour 0 (as the board's edge rows); else the window's rows.
+        // over color 0 (as the board's edge rows); else the window's rows.
         const int W = carts::kStageW, H = carts::Stage::kH;
         const bool full = hd && cart.full_canvas();
         const carts::Caps caps = host.caps();
         const int top = full ? caps.window_y : 0, OH = full ? caps.glass_h : H;
         std::vector<uint16_t> img(static_cast<size_t>(W) * OH);
         std::vector<uint16_t> work(st ? static_cast<size_t>(st->work_cells()) : 0);
-        if (cart.colours_version() != pal_ver) set_colours(cart);
+        if (cart.colors_version() != pal_ver) set_colors(cart);
         const int band = st ? st->band_rows() : 16;
         for (int y = 0; y < H; y += band) {
           uint16_t* rows = img.data() + static_cast<size_t>(top + y) * W;

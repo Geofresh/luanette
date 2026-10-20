@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Renders the full-colour layer's fonts (engine/hd_fonts.cpp) from their TTFs.
+"""Renders the full-color layer's fonts (engine/hd_fonts.cpp) from their TTFs.
 
     python3 tools/hd_fonts.py FONT_DIR
 

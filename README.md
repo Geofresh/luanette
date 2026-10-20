@@ -3,7 +3,7 @@
 [![ci](https://github.com/Geofresh/luanette/actions/workflows/ci.yml/badge.svg)](https://github.com/Geofresh/luanette/actions/workflows/ci.yml)
 
 A Lua game console for ESP32-S3 boards. A game, or cart, is one Lua file. It draws into a
-128x128 picture of 16 colours, and can add a lit 3D scene under it and a full-colour layer over
+128x128 picture of 16 colors, and can add a lit 3D scene under it and a full-color layer over
 it, at up to 60 fps. You write a cart on your computer, check it there, and send it to the board over USB.
 
 The name is Lua plus *lunette*, French for a little moon or a small window.
@@ -62,7 +62,7 @@ Measured on the AMOLED-2.06:
   `python3-devel`, or a Python from uv or pyenv), a C++17 compiler and CMake.
 
 I've only used it on Linux. macOS should work. On Windows, `cartrun`, which previews 3D and
-full-colour carts, doesn't build yet, and `push.py` needs `--port COM3` or similar.
+full-color carts, doesn't build yet, and `push.py` needs `--port COM3` or similar.
 
 ## Quick start
 
@@ -90,7 +90,7 @@ python tools/build_lupa32.py        # Lua with the board's 32-bit numbers, for c
 cmake -S host -B host/build && cmake --build host/build
 ```
 
-Change something in an example, a colour or a speed, and send it. Your copy replaces the
+Change something in an example, a color or a speed, and send it. Your copy replaces the
 built-in one:
 
 ```bash
@@ -146,7 +146,7 @@ python tools/check.py hello.lua --preview hello.png   # runs it here and enforce
 python tools/push.py hello.lua
 ```
 
-- [`docs/api.md`](docs/api.md) is the full API: drawing, input, the colour layer, images, 3D,
+- [`docs/api.md`](docs/api.md) is the full API: drawing, input, the color layer, images, 3D,
   sound and saves.
 - [`docs/DESIGN.md`](docs/DESIGN.md) covers making a cart run well. Read it before writing
   anything big.

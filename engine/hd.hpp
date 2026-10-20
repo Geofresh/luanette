@@ -1,6 +1,6 @@
-// Carts' full-colour layer (the `hd` API, docs/api.md): text in real fonts, smooth shapes and
+// Carts' full-color layer (the `hd` API, docs/api.md): text in real fonts, smooth shapes and
 // (later) images on a 384 x 384 canvas, kept between frames until cleared, composed with the 3D
-// scene and the 16-colour picture band by band (over the picture, or under it).
+// scene and the 16-color picture band by band (over the picture, or under it).
 //
 // Two planes: RGB565 (native order, not premultiplied) and 8-bit alpha, kept as a pool of rows
 // (twice the canvas's) that two maps index: the back rows the cart draws on, and the front rows the
@@ -68,13 +68,13 @@ class Hd {
   enum Align : uint8_t { kLeft, kCenter, kRight };
 
   // A w x h canvas (at most kMaxW x kMaxH). Its rows' storage: four planes, pitch_of(w) * h pixels
-  // each (two of colour, two of alpha: the pool's two halves): the caller allocates them (in PSRAM
+  // each (two of color, two of alpha: the pool's two halves): the caller allocates them (in PSRAM
   // on the board) and keeps them alive while the layer is in use.
   Hd(int w, int h, uint16_t* back_c, uint8_t* back_a, uint16_t* front_c, uint8_t* front_a);
   int width() const { return w_; }
   int height() const { return h_; }
 
-  // ---- drawing (canvas units; colours 0xRRGGBB; alpha 0-255) ----
+  // ---- drawing (canvas units; colors 0xRRGGBB; alpha 0-255) ----
   void clear(uint32_t rgb = 0, uint8_t a = 0);
   void rect(float x, float y, float w, float h, uint32_t rgb, uint8_t a = 255, float radius = 0);
   void frame(float x, float y, float w, float h, uint32_t rgb, float width = 1, float radius = 0, uint8_t a = 255);
@@ -108,7 +108,7 @@ class Hd {
   // place from now (any thread; the next publish() takes them back).
   void release_front() { front_free_.store(true, std::memory_order_release); }
   // For tests (cartrun): -1 when the rows' bookkeeping holds (each row in one place, the pool's
-  // free rows free) and every front row is its back row (colour; and alpha where it isn't opaque)
+  // free rows free) and every front row is its back row (color; and alpha where it isn't opaque)
   // with the right opaque and visible marks; else the first row that isn't (h for the pool).
   // Call it after publish().
   int verify();
@@ -133,7 +133,7 @@ class Hd {
 
  private:
   void plot(int x, int y, uint16_t c565, uint32_t cov255);  // coverage 0-255 x the op's alpha
-  // plot() with the row's work done once by the caller (its colour row pc = bc(y), solid(y)) and x
+  // plot() with the row's work done once by the caller (its color row pc = bc(y), solid(y)) and x
   // known to be inside the clip: the inner loops' version. The caller touch_row()s y if it drew.
   inline void put(int y, uint16_t* pc, bool sol, int x, uint16_t c565, uint32_t cov255);
   void touch_row(int y, int x0, int x1) {  // drawn on in columns [x0, x1)
@@ -143,7 +143,7 @@ class Hd {
     if (x1 > drawn_x1_[y]) drawn_x1_[y] = static_cast<uint16_t>(x1);
   }
   void span(int y, int x0, int x1, uint16_t c, uint8_t a);  // whole pixels [x0, x1), the clip applied
-  // As span / cover_row, in a colour that repeats every 4 pixels (pat[x & 3]: an ordered dither).
+  // As span / cover_row, in a color that repeats every 4 pixels (pat[x & 3]: an ordered dither).
   void span4(int y, int x0, int x1, const uint16_t* pat, uint8_t a);
   void cover_row4(int y, float xa, float xb, const uint16_t* pat, uint8_t a);
   void cover_row(int y, float xa, float xb, uint16_t c, uint8_t a);  // a horizontal span, edges smooth
@@ -153,7 +153,7 @@ class Hd {
   // where they apply (HD_PIE), the scalar code for the rest.
   void bake(uint16_t* out, int y, int cx, int n) const;
   void blend_over(uint16_t* out, int y, int cx, int n) const;
-  // Back row y read once: a hash of how it looks (colour; alpha unless it's solid), whether
+  // Back row y read once: a hash of how it looks (color; alpha unless it's solid), whether
   // anything of it shows and whether all of it is opaque.
   uint64_t row_look(int y, bool* visible, bool* opaque) const;
 
@@ -194,7 +194,7 @@ class Hd {
   // Back row y the cart's own (rule 3): if the front holds its slot and the sender may still read it,
   // a fresh one, with the row copied in unless `whole` (what's drawn next covers all of it).
   void own(int y, bool whole = false);
-  uint16_t* wr(int y, bool whole = false) {  // back row y's colour, to write (owned first)
+  uint16_t* wr(int y, bool whole = false) {  // back row y's color, to write (owned first)
     own(y, whole);
     return bc(y);
   }

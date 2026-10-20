@@ -64,7 +64,7 @@ int (&g_tilt)[4] = tuning.tilt;
 // finger came down) and BOOT is B. PWR, or a swipe down from the top edge, leaves.
 // No cart open: no task, no memory, one branch in the host's loop.
 constexpr int kCartScale = 3, kCartPx = carts::kW * kCartScale;  // 384
-// Centred; y even (the controller's rule) and a multiple of 3, so each pixel's third row is the dim
+// Centered; y even (the controller's rule) and a multiple of 3, so each pixel's third row is the dim
 // scanline (rows y % 3 == 2).
 constexpr int kCartX = 12, kCartY = 60;
 constexpr int kGlassRows = 502;  // the AMOLED-2.06's glass (a full canvas's height)
@@ -230,8 +230,8 @@ struct CartRun {
   uint8_t* tx = nullptr;     // the frame the sender is sending (PSRAM)
   uint8_t* shown = nullptr;  // what the panel shows (PSRAM); 0xFF where unknown
   uint16_t pal[16], dim[16];  // panel byte order; dim: the scanline rows, a quarter darker
-  uint32_t pal_ver = UINT32_MAX;  // the cart's colours_version() they were made from
-  carts::Hd* hd = nullptr;        // the cart's full-colour layer, as of the last handoff (the sender's to compose)
+  uint32_t pal_ver = UINT32_MAX;  // the cart's colors_version() they were made from
+  carts::Hd* hd = nullptr;        // the cart's full-color layer, as of the last handoff (the sender's to compose)
   bool full = false;              // its layer covers the glass ("-- canvas: full"): canvas = glass pixels
   uint32_t edge_due[(kGlassRows + 31) / 32] = {};  // a full canvas's rows outside the window still to send
   // The glass columns [span0, span1) of a row due only because the layer changed there (span1 0: all
@@ -274,7 +274,7 @@ struct CartRun {
   int64_t lua_us = 0, lua_max = 0, window_t0 = 0;
   size_t lua_max_freed = 0;  // what the Lua heap gave back in the slowest frame (a collection ran in it: tens of KB)
   int64_t lua_own_max = 0;   // a 3D cart's slowest Lua frame less the helper's drawing in it
-  int64_t hd_us = 0, hd_max = 0;  // the full-colour layer's publish() at each handoff
+  int64_t hd_us = 0, hd_max = 0;  // the full-color layer's publish() at each handoff
   std::atomic<uint32_t> rows_sent{0}, tx_frames{0};
   mutable std::atomic<uint32_t> px_sent{0}, px_rows{0};  // pixels to the panel (cart_write), and in the rows they're in
   std::atomic<int64_t> tx_us{0}, tx_max{0};
@@ -287,7 +287,7 @@ struct CartRun {
   // sender, band by band, each band just before it goes out; depth: its band of depth cells.
   carts::Stage* stage = nullptr;              // the cart's (a 3D cart: docs/api.md, "3D") or the test's
   std::unique_ptr<carts::Stage> own_stage;     // the test scene's ("@stage")
-  bool overlay = false;                        // a 3D cart: its picture goes over the scene (colour 0: clear)
+  bool overlay = false;                        // a 3D cart: its picture goes over the scene (color 0: clear)
   int64_t prep_us = 0, prep_max = 0;           // the stage's preparing (core 1; sums for the stats)
   uint16_t* depth = nullptr;  // internal RAM, kStageBand rows of the stage's width
   std::string stage_name;
@@ -330,21 +330,21 @@ uint16_t to_panel(uint32_t rgb) {
   return static_cast<uint16_t>(v << 8 | v >> 8);  // the panel takes big-endian
 }
 
-// The cart's 16 colours as the sender draws them: panel order, and each a quarter darker for the
+// The cart's 16 colors as the sender draws them: panel order, and each a quarter darker for the
 // scanline rows.
-void set_colours(CartRun& c) {
-  const uint32_t* rgb = c.cart.colours();
+void set_colors(CartRun& c) {
+  const uint32_t* rgb = c.cart.colors();
   for (int i = 0; i < 16; ++i) {
     c.pal[i] = to_panel(rgb[i]);
     c.dim[i] = hg::panel_order(hg::scan_dim(hg::panel_order(c.pal[i])));
   }
-  c.pal_ver = c.cart.colours_version();
+  c.pal_ver = c.cart.colors_version();
 }
 
 // One picture row (n palette indices) as three panel rows (two bright, one dim) of `stride`
-// pixels: the picture 3x from column x0, and its edge pixels' colours out to the rows' ends. A
+// pixels: the picture 3x from column x0, and its edge pixels' colors out to the rows' ends. A
 // picture that stopped at the window met the black margin in a hard vertical edge, which this
-// AMOLED's subpixel layout draws as a coloured zig-zag; full-width rows never have one.
+// AMOLED's subpixel layout draws as a colored zig-zag; full-width rows never have one.
 void expand_row(uint16_t* d, int stride, int x0, const uint8_t* s, int n, const uint16_t* pal, const uint16_t* dim) {
   const int w = n * kCartScale;
   auto row = [&](uint16_t* out, const uint16_t* p) {
@@ -364,7 +364,7 @@ void expand_row(uint16_t* d, int stride, int x0, const uint8_t* s, int n, const 
   row(d + 2 * stride, dim);
 }
 
-// The full-colour layer's canvas rows [y, y + h) over `out` (h rows of `stride`, the canvas's
+// The full-color layer's canvas rows [y, y + h) over `out` (h rows of `stride`, the canvas's
 // column 0 at x), its edge columns out to the glass.
 void layer_rows(const carts::Hd& hd, uint16_t* out, int stride, int x, int y, int h) {
   for (int i = 0; i < h; ++i)
@@ -385,7 +385,7 @@ inline void layer_row_direct(const carts::Hd& hd, uint16_t* out, int stride, int
   std::fill_n(out + x + w, stride - x - w, out[x + w - 1]);
 }
 
-// The picture's row r (n wide) all colour 0: nothing of it shows over the layer.
+// The picture's row r (n wide) all color 0: nothing of it shows over the layer.
 inline bool pic_row_clear(const uint8_t* pic, int n, int r) {
   const uint8_t* p = pic + static_cast<size_t>(r) * n;
   for (int i = 0; i < n; i += 4) {
@@ -397,7 +397,7 @@ inline bool pic_row_clear(const uint8_t* pic, int n, int r) {
 }
 
 // Picture row r of an n-wide picture as its three panel rows (`stride` wide, the picture's column
-// 0 at x), with the cart's full-colour layer: what the sender sends and a screenshot shows.
+// 0 at x), with the cart's full-color layer: what the sender sends and a screenshot shows.
 void cart_row(uint16_t* d, int stride, int x, const uint8_t* pic, int n, int r, const CartRun& c) {
   const int py = r * kCartScale;  // its three rows, from the picture's top
   const carts::Hd* hd = n == carts::kW ? c.hd : nullptr;
@@ -406,7 +406,7 @@ void cart_row(uint16_t* d, int stride, int x, const uint8_t* pic, int n, int r, 
   // The layer opaque over all three, and the picture under it or clear there: the rows as they are.
   if (hd && hd->row_opaque(cy) && hd->row_opaque(cy + 1) && hd->row_opaque(cy + 2) && (hd->over() || pic_row_clear(pic, n, r))) {
     for (int i = 0; i < kCartScale; ++i) layer_row_direct(*hd, d + static_cast<size_t>(i) * stride, stride, lx, cy + i);
-  } else if (hd && !hd->over()) {  // under: colour 0's background, the layer, then the picture's other colours
+  } else if (hd && !hd->over()) {  // under: color 0's background, the layer, then the picture's other colors
     for (int i = 0; i < kCartScale; ++i) std::fill_n(d + static_cast<size_t>(i) * stride, stride, i == 2 ? c.dim[0] : c.pal[0]);
     layer_rows(*hd, d, stride, lx, cy, kCartScale);
     carts::overlay_rows(d, stride, x, py, kCartScale, pic, c.pal, c.dim);
@@ -416,7 +416,7 @@ void cart_row(uint16_t* d, int stride, int x, const uint8_t* pic, int n, int r, 
   }
 }
 
-// A full canvas's glass row y outside the window (no picture there): the layer over colour 0.
+// A full canvas's glass row y outside the window (no picture there): the layer over color 0.
 void edge_row(uint16_t* d, int stride, int y, const CartRun& c) {
   if (c.hd->row_opaque(y)) {
     layer_row_direct(*c.hd, d, stride, 0, y);
@@ -514,8 +514,8 @@ uint32_t send_edge_rows(CartRun& c, int from, int to, int& k, bool& first) {
 }
 
 // Rows [r0, r1) of an n-wide picture (at screen x, y its row 0) out through band buffer k, as
-// rows the glass's width (the picture's edge colours out to the edges), with the cart's
-// full-colour layer under or over it.
+// rows the glass's width (the picture's edge colors out to the edges), with the cart's
+// full-color layer under or over it.
 void cart_band(const uint8_t* pic, int n, int r0, int r1, int x, int y, int& k, bool& first, const CartRun& c, int x0, int x1) {
   dev->band_wait(k);
   uint16_t* b = dev->band(k);
@@ -837,7 +837,7 @@ bool cart_open(const std::string& name) {
     return false;
   }
   std::memset(c->shown, 0xFF, carts::kW * carts::kH);
-  set_colours(*c);
+  set_colors(*c);
   esp_timer_create_args_t ta = {};
   ta.callback = [](void*) { dev->wake_screen(); };  // a cart's wake(): light the screen; the cart resumes
   ta.name = "hg-cart-wake";
@@ -1281,10 +1281,10 @@ uint32_t cart_tick() {
     dev->timed_out("the cart sender (a frame dropped)");
   } else {
     if (!c.stage || c.overlay) std::memcpy(c.tx, c.cart.picture(), carts::kW * carts::kH);  // a 3D cart's: last tick's, as its scene
-    if (c.cart.colours_version() != c.pal_ver) {  // palette(): new colours (the sender is idle: safe here)
-      set_colours(c);
+    if (c.cart.colors_version() != c.pal_ver) {  // palette(): new colors (the sender is idle: safe here)
+      set_colors(c);
       std::memset(c.shown, 0xFF, carts::kW * carts::kH);  // every row again, in them
-      if (c.full) {  // and a full canvas's others (the layer shows over colour 0 there), all of each
+      if (c.full) {  // and a full canvas's others (the layer shows over color 0 there), all of each
         std::memset(c.edge_due, 0xFF, sizeof c.edge_due);
         std::memset(c.edge_span1, 0, sizeof c.edge_span1);
       }

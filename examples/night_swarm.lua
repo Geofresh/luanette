@@ -299,7 +299,7 @@ local function start()
 end
 
 function _init()
-  hd.order("under")                       -- the picture's colour 0 shows the layer
+  hd.order("under")                       -- the picture's color 0 shows the layer
   hd.clear(BG)
   palette(0, BG)                          -- the night matches the bands
   local s = load()
@@ -400,7 +400,7 @@ end
 -- ---- the boon picker: cards on the layer OVER the picture, on a dimmed frozen game ----
 
 local CARDS_X, CARDS_W, CARD_H, CARD_GAP = PX + 32, 320, 68, 14
-local CARDS_Y = PY + 76               -- three 68 px cards with 14 px gaps, centred
+local CARDS_Y = PY + 76               -- three 68 px cards with 14 px gaps, centered
 
 local function draw_card(i)
   local u = picks and picks[i + 1]

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The full-colour layer's benches on the board, over USB: each bench cart is sent, run for two of
+"""The full-color layer's benches on the board, over USB: each bench cart is sent, run for two of
 the board's 5 s stats windows, read from the log, and removed again. Prints a table, and saves it
 (results/NAME.json) for a later run to compare with.
 

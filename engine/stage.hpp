@@ -25,8 +25,8 @@ class Stage {
 
   // scale 1: drawn at full size; 2: at half, each pixel sent as 2x2 (a quarter of the drawing).
   // width: what goes out, kH rows of it (wider than the window: the scene runs past it to the
-  // glass's edges); centre_x: where the window's centre is in it. A multiple of 4 at scale 2.
-  explicit Stage(int scale = 1, int width = kW, float centre_x = kW / 2.0f);
+  // glass's edges); center_x: where the window's center is in it. A multiple of 4 at scale 2.
+  explicit Stage(int scale = 1, int width = kW, float center_x = kW / 2.0f);
   ~Stage();
 
   // ---- the scene (the Lua API's, docs/api.md) ----
@@ -37,33 +37,33 @@ class Stage {
   int cylinder(float r, float h, int segs);         // along y
   int cone(float r, float h, int segs);             // along y, the point up
   // Vertices (x, y, z, ...) and triangles (indices into them, from 0), each face turned outward from
-  // the shape's centre (meant for convex shapes, as dice are). smooth: normals averaged at shared
+  // the shape's center (meant for convex shapes, as dice are). smooth: normals averaged at shared
   // vertices; else each face flat.
   // uv: a texture's coordinates (u, v, ...), a pair a vertex, 0..1 across it (it repeats past).
   int mesh(const std::vector<float>& xyz, const std::vector<int>& tris, bool smooth, const std::vector<float>* uv = nullptr);
-  // An object: a shape with a colour (0xRRGGBB), a shine (specular, 0..255) and unlit (its colour
+  // An object: a shape with a color (0xRRGGBB), a shine (specular, 0..255) and unlit (its color
   // as is). Returns its id, or -1.
   int add(int mesh, uint32_t rgb, int shine, bool unlit);
   bool place(int obj, float x, float y, float z, float rx, float ry, float rz);  // Euler degrees: x, then y, then z
   bool orient(int obj, const float m[9]);                                       // a rotation matrix, rows
   bool hide(int obj, bool hidden);
-  bool recolour(int obj, uint32_t rgb, int shine, bool unlit);
+  bool recolor(int obj, uint32_t rgb, int shine, bool unlit);
   // A texture: w x h texels (4 to 64 each way, powers of two), each an index into palette (16
-  // colours, 0xRRGGBB). Returns its id, or -1. Shapes carry (u, v) coordinates: a box's faces each
+  // colors, 0xRRGGBB). Returns its id, or -1. Shapes carry (u, v) coordinates: a box's faces each
   // the whole texture, a sphere's, cylinder's and cone's around their side (caps across), a torus's
   // around and through its tube.
   int texture(int w, int h, const std::vector<uint8_t>& texels, const uint32_t palette[16]);
-  // An object in a texture (tex -1: its colour again), repeated ru x rv times across the shape, lit
+  // An object in a texture (tex -1: its color again), repeated ru x rv times across the shape, lit
   // as its shine and unlit say. Mapped affinely across each triangle (the PS1's way: it bends on
   // big triangles near the camera; smaller ones bend less).
   bool skin(int obj, int tex, float ru, float rv);
   // The camera at (x, y, z), looking along +z at yaw 0 (yaw 90: along +x; pitch 90: up); fov degrees.
   void view(float x, float y, float z, float yaw, float pitch, float fov);
-  // The sun: azimuth and elevation in degrees (Jet's), intensity 0..255, and the ambient colour.
+  // The sun: azimuth and elevation in degrees (Jet's), intensity 0..255, and the ambient color.
   void light(float azimuth, float elevation, int intensity, uint32_t ambient_rgb);
   void sky(uint32_t top_rgb, uint32_t bottom_rgb);  // the background, top to bottom
   // Shadows: objects with shadow() on cast them along the sun onto the plane y = height, in
-  // `rgb` (the ground's colour in shadow).
+  // `rgb` (the ground's color in shadow).
   void ground(float height, uint32_t rgb);
   bool shadow(int obj, bool on);
   // A world point on the output (0..width(), 0..kH; its depth along the view). False: behind the camera.

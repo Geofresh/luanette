@@ -3,7 +3,7 @@
 How the 3D stage (`engine/stage.hpp`, `stage.cpp`, `stage_pie.S`) draws, and how it got to 60 fps,
 with the measurements behind each decision. The overview is in `ARCHITECTURE.md`.
 
-The stage draws a lit, depth-buffered 3D scene on the cart window in full RGB565 colour, at
+The stage draws a lit, depth-buffered 3D scene on the cart window in full RGB565 color, at
 384x384 or at 192x192 shown as 2x2. There's no framebuffer: the scene is drawn band by band into
 the band buffers just before each band goes out. Meshes, materials and the lighting model come
 from Jet (`jet/`, a software rasteriser, vendored and patched; see NOTICE). The pipeline and the
@@ -23,18 +23,18 @@ same scenes a few percent faster (`tests/bench/`).
   span loop (edge slopes, depth and brightness planes, a 64-byte record) and binned by the 16-row
   pieces it crosses. There's no sort: the depth buffer orders the pixels.
 - **Drawing**: a span loop in IRAM. Each pixel costs a 16-bit depth test, a lookup in the
-  material's brightness-to-colour table (already in the panel's byte order) and two adds. A face
-  with one brightness (flat-shaded, unlit, or turned from the sun) is filled in one colour. Edges are walked from their
+  material's brightness-to-color table (already in the panel's byte order) and two adds. A face
+  with one brightness (flat-shaded, unlit, or turned from the sun) is filled in one color. Edges are walked from their
   upper vertex with their own slope in 32 bits (the 64-bit edge's low 4 bits are the same on every
   row, so the walk and its rounding are exact), so triangles sharing an edge meet without gaps or
-  double-drawn pixels (pixel centres, top-left inclusive). Runs of 24 pixels or more go 8 at a
+  double-drawn pixels (pixel centers, top-left inclusive). Runs of 24 pixels or more go 8 at a
   time on the S3's vector unit (`stage_pie.S`: depth unzipped to 16-bit lanes, tested with a biased
-  signed min and compare, colour blended by the mask; a lit face's colour broadcast when its 8
+  signed min and compare, color blended by the mask; a lit face's color broadcast when its 8
   pixels share a table entry, else looked up one by one). The sky and depth clears go 16 bytes a
   store. `Stage::selftest()` (`check selftest` over USB) draws test scenes with the
   vector loop and without, at every 16-byte phase of the band buffer, and compares them bit for bit.
 - **Textures** (`texture`, `skin`): palette texels (4 to 64 each way), mapped affinely (the PS1's
-  way), lit through a table of their 16 colours at 64 brightness levels; their own span loop
+  way), lit through a table of their 16 colors at 64 brightness levels; their own span loop
   (`draw_tex`, a flat face's without the brightness), about 1.6x a plain face's pixel.
 - **Half size** (`res`): each frame carries its scale, so a cart can switch between frames while
   the last one is still being drawn. At half size the 410-wide scene is 206 columns (the last
@@ -52,11 +52,11 @@ same scenes a few percent faster (`tests/bench/`).
 - **The glass's width**: a 3D cart's scene is 410 wide (the window at x 12 in it, `fov` still across
   the window), and every cart's picture runs its edge columns out to the glass's edges (2D bands go
   out full width too). A picture or scene stopping at the window met the black margin in a hard
-  vertical edge, which this AMOLED's subpixel layout draws as a coloured zig-zag (seen on the left
+  vertical edge, which this AMOLED's subpixel layout draws as a colored zig-zag (seen on the left
   edge; full-width rows never have one).
 - **From Lua** (docs/api.md, "3D"): `shape obj place orient paint hide view light sky ground shadow
   project texture skin res`. A cart's first 3D call makes its stage (`Cart::stage()`); from then on its picture is an
-  overlay (colour 0 clear, with scanlines; `overlay_rows`), composited onto each band by
+  overlay (color 0 clear, with scanlines; `overlay_rows`), composited onto each band by
   the sender, and core 1 runs the cart's Lua then prepares the next frame. Planar shadows: an
   object's faces turned to the sun, dropped onto the ground plane, unlit. `cartrun` renders 3D carts
   as the board does (`frame_<n>.ppm`); check.py uses it. A full-window object costs the span loop
@@ -66,7 +66,7 @@ same scenes a few percent faster (`tests/bench/`).
   for comparison). `tests/bench/stage_vs_jet.py` uses them.
 - Memory: nothing in internal RAM while no stage is open (Jet's code runs from flash and its trig
   tables are made in PSRAM by the first scene; it used to be 39 KB of IRAM and .bss at all times).
-  An open stage takes about 13 KB: depth and colour pieces, and the helper's stack.
+  An open stage takes about 13 KB: depth and color pieces, and the helper's stack.
 
 Measured 2026-10-14 on the board, before racing the beam (frames sent behind the scan), with two
 Gouraud rings:

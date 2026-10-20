@@ -1,12 +1,12 @@
 // The 3D stage's span loop in the ESP32-S3's vector instructions (PIE: 128-bit registers, eight
 // 16-bit lanes): eight pixels of a triangle's row at a time, depth-tested against the piece's depth
-// row and coloured. Bit for bit what stage.cpp's scalar loop gives (stage_pie_selftest checks that
+// row and colored. Bit for bit what stage.cpp's scalar loop gives (stage_pie_selftest checks that
 // on the board). Also the fills band() starts each piece with.
 //
 // Both rows aligned to 16 bytes, whole groups of 8 pixels. Depth: 24.8 in 32-bit lanes, stepped
 // 8 pixels a group; its whole part (16 bits) unzipped into 16-bit lanes, tested unsigned (both sides
 // biased by 0x8000 for the signed compare and min): the new depth row is the lanes' minimum, and
-// where the new pixel was nearer its colour is taken. Colour: a flat triangle's one colour, else
+// where the new pixel was nearer its color is taken. Color: a flat triangle's one color, else
 // the material's table at the brightness (16.16): one broadcast when the 8 pixels share an entry,
 // else looked up one by one (the S3 has no vector gather).
 #include "sdkconfig.h"
@@ -16,9 +16,9 @@
 #define S_Z      0    /* int32 z[8]: the group's depths */
 #define S_DZ8    32   /* int32: 8 x depth per pixel */
 #define S_BIAS   36   /* 0x80008000 */
-#define S_COLOUR 40   /* a flat triangle's colour, in both halves */
+#define S_COLOR 40   /* a flat triangle's color, in both halves */
 #define S_FLAT   44
-#define S_GATHER 48   /* uint16 [8]: scratch for the looked-up colours */
+#define S_GATHER 48   /* uint16 [8]: scratch for the looked-up colors */
 #define S_ZR     64
 #define S_CR     68
 #define S_N8     72
@@ -27,7 +27,7 @@
 #define S_LUT    84
 
     // The depth test and the blend for 8 pixels: q0 q1 depths (32-bit lanes), q2 8 x their step,
-    // q3 the bias, q4 the colour; a5 the depth row, a6 the colour row (both advanced). SAR = 8.
+    // q3 the bias, q4 the color; a5 the depth row, a6 the color row (both advanced). SAR = 8.
     .macro TEST8
     ee.vsr.32 q5, q0                // depth >> 8
     ee.vsr.32 q6, q1
@@ -39,7 +39,7 @@
     ee.vmin.s16 q5, q5, q6
     ee.xorq q5, q5, q3
     ee.vst.128.ip q5, a5, 16
-    ee.vld.128.ip q6, a6, 0         // the colour row's
+    ee.vld.128.ip q6, a6, 0         // the color row's
     ee.andq q5, q4, q7
     ee.notq q7, q7
     ee.andq q6, q6, q7
@@ -70,7 +70,7 @@ stage_pie_span:
     beqz    a7, .Lspan_done
     l32i    a3, a2, S_FLAT
     beqz    a3, .Lspan_lit
-    addi    a3, a2, S_COLOUR
+    addi    a3, a2, S_COLOR
     ee.vldbc.32 q4, a3
     loopnez a7, .Lspan_flat_end
     TEST8

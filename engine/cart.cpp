@@ -374,7 +374,7 @@ __attribute__((always_inline)) inline int coord(lua_State* L, int i) {
   return t - (v < static_cast<lua_Number>(t));
 }
 inline int opt_coord(lua_State* L, int i, int d) { return absent(L, i) ? d : coord(L, i); }
-// The colour argument: absent, the last one used; given, it becomes the last one used.
+// The color argument: absent, the last one used; given, it becomes the last one used.
 __attribute__((always_inline)) inline int color_arg(lua_State* L, int i) {
   if (absent(L, i)) return S->color;
   S->color = coord(L, i) & 15;
@@ -474,22 +474,22 @@ int f_spr(lua_State* L) {
   lua_pop(L, 2);
   return 0;
 }
-// palette(i, 0xRRGGBB): what colour index i shows, from now on (the whole picture, this frame
-// included); palette(i): its colour now; palette(): the starting 16 again.
+// palette(i, 0xRRGGBB): what color index i shows, from now on (the whole picture, this frame
+// included); palette(i): its color now; palette(): the starting 16 again.
 int f_palette(lua_State* L) {
   if (lua_isnoneornil(L, 1)) {
-    S->cart->reset_colours();
+    S->cart->reset_colors();
     return 0;
   }
   const lua_Integer i = luaL_checkinteger(L, 1);
-  if (i < 0 || i > 15) return luaL_error(L, "palette: colour %d isn't one of 0-15", static_cast<int>(i));
+  if (i < 0 || i > 15) return luaL_error(L, "palette: color %d isn't one of 0-15", static_cast<int>(i));
   if (lua_isnoneornil(L, 2)) {
-    lua_pushinteger(L, static_cast<lua_Integer>(S->cart->colours()[i]));
+    lua_pushinteger(L, static_cast<lua_Integer>(S->cart->colors()[i]));
     return 1;
   }
   const lua_Integer rgb = luaL_checkinteger(L, 2);
-  if (rgb < 0 || rgb > 0xFFFFFF) return luaL_error(L, "palette: 0x%x isn't a 0xRRGGBB colour", static_cast<unsigned>(rgb));
-  S->cart->set_colour(static_cast<int>(i), static_cast<uint32_t>(rgb));
+  if (rgb < 0 || rgb > 0xFFFFFF) return luaL_error(L, "palette: 0x%x isn't a 0xRRGGBB color", static_cast<unsigned>(rgb));
+  S->cart->set_color(static_cast<int>(i), static_cast<uint32_t>(rgb));
   return 0;
 }
 
@@ -725,7 +725,7 @@ int f_cos(lua_State* L) {
   return 1;
 }
 
-// trifill: a pixel is filled when its centre is inside, with the top-left rule on the edges, in
+// trifill: a pixel is filled when its center is inside, with the top-left rule on the edges, in
 // sixteenths of a pixel (integers, so check.py's preview is exact): solid 3D from a cart.
 int f_trifill(lua_State* L) {
   auto sub = [&](int i) -> int64_t {  // a coordinate in 1/16 px, floored
@@ -757,7 +757,7 @@ int f_trifill(lua_State* L) {
     dy[e] = y[b] - y[a];
     bias[e] = (dy[e] < 0 || (dy[e] == 0 && dx[e] > 0)) ? 0 : -1;
   }
-  // Pixels whose centres (16 px + 8) can be inside, within the clip.
+  // Pixels whose centers (16 px + 8) can be inside, within the clip.
   auto lo = [](int64_t v) { return static_cast<int>((v - 8 + 15 + (1 << 20) * 16) / 16 - (1 << 20)); };  // ceil((v - 8) / 16)
   auto hi = [](int64_t v) { return static_cast<int>((v - 8 + (1 << 20) * 16) / 16 - (1 << 20)); };       // floor((v - 8) / 16)
   const int x0 = std::max(lo(std::min({x[0], x[1], x[2]})), S->clip_x0), x1 = std::min(hi(std::max({x[0], x[1], x[2]})), S->clip_x1 - 1);
@@ -968,7 +968,7 @@ int f_not_yet(lua_State* L) {
 }
 // ---- 3D (the stage) ----
 
-// ---- hd: the full-colour layer ----
+// ---- hd: the full-color layer ----
 
 
 Hd& hd_of(lua_State* L) {
@@ -988,7 +988,7 @@ Hd& hd_of(lua_State* L) {
 
 uint32_t hd_rgb(lua_State* L, int i) {
   const lua_Integer v = luaL_checkinteger(L, i);
-  if (v < 0 || v > 0xFFFFFF) luaL_error(L, "0x%x isn't a 0xRRGGBB colour", static_cast<unsigned>(v));
+  if (v < 0 || v > 0xFFFFFF) luaL_error(L, "0x%x isn't a 0xRRGGBB color", static_cast<unsigned>(v));
   return static_cast<uint32_t>(v);
 }
 uint8_t hd_alpha(lua_State* L, int i) {
@@ -1135,7 +1135,7 @@ Stage& stage_of(lua_State*) {
 }
 uint32_t rgb_arg(lua_State* L, int i, const char* fn) {
   const lua_Integer v = luaL_checkinteger(L, i);
-  if (v < 0 || v > 0xFFFFFF) luaL_error(L, "%s: colours are 0xRRGGBB", fn);
+  if (v < 0 || v > 0xFFFFFF) luaL_error(L, "%s: colors are 0xRRGGBB", fn);
   return static_cast<uint32_t>(v);
 }
 float num(lua_State* L, int i) { return static_cast<float>(luaL_checknumber(L, i)); }
@@ -1192,10 +1192,10 @@ int f_obj(lua_State* L) {
   return id_or_error(L, st.add(shape, rgb_arg(L, 2, "obj"), static_cast<int>(luaL_optinteger(L, 3, 0)), lua_toboolean(L, 4)), "obj");
 }
 int f_paint(lua_State* L) {
-  return ok_or_error(L, stage_of(L).recolour(obj_arg(L, 1), rgb_arg(L, 2, "paint"), static_cast<int>(luaL_optinteger(L, 3, 0)), lua_toboolean(L, 4)),
+  return ok_or_error(L, stage_of(L).recolor(obj_arg(L, 1), rgb_arg(L, 2, "paint"), static_cast<int>(luaL_optinteger(L, 3, 0)), lua_toboolean(L, 4)),
                      "paint");
 }
-// texture(w, h, texels): w x h colour numbers (hex digits, as SPRITES), in the palette as it is now
+// texture(w, h, texels): w x h color numbers (hex digits, as SPRITES), in the palette as it is now
 int f_texture(lua_State* L) {
   Stage& st = stage_of(L);
   const int w = static_cast<int>(luaL_checkinteger(L, 1)), h = static_cast<int>(luaL_checkinteger(L, 2));
@@ -1207,14 +1207,14 @@ int f_texture(lua_State* L) {
     const char ch = s[k];
     if (ch == ' ' || ch == '\n' || ch == '\t' || ch == '\r') continue;  // (laid out in rows, if the cart likes)
     const int v = ch >= '0' && ch <= '9' ? ch - '0' : ch >= 'a' && ch <= 'f' ? ch - 'a' + 10 : ch >= 'A' && ch <= 'F' ? ch - 'A' + 10 : -1;
-    if (v < 0) return luaL_error(L, "texture: '%c' isn't a colour number (0-9, a-f)", ch);
+    if (v < 0) return luaL_error(L, "texture: '%c' isn't a color number (0-9, a-f)", ch);
     texels.push_back(static_cast<uint8_t>(v));
   }
   uint32_t pal[16];
-  for (int k = 0; k < 16; ++k) pal[k] = S->cart->colours()[k];
+  for (int k = 0; k < 16; ++k) pal[k] = S->cart->colors()[k];
   return id_or_error(L, st.texture(w, h, texels, pal), "texture");
 }
-// skin(o, tex[, repeat_u, repeat_v]): object o in a texture (nil: its colour again)
+// skin(o, tex[, repeat_u, repeat_v]): object o in a texture (nil: its color again)
 int f_skin(lua_State* L) {
   const int tex = lua_isnoneornil(L, 2) ? -1 : static_cast<int>(luaL_checkinteger(L, 2)) - 1;
   if (!lua_isnoneornil(L, 2) && tex < 0) return luaL_error(L, "skin: no texture %d", tex + 1);
@@ -1511,7 +1511,7 @@ bool Cart::start(std::string_view name, std::string_view src) {
     lua_pushcfunction(L_, f.func);
     lua_setglobal(L_, f.name);
   }
-  {  // hd: the full-colour layer (docs/api.md)
+  {  // hd: the full-color layer (docs/api.md)
     static const luaL_Reg kHd[] = {
         {"clear", hd_clear},       {"order", hd_order}, {"scanlines", hd_scanlines}, {"rect", hd_rect},
         {"frame", hd_frame},       {"circle", hd_circle}, {"ring", hd_ring},        {"line", hd_line},

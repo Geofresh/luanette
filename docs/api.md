@@ -1,7 +1,7 @@
 # Carts: the API
 
 A cart is one Lua 5.4 file. It draws a 128x128 picture, shown 3x as 384x384, and can add a 3D
-scene under it and a full-colour layer at the full 384x384.
+scene under it and a full-color layer at the full 384x384.
 
 This file is the contract. `check.py` tests carts against it, and the runtime in `engine/`
 implements the same calls, drawing exactly the pixels `check.py`'s preview shows
@@ -29,15 +29,15 @@ The three header comments are required: `title`, `by` and `about`. The title sho
 launcher. Two more are optional:
 
 - `-- api: 2` says which version of this API the cart needs (see Versions). Give it to any cart
-  that uses the full-colour layer.
-- `-- canvas: full` gives the full-colour layer the whole glass (the entire 410x502 screen,
-  corners and all) instead of the 384x384 window (see The full-colour layer).
+  that uses the full-color layer.
+- `-- canvas: full` gives the full-color layer the whole glass (the entire 410x502 screen,
+  corners and all) instead of the 384x384 window (see The full-color layer).
 
 Everything else is up to the cart. Globals persist between frames.
 
 ## Versions and what a cart runs on
 
-The API has a version. Version 1 is everything before the full-colour layer; version 2 adds the
+The API has a version. Version 1 is everything before the full-color layer; version 2 adds the
 layer (`hd`), its images, the `ui` helpers, `caps()` and `touch(true)`. A runtime older than a
 cart's `-- api: N` refuses it with a message saying so ("it needs API 2; this runtime has 1
 (update the firmware)") instead of failing at the first call it doesn't know. `check.py` refuses
@@ -53,7 +53,7 @@ a version the board doesn't have, and asks for `-- api: 2` when a cart uses the 
 | `scale` | the panel's pixels for each canvas unit: 1 (the canvas is always 384 x 384 units; another board scales it) |
 | `round` | a round window whose corners don't show: false |
 | `touch`, `tilt`, `buzz`, `sound` | true, true, false (no vibration motor is fitted), true (the speaker plays `sfx`) |
-| `hd`, `stage` | the full-colour layer and the 3D scene: true, true |
+| `hd`, `stage` | the full-color layer and the 3D scene: true, true |
 | `host` | `data()` and `act()` reach the console: true |
 | `version` | the API version the runtime has: 2 |
 | `board` | `"waveshare-amoled-206"` (`"browser"` in the playground) |
@@ -79,43 +79,43 @@ a version the board doesn't have, and asks for `-- api: 2` when a cart uses the 
   is dark, no frames run; `time()` keeps counting, and `wake()` can light the screen again when
   something is due.
 
-## Screen and colours
+## Screen and colors
 
-128x128 pixels, (0,0) top left. 16 colours, by index:
+128x128 pixels, (0,0) top left. 16 colors, by index:
 
 | 0-3 | 4-7 | 8-11 | 12-15 |
 |---|---|---|---|
 | 0 black | 4 brown | 8 red | 12 blue |
-| 1 dark blue | 5 dark grey | 9 orange | 13 lavender |
-| 2 dark purple | 6 light grey | 10 yellow | 14 pink |
+| 1 dark blue | 5 dark gray | 9 orange | 13 lavender |
+| 2 dark purple | 6 light gray | 10 yellow | 14 pink |
 | 3 dark green | 7 white | 11 green | 15 peach |
 
 That's the PICO-8 palette. On the board each pixel's bottom third is a little darker, like a
 scanline. The window is narrower than the glass, so the picture's leftmost and rightmost columns
-carry on out to the glass's edges: a background colour, or a bar drawn edge to edge, fills the
+carry on out to the glass's edges: a background color, or a bar drawn edge to edge, fills the
 screen's width.
 
 ## Drawing
 
-All coordinates are numbers (fractions are floored). The colour `c` is optional where shown in
-brackets; it defaults to the last colour used (7 at start).
+All coordinates are numbers (fractions are floored). The color `c` is optional where shown in
+brackets; it defaults to the last color used (7 at start).
 
 | call | does |
 |---|---|
 | `cls([c])` | clear the screen (default 0) |
-| `pset(x, y, [c])` / `pget(x, y)` | set / read one pixel (`pget` returns the colour index) |
+| `pset(x, y, [c])` / `pget(x, y)` | set / read one pixel (`pget` returns the color index) |
 | `line(x0, y0, x1, y1, [c])` | a line |
 | `rect(x0, y0, x1, y1, [c])` / `rectfill(...)` | a box outline / filled box (corners inclusive) |
 | `circ(x, y, r, [c])` / `circfill(x, y, r, [c])` | a circle outline / filled circle |
 | `trifill(x0, y0, x1, y1, x2, y2, [c])` | a filled triangle. Fractions count (to 1/16 px): triangles sharing an edge meet with no gap and no overlap, so meshes tile cleanly. For solid 3D: drop faces turned away, draw far to near |
 | `print(text, x, y, [c])` | text in the 4x6 font (3x5 glyphs, 4 px a character, so 32 a line); returns the x after the text. Letters show as capitals; `\n` starts a new line at `x`; whole numbers print without `.0` |
-| `spr(n, x, y, [flip_x], [flip_y])` | sprite `n` from `SPRITES` (below), colour 0 transparent |
-| `pal(c0, c1)` / `pal()` | draw colour `c0` as `c1` from now on / reset |
-| `palette(i, 0xRRGGBB)` / `palette(i)` / `palette()` | change what colour index `i` (0-15) looks like, for the whole picture (this frame included) / its colour now / the starting 16 again. A cart still has 16 colours at a time; this picks which 16 (an exact red, softer pastels). `pal` remaps indices, `palette` the colours behind them |
+| `spr(n, x, y, [flip_x], [flip_y])` | sprite `n` from `SPRITES` (below), color 0 transparent |
+| `pal(c0, c1)` / `pal()` | draw color `c0` as `c1` from now on / reset |
+| `palette(i, 0xRRGGBB)` / `palette(i)` / `palette()` | change what color index `i` (0-15) looks like, for the whole picture (this frame included) / its color now / the starting 16 again. A cart still has 16 colors at a time; this picks which 16 (an exact red, softer pastels). `pal` remaps indices, `palette` the colors behind them |
 | `camera(x, y)` / `camera()` | offset everything drawn by (-x, -y) / reset |
 | `clip(x, y, w, h)` / `clip()` | draw only inside a rectangle / reset |
 
-Sprites: a global table `SPRITES` of 8x8 images, each a string of 64 hex digits (one colour index
+Sprites: a global table `SPRITES` of 8x8 images, each a string of 64 hex digits (one color index
 a pixel, row by row). `SPRITES[1] = "0000000000777700..."` and so on; `spr(1, x, y)` draws it.
 
 Per-pixel `pset` over the whole screen every frame is slow on the board; draw with `rectfill`,
@@ -123,9 +123,9 @@ Per-pixel `pset` over the whole screen every frame is slow on the board; draw wi
 
 ## 3D
 
-A cart can draw a lit, depth-buffered 3D scene in full colour under its picture, at the window's
+A cart can draw a lit, depth-buffered 3D scene in full color under its picture, at the window's
 full resolution (384x384, not the picture's 128x128). It starts with the first 3D call; from then
-on the picture is an overlay: **colour 0 shows the scene through**, every other colour draws over it
+on the picture is an overlay: **color 0 shows the scene through**, every other color draws over it
 (so `cls(0)` clears the overlay, and HUD text, labels and sprites sit on top). A cart without 3D
 calls costs nothing more.
 
@@ -135,24 +135,24 @@ calls costs nothing more.
 | `shape("sphere", r, [segs])` | a sphere (segs around, default 16) |
 | `shape("torus", R, r, [segs])` | a ring around the z axis (facing the camera at the start) |
 | `shape("cylinder", r, h, [segs])` / `shape("cone", r, h, [segs])` | along y (the cone's point up) |
-| `shape(verts, faces, [smooth, uvs])` | your own: `verts` a flat list `{x, y, z, x, y, z, ...}`, `faces` a flat list of vertex numbers (from 1) in threes, each a triangle. Faces are turned outward from the shape's centre, so wind them any way (meant for convex shapes: dice, gems). Flat-shaded unless `smooth`. `uvs`: texture coordinates `{u, v, u, v, ...}`, a pair a vertex, 0 to 1 across a texture (it repeats past them) |
-| `obj(shape, colour, [shine, unlit])` | an object: the shape placed in the scene, in `colour` (`0xRRGGBB`); `shine` 0-255 adds a highlight; `unlit` shows the colour as it is. Returns its number |
+| `shape(verts, faces, [smooth, uvs])` | your own: `verts` a flat list `{x, y, z, x, y, z, ...}`, `faces` a flat list of vertex numbers (from 1) in threes, each a triangle. Faces are turned outward from the shape's center, so wind them any way (meant for convex shapes: dice, gems). Flat-shaded unless `smooth`. `uvs`: texture coordinates `{u, v, u, v, ...}`, a pair a vertex, 0 to 1 across a texture (it repeats past them) |
+| `obj(shape, color, [shine, unlit])` | an object: the shape placed in the scene, in `color` (`0xRRGGBB`); `shine` 0-255 adds a highlight; `unlit` shows the color as it is. Returns its number |
 | `place(o, x, y, z, [rx, ry, rz])` | move object `o` there, turned by `rx, ry, rz` degrees (about x, then y, then z) |
 | `orient(o, m1, ..., m9)` / `orient(o, {m1, ..., m9})` | turn it by a rotation matrix (rows), for carts that keep their own (physics) |
-| `paint(o, colour, [shine, unlit])` | recolour it |
+| `paint(o, color, [shine, unlit])` | recolor it |
 | `hide(o, [hidden])` | hide it (`hide(o, false)` shows it again) |
 | `view(x, y, z, [yaw, pitch, fov])` | the camera: at x, y, z, looking along +z (yaw 90 looks along +x, pitch 90 up); fov in degrees (60). Default `view(0, 0, -420)` |
-| `light(azimuth, elevation, [intensity, ambient])` | the sun's direction in degrees, its strength 0-255 (255), and the shadows' colour (`0x22283E`) |
+| `light(azimuth, elevation, [intensity, ambient])` | the sun's direction in degrees, its strength 0-255 (255), and the shadows' color (`0x22283E`) |
 | `sky(top, [bottom])` | the background, a gradient from top to bottom (`0xRRGGBB` each) |
-| `ground(y, [colour])` | shadows fall on the plane at height `y`, in `colour` (the ground's colour in shadow, `0xRRGGBB`; default black) |
+| `ground(y, [color])` | shadows fall on the plane at height `y`, in `color` (the ground's color in shadow, `0xRRGGBB`; default black) |
 | `shadow(o, [on])` | object `o` casts a shadow along the sun onto the ground (`shadow(o, false)` stops it). Costs its faces again |
 | `project(x, y, z)` | where a point in the scene lands on the picture: `x, y, depth` (picture pixels, for labels), or `nil` behind the camera |
-| `texture(w, h, texels)` | a texture: `w` x `h` texels (4, 8, 16, 32 or 64 each way), `texels` a string of colour numbers as `SPRITES` are (hex digits row by row; spaces and line breaks ignored), in the palette as it is when made (`palette()` first for other colours). Returns its number (up to 16) |
-| `skin(o, tex, [ru, rv])` | object `o` in texture `tex`, repeated `ru` x `rv` times across its shape (default 1; `rv` defaults to `ru`), lit as its `shine` and `unlit` say (its colour is set aside; `skin(o)` brings it back). A box's faces each show the whole texture, a sphere's, cylinder's and cone's wrap around their side (caps across), a torus's around and through its tube |
+| `texture(w, h, texels)` | a texture: `w` x `h` texels (4, 8, 16, 32 or 64 each way), `texels` a string of color numbers as `SPRITES` are (hex digits row by row; spaces and line breaks ignored), in the palette as it is when made (`palette()` first for other colors). Returns its number (up to 16) |
+| `skin(o, tex, [ru, rv])` | object `o` in texture `tex`, repeated `ru` x `rv` times across its shape (default 1; `rv` defaults to `ru`), lit as its `shine` and `unlit` say (its color is set aside; `skin(o)` brings it back). A box's faces each show the whole texture, a sphere's, cylinder's and cone's wrap around their side (caps across), a torus's around and through its tube |
 | `res(mode)` / `res()` | the scene drawn at `"full"` size (384 x 384, the default), `"half"` (192 x 192, each pixel shown 2x2: a quarter of the drawing, chunkier), or `"auto"` (the board draws at half while frames run over and goes back to full when there's room) / the size it's drawn at now |
 
 World units are yours (y up; the default camera sees about ±240 units across at z = 0). Shapes are
-made once (in `_init`); move objects every frame. Limits: 64 shapes, 128 objects, 64 colour and
+made once (in `_init`); move objects every frame. Limits: 64 shapes, 128 objects, 64 color and
 shine pairs (a texture with a shine counts as one), 16 textures, 16,384 vertices and 16,384
 triangles in all the shapes together. Triangles nearer the camera than 2 units are dropped. What
 holds 60 fps: about 1,500 triangles facing the camera at once (a sphere of 16 segments is 224 of
@@ -169,11 +169,11 @@ smoothing between texels (crisp, and a fine texture far away shimmers).
 check.py checks the calls and the limits; it draws a 3D cart's preview with the board's own
 renderer (`cartrun`, built in `host/build`), and fails the cart if that runtime stops it.
 
-## The full-colour layer (`hd`)
+## The full-color layer (`hd`)
 
-Next to the 128x128 picture, a cart can draw in full colour at the window's full resolution: a
+Next to the 128x128 picture, a cart can draw in full color at the window's full resolution: a
 384x384 canvas (the picture's 3x, so picture pixel `(x, y)` is canvas `(3x, 3y)` to `(3x+2, 3y+2)`),
-with smooth edges, any `0xRRGGBB` colour, transparency, and text in real fonts. It starts with the
+with smooth edges, any `0xRRGGBB` color, transparency, and text in real fonts. It starts with the
 first `hd.` call (a cart without one costs nothing more). Its edge columns carry on out to the
 glass like the picture's, and it gets the same scanlines unless turned off.
 
@@ -190,8 +190,8 @@ the whole canvas every frame costs most of the board's frame on its own.
 
 | call | does |
 |---|---|
-| `hd.clear([rgb, a])` | wipe the canvas (inside the clip) to clear, or to a colour at alpha `a` (255) |
-| `hd.order("over" \| "under")` | the layer over the picture (default), or under it: then the picture's **colour 0 shows the layer through**, as over a 3D scene. Under a 3D scene's picture too: scene, layer, picture, in that order when "under" |
+| `hd.clear([rgb, a])` | wipe the canvas (inside the clip) to clear, or to a color at alpha `a` (255) |
+| `hd.order("over" \| "under")` | the layer over the picture (default), or under it: then the picture's **color 0 shows the layer through**, as over a 3D scene. Under a 3D scene's picture too: scene, layer, picture, in that order when "under" |
 | `hd.scanlines(on)` / `hd.scanlines()` | the scanlines on the layer (default on) / whether they're on |
 | `hd.rect(x, y, w, h, rgb, [a, radius])` | a filled box, its corners rounded by `radius` |
 | `hd.frame(x, y, w, h, rgb, [width, radius, a])` | a box's outline, `width` px (1) |
@@ -282,7 +282,7 @@ the calls as the board does and draws the preview with the board's own runtime (
 |---|---|
 | `btn(b)` | true while button `b` is held |
 | `btnp(b)` | true on the frame `b` went down |
-| `touch()` / `touch(true)` | `x, y` in screen pixels while the cart window is touched, else `nil` / the same in canvas units (3x finer: for the full-colour layer) |
+| `touch()` / `touch(true)` | `x, y` in screen pixels while the cart window is touched, else `nil` / the same in canvas units (3x finer: for the full-color layer) |
 | `tilt()` | `ax, ay`, each about -1..1: which way things would roll. `ax` > 0 when the right edge is lower, `ay` > 0 when the bottom edge is lower (screen directions: roll a ball by `ax, ay` and it goes downhill). Measured from how the board was held when the cart started (lying on a desk at a lean counts as level); `level()` takes the pose it's in now as level |
 
 Buttons: `0` left, `1` right, `2` up, `3` down, `4` A, `5` B. There are no buttons on screen: a

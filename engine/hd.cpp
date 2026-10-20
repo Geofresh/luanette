@@ -1,4 +1,4 @@
-// The full-colour layer (hd.hpp).
+// The full-color layer (hd.hpp).
 #include "hd.hpp"
 
 #include <algorithm>
@@ -14,7 +14,7 @@
 namespace carts {
 namespace {
 
-// compose() and front_out() take two pixels' colour (and four alphas) from each 32-bit word of a row.
+// compose() and front_out() take two pixels' color (and four alphas) from each 32-bit word of a row.
 static_assert(__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__, "the layer's row words assume little-endian");
 
 using hd_fonts::Font;
@@ -132,12 +132,12 @@ struct Recip {
 };
 constexpr Recip kRecip;
 
-// One pixel: colour c at alpha sa (1-255) over what's there (straight alpha, "over").
+// One pixel: color c at alpha sa (1-255) over what's there (straight alpha, "over").
 inline void blend(uint16_t& dc, uint8_t& da, uint16_t c, uint32_t sa) {
   if (sa >= 255 || da == 0) {
     dc = c;
     da = static_cast<uint8_t>(sa > 255 ? 255 : sa);
-  } else {  // the result's alpha, and its colour weighted by what each brings
+  } else {  // the result's alpha, and its color weighted by what each brings
     const uint32_t oa = sa + div255(da * (255 - sa));
     dc = lerp565(dc, c, static_cast<int>((sa * kRecip.v[oa]) >> 16));
     da = static_cast<uint8_t>(oa);
@@ -180,7 +180,7 @@ void Hd::span(int y, int x0, int x1, uint16_t c, uint8_t a) {
     if (x0 == 0 && x1 == w_) set_bit(solid_, y, true);  // the whole row opaque: its alpha needn't be kept
     else if (!sol) std::memset(pa + x0, 255, x1 - x0);
   } else {
-    // Over an opaque pixel (alpha stays 255) the colour moves toward c by a / 255: green spread out
+    // Over an opaque pixel (alpha stays 255) the color moves toward c by a / 255: green spread out
     // from red and blue in one 32-bit word, so one multiply weighs all three (to 32 steps).
     const uint32_t cs = (c | static_cast<uint32_t>(c) << 16) & 0x07E0F81F, t = (a * 32 + 127) / 255;
     for (int x = x0; x < x1; ++x) {
@@ -253,7 +253,7 @@ void Hd::clear(uint32_t rgb, uint8_t a) {
   for (int y = cy0_; y < cy1_; ++y) {
     // A row with nothing drawn on it since it was last cleared to nothing stays as it is.
     if (whole && a == 0 && !(inked_[y >> 5] >> (y & 31) & 1)) continue;
-    uint16_t* pc = wr(y, whole);  // (across: colour and alpha all written, no copy of the old row)
+    uint16_t* pc = wr(y, whole);  // (across: color and alpha all written, no copy of the old row)
     std::fill(pc + cx0_, pc + cx1_, c);
     if (whole && a == 255) {
       set_bit(solid_, y, true);
@@ -316,7 +316,7 @@ void Hd::ring(float cx, float cy, float r, uint32_t rgb, float width, uint8_t a)
   if (r <= 0 || width <= 0) return;
   const uint16_t c = to565(rgb);
   const float ri = r - width;  // the inner edge (below 0: a filled circle)
-  // A pixel's coverage: clamp01(r + 0.5 - d) less clamp01(ri + 0.5 - d), d its centre's distance.
+  // A pixel's coverage: clamp01(r + 0.5 - d) less clamp01(ri + 0.5 - d), d its center's distance.
   // Each row splits by |dx| into runs: whole (one fill), empty (the hole: skipped) and the edges
   // between, measured pixel by pixel. The runs' bounds keep 0.01 px clear of the exact ones, so a
   // pixel in a run is one the measure would give exactly 1 or 0.
@@ -376,12 +376,12 @@ void Hd::line(float x0, float y0, float x1, float y1, uint32_t rgb, float width,
     float xa = bx0, xb = bx1;
     if (std::fabs(dy) > 0.01f) {
       const float t = (my - y0) / dy, xm = x0 + t * dx, spread = reach * len / std::fabs(dy);
-      xa = std::max(bx0, xm - spread - 0.5f);  // pixels whose centre (px + 0.5) is within spread of xm
+      xa = std::max(bx0, xm - spread - 0.5f);  // pixels whose center (px + 0.5) is within spread of xm
       xb = std::min(bx1, xm + spread - 0.5f);
     }
     const int pa = std::max(ifloor(xa), cx0_), pb = std::min(iceil(xb), cx1_);
     if (pa >= pb) continue;
-    auto coverage = [&](int px) {  // the pixel's coverage, from its centre's distance to the segment
+    auto coverage = [&](int px) {  // the pixel's coverage, from its center's distance to the segment
       const float mx = px + 0.5f;
       const float t = ((mx - x0) * dx + (my - y0) * dy) * inv_len2;
       float dist;
@@ -393,7 +393,7 @@ void Hd::line(float x0, float y0, float x1, float y1, uint32_t rgb, float width,
       }
       return static_cast<uint32_t>(clamp01(hw + 0.5f - dist) * a + 0.5f);
     };
-    // A horizontal line (a rule, a divider: the commonest kind): pixels whose centres lie half a
+    // A horizontal line (a rule, a divider: the commonest kind): pixels whose centers lie half a
     // pixel inside its ends are beside it, all at the same distance, so one coverage serves the row
     // between its ends; only the ends are measured pixel by pixel. (The same sums as coverage().)
     int ia = pb, ib = pb;
@@ -426,18 +426,18 @@ void Hd::line(float x0, float y0, float x1, float y1, uint32_t rgb, float width,
 
 void Hd::gradient(float x, float y, float w, float h, uint32_t top, uint32_t bottom, uint8_t a) {
   if (w <= 0 || h <= 0) return;
-  if (top == bottom) {  // one colour: a box
+  if (top == bottom) {  // one color: a box
     rect(x, y, w, h, top, a);
     return;
   }
   // RGB565 has 32 steps of red and blue: a slow dark gradient bands. Each row is ordered-dithered
-  // (4 x 4 Bayer, as carts/pack_images.py does photos): four colours a row, repeating, so filling
+  // (4 x 4 Bayer, as carts/pack_images.py does photos): four colors a row, repeating, so filling
   // it stays a run of stores.
   static constexpr uint8_t kBayer[4][4] = {{0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5}};
   const float y1 = y + h;
   for (int py = std::max(ifloor(y), cy0_); py < std::min(iceil(y1), cy1_); ++py) {
     const float t = clamp01((py + 0.5f - y) / h);
-    auto ch = [&](int s, int max) {  // channel s of the row's colour, in [0, max]
+    auto ch = [&](int s, int max) {  // channel s of the row's color, in [0, max]
       return (((top >> s) & 255) * (1 - t) + ((bottom >> s) & 255) * t) * max / 255.0f;
     };
     const float r = ch(16, 31), gg = ch(8, 63), bl = ch(0, 31);
@@ -627,7 +627,7 @@ void Hd::image(const HdImage& img, float x, float y, float w, float h, uint8_t a
   const int xa = std::max(x0, cx0_), xb = std::min(x0 + iw, cx1_);
   const int ya = std::max(y0, cy0_), yb = std::min(y0 + ih, cy1_);
   if (xa >= xb || ya >= yb) return;
-  // Nearest sampling at each destination pixel's centre: the source column of every visible
+  // Nearest sampling at each destination pixel's center: the source column of every visible
   // column worked out once (32-bit maths: sizes are at most 32767 x 384; a 64-bit divide per
   // pixel is a library call on the board).
   uint16_t col[kMaxW];
@@ -862,8 +862,8 @@ int Hd::verify() {
     if (vis != bit(visible_, y) || opq != bit(opaque_, y)) return y;
   }
   // What the sender is told changed covers all that did: a row's pixels outside its changed_span
-  // (all of a row not changed()) are as the last verify saw them (colour; alpha where shown).
-  const size_t row = static_cast<size_t>(w_) * 2;  // colour then alpha (as 16-bit), a row
+  // (all of a row not changed()) are as the last verify saw them (color; alpha where shown).
+  const size_t row = static_cast<size_t>(w_) * 2;  // color then alpha (as 16-bit), a row
   const bool first = verify_seen_.empty();
   if (first) verify_seen_.assign(row * h_, 0);
   for (int y = 0; y < h_; ++y) {

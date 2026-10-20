@@ -84,7 +84,7 @@ local function width_at(r, dy)
   return r * math.sqrt(f > 0 and f or 0)
 end
 
--- ---------- cosmetics: each draws relative to the body (x, y centre, r radius) ----------
+-- ---------- cosmetics: each draws relative to the body (x, y center, r radius) ----------
 -- geometry from pet.lua: eyes at y - 0.15 r, x +- 0.4 r; mouth 0.35 r below the eyes
 
 local function eyes(x, y, r) return y - r * 0.15, r * 0.4 end
@@ -654,12 +654,12 @@ end
 
 local SIZE = {baby = 10, child = 14, adult = 18}
 
-local function body_colour()
+local function body_color()
   if S.sick then return 11, 3 end
   if S.stage == "adult" then
     if S.care <= 2 then return 14, 2 end   -- well loved: pink
     if S.care <= 6 then return 15, 4 end   -- fine: peach
-    return 6, 5                            -- grumpy grey
+    return 6, 5                            -- grumpy gray
   end
   return 15, 4
 end
@@ -689,7 +689,7 @@ local function draw_pet(t)
   else bounce = abs(sin(t * 0.8)) * -2 end
   local squash = 1 + bounce * -0.04
   local x, y = pet_x, FLOOR_Y - r + bounce
-  local c, edge = body_colour()
+  local c, edge = body_color()
   local items = worn(S.wear)
   for _, it in ipairs(items) do if it.back then it.draw(x, y, r, t, true) end end
   -- shadow, outline, body
@@ -744,7 +744,7 @@ end
 local function mini(x, y, r, outfit, t)
   local items = worn(outfit)
   for _, it in ipairs(items) do if it.back then it.draw(x, y, r, t, true) end end
-  local c, edge = body_colour()
+  local c, edge = body_color()
   blob(x, y, r + 1, r + 1, edge)
   blob(x, y, r, r, c)
   local ey, ex = y - r * 0.15, r * 0.4
@@ -892,7 +892,7 @@ local function draw_game(t)
     circfill(s.x, s.y, 2, 10)
     pset(s.x, s.y - 3, 10) pset(s.x, s.y + 3, 10) pset(s.x - 3, s.y, 10) pset(s.x + 3, s.y, 10)
   end
-  local c, edge = body_colour()
+  local c, edge = body_color()
   blob(g.x, FLOOR_Y - 8, 9, 8, edge)
   blob(g.x, FLOOR_Y - 8, 8, 7, c)
   rectfill(g.x - 4, FLOOR_Y - 10, g.x - 3, FLOOR_Y - 9, 0)

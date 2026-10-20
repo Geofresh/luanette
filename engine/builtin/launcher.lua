@@ -8,7 +8,7 @@
 -- for each, sent ones newest first, then the built-in ones); act("open", name) opens one.
 -- A tap on the clock, or the last row, opens the settings: volume and brightness (data("settings"), changed with
 -- act("volume", step) and act("brightness", step)) and the battery (data("battery")).
--- The whole glass on the full-colour layer, drawn with the ui helpers: the clock again when its
+-- The whole glass on the full-color layer, drawn with the ui helpers: the clock again when its
 -- minute changes, a row when it's pressed or its value changes, the list moved under the finger.
 
 local c = caps()
@@ -17,9 +17,9 @@ local HEAD, ROW = 108, 78                    -- the header's height; a row
 local CLOCK = 70                             -- the clock's rows; the line under it is below
 local PAD, BADGE = 26, 52                    -- the rows' left margin; the cartridge badge's size
 local BG, PRESS, RULE = 0x0b0f1a, 0x1b2438, 0x1c2536
-local WHITE, GREY, DIM = 0xf2f4f8, 0x8d97ab, 0x56607a
+local WHITE, GRAY, DIM = 0xf2f4f8, 0x8d97ab, 0x56607a
 local RED, GREEN, BLUE, YELLOW = 0xff4d6d, 0x3ddc84, 0x29b6f6, 0xffd23f
--- Badge colours, picked by the cart's name (the same cart keeps its colour)
+-- Badge colors, picked by the cart's name (the same cart keeps its color)
 local HUES = {0xff4d6d, 0xff9f43, 0xffd23f, 0x3ddc84, 0x29b6f6, 0x7c6cff, 0xe056fd, 0x2ee6c9}
 local VOLUMES = {"Off", "Low", "Medium", "High"}
 local BRIGHTNESS = {"25%", "50%", "75%", "100%"}
@@ -74,7 +74,7 @@ local function draw_row(i, y)
   local x0 = PAD  -- every row on the same edge (one shifting in at the rounded corners looked odd while scrolling;
                   -- the list's end has room to bring the last row clear of them)
   if i == lit then hd.rect(0, y, W, ROW, PRESS) end
-  -- the cartridge: a rounded badge in its colour, a notch along its top
+  -- the cartridge: a rounded badge in its color, a notch along its top
   local by = y + (ROW - BADGE) // 2
   local hue = it.hue
   if it.kind == "battery" and battery and (battery.percent or 100) <= 20 and not battery.charging then hue = RED end
@@ -85,7 +85,7 @@ local function draw_row(i, y)
   local about = it.fit_about
   if it.kind == "battery" then about = select(2, battery_line()) end
   hd.text(it.fit_title, tx0, y + 18, WHITE, 18, "bold")
-  hd.text(about, tx0, y + 44, GREY, 14, "mono")
+  hd.text(about, tx0, y + 44, GRAY, 14, "mono")
   local value = value_of(it.kind)
   if value then hd.text(value, W - PAD - 6, y + 26, WHITE, 18, "bold", "right") end
   hd.line(tx0, y + ROW - 1, W - PAD, y + ROW - 1, RULE)
@@ -96,7 +96,7 @@ local function draw_rows(top, y0, y1)
   hd.rect(0, y0, W, y1 - y0, BG)
   if #rows == 0 then
     hd.text("No carts yet", W / 2, top + 70, WHITE, 18, "bold", "center")
-    hd.text("send one over USB:", W / 2, top + 104, GREY, 14, "mono", "center")
+    hd.text("send one over USB:", W / 2, top + 104, GRAY, 14, "mono", "center")
     hd.text("tools/push.py game.lua", W / 2, top + 126, BLUE, 14, "mono", "center")
     return
   end

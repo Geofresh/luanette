@@ -23,9 +23,9 @@ local TYPES = {4, 6, 8, 10, 12, 20}
 local COLS = {
   [4] = {4, 9, 10}, [6] = {5, 6, 7}, [8] = {1, 12, 6}, [10] = {3, 11, 10}, [12] = {2, 13, 14}, [20] = {2, 8, 14}}
 local RGB = {[4] = 0xF08A24, [6] = 0xF2EEE4, [8] = 0x3A7BEA, [10] = 0x2FB36A, [12] = 0x9A5BE0, [20] = 0xE0384A}
-local LABEL = {[4] = 7, [6] = 1, [8] = 7, [10] = 7, [12] = 7, [20] = 7} -- the numbers' colour on each
+local LABEL = {[4] = 7, [6] = 1, [8] = 7, [10] = 7, [12] = 7, [20] = 7} -- the numbers' color on each
 local MESH, POOL = {}, {} -- a 3D shape for each kind, and objects of dice taken away (reused)
-local OY = CY - 64 -- the tray's centre below the screen's
+local OY = CY - 64 -- the tray's center below the screen's
 local drop_all -- (below)
 local CAM_H, CAM_Z, CAM_PITCH, CAM_FOV = 245, -110, -66, 29 -- fitted: the far wall under the top bar, the near one over the bottom bar
 local SHAPES = {}
@@ -37,7 +37,7 @@ local function norm(x, y, z)
   return x / l, y / l, z / l
 end
 
--- A die's polyhedron: corners scaled to radius 1, faces wound outwards with normal, centre and number.
+-- A die's polyhedron: corners scaled to radius 1, faces wound outwards with normal, center and number.
 local function poly(verts, faces)
   local r = 0
   for _, v in ipairs(verts) do r = math.max(r, math.sqrt(v[1] ^ 2 + v[2] ^ 2 + v[3] ^ 2)) end
@@ -63,7 +63,7 @@ local function poly(verts, faces)
   return {v = verts, f = fs}
 end
 
--- Faces whose centres point along `dirs`: the corners nearest each, ordered round it.
+-- Faces whose centers point along `dirs`: the corners nearest each, ordered round it.
 local function faces_by_dirs(verts, dirs, per)
   local out = {}
   for _, d in ipairs(dirs) do
@@ -261,7 +261,7 @@ local function step(d, gx, gy, gz)
       nfc = nfc + 1
       local c = fc[nfc]
       if not c then c = {} fc[nfc] = c end
-      c[1], c[2], c[3] = px - d.x, py - d.y, pz - d.z -- from the centre
+      c[1], c[2], c[3] = px - d.x, py - d.y, pz - d.z -- from the center
       if -pz > deep then deep = -pz end
     end
     if pz > 70 then contact(d, px, py, pz, 0, 0, -1, pz - 70, 0.3, 0.05) end
@@ -277,7 +277,7 @@ local function step(d, gx, gy, gz)
   end
   local wd = touching and ROLL_DRAG or 0.999 -- rolling resistance, air
   -- nearly stopped on the felt, barely turning: settle (a real die doesn't keep wobbling). Only then:
-  -- a rolling die's centre moves slowly while it still tumbles
+  -- a rolling die's center moves slowly while it still tumbles
   if touching and d.vx * d.vx + d.vy * d.vy + d.vz * d.vz < REST_V2 * 4
      and d.wx * d.wx + d.wy * d.wy + d.wz * d.wz < 4 then wd = 0.9 end
   d.wx, d.wy, d.wz = d.wx * wd, d.wy * wd, d.wz * wd
@@ -517,7 +517,7 @@ end
 
 function _draw()
   if not scene then set_scene() end
-  cls(0) -- the tray and the dice show through colour 0
+  cls(0) -- the tray and the dice show through color 0
   rectfill(0, 0, 127, TOP - 2, 1)
   for i, n in ipairs(TYPES) do
     local x = (i - 1) * (128 / 7)

@@ -38,12 +38,12 @@ SCALE = 3
 MAX_SOURCE = 32 * 1024
 BUDGET = 30_000
 MAX_SAVE = 2048
-API_VERSION = 2  # engine/cart.hpp kApiVersion: 1 before the full-colour layer, 2 with it
+API_VERSION = 2  # engine/cart.hpp kApiVersion: 1 before the full-color layer, 2 with it
 # The board's runtime built for this computer (engine/host/cartrun.cpp): a 3D cart's preview
 # is drawn by it (the stage's own code), and it must agree that the cart runs.
 ROOT = Path(__file__).resolve().parents[1]
 CARTRUN = Path(os.environ.get("CARTRUN", ROOT / "host/build/cartrun"))
-# The full-colour layer's glyph tables (engine/hd_fonts.cpp): hd.measure and
+# The full-color layer's glyph tables (engine/hd_fonts.cpp): hd.measure and
 # hd.wrap here give the board's numbers.
 HD_FONTS = Path(os.environ.get("HD_FONTS", ROOT / "engine/hd_fonts.cpp"))
 UI_LUA = HD_FONTS.parent / "ui.lua"  # the helpers the runtime loads before every cart (the same file)
@@ -120,7 +120,7 @@ class Cart:
         self.rgb = list(PICO)
         self.calls = {"buzz": 0, "sfx": 0, "wake": 0, "act": [], "save": 0, "data": set()}
         self.scene = None  # a 3D cart's, once it makes anything 3D
-        self.hd = None  # the full-colour layer's calls, once the cart draws on it
+        self.hd = None  # the full-color layer's calls, once the cart draws on it
         self.hd_w, self.hd_h = HD_W, HD_H  # the canvas: the window, or the glass ("-- canvas: full")
         self.full = False
         self.hd_clipr = (0, 0, HD_W, HD_H)  # x0, y0, x1, y1
@@ -214,7 +214,7 @@ class Cart:
                     self._px(x + dx, y + dy, c)
 
     def trifill(self, x0, y0, x1, y1, x2, y2, c=None):
-        """The board's rule exactly: a pixel whose centre is inside, top-left edges kept, in 1/16 px."""
+        """The board's rule exactly: a pixel whose center is inside, top-left edges kept, in 1/16 px."""
         c = self._c(c)
         def sub(v):
             if not v > -2048:
@@ -296,12 +296,12 @@ class Cart:
             return None
         i = int(i)
         if not 0 <= i <= 15:
-            raise ValueError(f"palette: colour {i} isn't one of 0-15")
+            raise ValueError(f"palette: color {i} isn't one of 0-15")
         if rgb is None:
             return self.rgb[i]
         rgb = int(rgb)
         if not 0 <= rgb <= 0xFFFFFF:
-            raise ValueError(f"palette: {rgb:#x} isn't a 0xRRGGBB colour")
+            raise ValueError(f"palette: {rgb:#x} isn't a 0xRRGGBB color")
         self.rgb[i] = rgb
         return None
 
@@ -479,7 +479,7 @@ class Cart:
 
     def _rgb(self, v, fn):
         if not isinstance(v, int) or isinstance(v, bool) or not 0 <= v <= 0xFFFFFF:
-            raise ValueError(f"{fn}: colours are 0xRRGGBB")
+            raise ValueError(f"{fn}: colors are 0xRRGGBB")
         return v
 
     def _fail(self, msg):
@@ -538,16 +538,16 @@ class Cart:
             return self._add_shape(2 * (n + 1) + caps * (n + 2), (2 * n if kind == "cylinder" else n) + caps * n)
         self._fail(f"shape: no shape '{kind}' (box, sphere, torus, cylinder, cone, or vertices and faces)")
 
-    def obj(self, shape, colour, shine=0, unlit=False):
+    def obj(self, shape, color, shine=0, unlit=False):
         sc = self._3d()
         if not isinstance(shape, int) or not 1 <= shape <= len(sc["shapes"]):
             self._fail(f"obj: no shape {shape}")
         if sc["objects"] >= 128:
             self._fail("obj: too many objects (the limit is 128)")
-        key = (self._rgb(colour, "obj"), max(0, min(255, int(shine or 0))), bool(unlit))
+        key = (self._rgb(color, "obj"), max(0, min(255, int(shine or 0))), bool(unlit))
         sc["materials"].add(key)
         if len(sc["materials"]) > 64:
-            self._fail("obj: too many colours in the scene (the limit is 64 colour and shine pairs)")
+            self._fail("obj: too many colors in the scene (the limit is 64 color and shine pairs)")
         sc["objects"] += 1
         return sc["objects"]
 
@@ -571,12 +571,12 @@ class Cart:
     def hide(self, o, hidden=True):
         self._obj(o, "hide")
 
-    def paint(self, o, colour, shine=0, unlit=False):
+    def paint(self, o, color, shine=0, unlit=False):
         self._obj(o, "paint")
         sc = self._3d()
-        sc["materials"].add((self._rgb(colour, "paint"), max(0, min(255, int(shine or 0))), bool(unlit)))
+        sc["materials"].add((self._rgb(color, "paint"), max(0, min(255, int(shine or 0))), bool(unlit)))
         if len(sc["materials"]) > 64:
-            self._fail("paint: too many colours in the scene (the limit is 64 colour and shine pairs)")
+            self._fail("paint: too many colors in the scene (the limit is 64 color and shine pairs)")
 
     def view(self, x, y, z, yaw=0, pitch=0, fov=60):
         self._3d()["cam"] = (float(x), float(y), float(z), float(yaw), float(pitch), max(10.0, min(150.0, float(fov))))
@@ -592,12 +592,12 @@ class Cart:
         if bottom is not None:
             self._rgb(bottom, "sky")
 
-    def ground(self, y, colour=None):
+    def ground(self, y, color=None):
         self._3d()
         if not isinstance(y, (int, float)):
             self._fail("ground: needs a height")
-        if colour is not None:
-            self._3d()["materials"].add((self._rgb(colour, "ground"), 0, True))
+        if color is not None:
+            self._3d()["materials"].add((self._rgb(color, "ground"), 0, True))
 
     def shadow(self, o, on=True):
         self._obj(o, "shadow")
@@ -607,11 +607,11 @@ class Cart:
         if w not in (4, 8, 16, 32, 64) or h not in (4, 8, 16, 32, 64):
             self._fail(f"texture: a texture is 4, 8, 16, 32 or 64 texels wide and high (not {w} x {h})")
         if not isinstance(texels, str):
-            self._fail("texture: the texels are a string of colour numbers (hex digits, as SPRITES)")
+            self._fail("texture: the texels are a string of color numbers (hex digits, as SPRITES)")
         digits = [ch for ch in texels if ch not in " \n\t\r"]
         bad = [ch for ch in digits if ch not in "0123456789abcdefABCDEF"]
         if bad:
-            self._fail(f"texture: '{bad[0]}' isn't a colour number (0-9, a-f)")
+            self._fail(f"texture: '{bad[0]}' isn't a color number (0-9, a-f)")
         if len(digits) != w * h:
             self._fail(f"texture: a texture of {w} x {h} needs {w * h} texels (it has {len(digits)})")
         sc.setdefault("textures", 0)
@@ -628,7 +628,7 @@ class Cart:
         if tex is not None:
             sc["materials"].add(("tex", tex))
             if len(sc["materials"]) > 64:
-                self._fail("skin: too many colours in the scene (the limit is 64 colour and shine pairs)")
+                self._fail("skin: too many colors in the scene (the limit is 64 color and shine pairs)")
 
     def res(self, mode=None):
         sc = self._3d()
@@ -638,7 +638,7 @@ class Cart:
             sc["res"] = mode
         return "half" if sc.get("res") == "half" else "full"
 
-    def project(self, x, y, z):  # as Stage::project, in the picture's coordinates (the window's centre, x 204 of the glass)
+    def project(self, x, y, z):  # as Stage::project, in the picture's coordinates (the window's center, x 204 of the glass)
         cx, cy, cz, yaw, pitch, fov = self._3d()["cam"]
         rx, ry, rz = x - cx, y - cy, z - cz
         a = math.radians(-yaw)  # Ry(-yaw), then Rx(pitch)
@@ -652,7 +652,7 @@ class Cart:
         focal = 192 / math.tan(math.radians(fov) / 2)
         return (rx * focal / rz + 192) / 3, (192 - ry * focal / rz) / 3, rz
 
-    # -- the full-colour layer (engine/hd.hpp): checked here, drawn by cartrun --
+    # -- the full-color layer (engine/hd.hpp): checked here, drawn by cartrun --
     def _hd(self, fn):
         if self.hd is None:
             self.hd = {}
@@ -667,17 +667,17 @@ class Cart:
     @staticmethod
     def _hd_rgb(v, fn):
         if not isinstance(v, (int, float)) or isinstance(v, bool) or v != int(v):
-            raise ValueError(f"hd.{fn}: colours are 0xRRGGBB integers")
+            raise ValueError(f"hd.{fn}: colors are 0xRRGGBB integers")
         if not 0 <= v <= 0xFFFFFF:
-            raise ValueError(f"hd.{fn}: {int(v):#x} isn't a 0xRRGGBB colour")
+            raise ValueError(f"hd.{fn}: {int(v):#x} isn't a 0xRRGGBB color")
         return int(v)
 
-    def _hd_shape(self, fn, nums, colours, opts):
-        """nums: the arguments that must be numbers; colours: those that are 0xRRGGBB; opts: optional numbers."""
+    def _hd_shape(self, fn, nums, colors, opts):
+        """nums: the arguments that must be numbers; colors: those that are 0xRRGGBB; opts: optional numbers."""
         self._hd(fn)
         for i, v in enumerate(nums):
             self._num(v, fn, f"argument {i + 1}")
-        for v in colours:
+        for v in colors:
             self._hd_rgb(v, fn)
         for v in opts:
             if v is not None:
@@ -1003,8 +1003,8 @@ def script_input(cart: Cart, f: int, rng: random.Random):
 
 
 def render(fbs, theme: str) -> Image.Image:
-    """Frames side by side at the board's scale; each a picture of indices, or (picture, its 16 colours)."""
-    def colours(rgb):
+    """Frames side by side at the board's scale; each a picture of indices, or (picture, its 16 colors)."""
+    def colors(rgb):
         if theme == "phosphor":
             cols = []
             for c in rgb:
@@ -1017,7 +1017,7 @@ def render(fbs, theme: str) -> Image.Image:
     out = Image.new("RGB", (len(fbs) * (W * SCALE + gap) + gap, H * SCALE + 2 * gap), (24, 24, 24))
     for i, fb in enumerate(fbs):
         fb, rgb = fb if isinstance(fb, tuple) else (fb, PICO)
-        cols = colours(rgb)
+        cols = colors(rgb)
         img = Image.new("RGB", (W, H))
         img.putdata([cols[v] for v in fb])
         out.paste(img.resize((W * SCALE, H * SCALE), Image.NEAREST), (gap + i * (W * SCALE + gap), gap))
@@ -1030,7 +1030,7 @@ def cartrun_input(fps: int, inputs: list, t0: int) -> dict:
 
 
 def run_3d(path: Path, fps: int, inputs: list, shots: list[int], bundle: bytes = b"", t0: int = 0) -> dict:
-    """Runs a 3D or full-colour cart through cartrun with check.py's input; returns its result and the shots it drew."""
+    """Runs a 3D or full-color cart through cartrun with check.py's input; returns its result and the shots it drew."""
     if not CARTRUN.exists():
         return {"ok": False, "why": f"isn't built ({CARTRUN}; cmake -S host -B host/build && cmake --build host/build)"}
     d = Path(tempfile.mkdtemp(prefix="cart3d-"))
@@ -1192,7 +1192,7 @@ def check(path: Path, frames: int, preview: Path | None, theme: str, dump_input:
                     res["hd"]["slow_frames"] = len(slow)  # a screen's first draw now and then: one late frame each
                 if len(slow) > len(hd_ms) * 0.05:  # sustained: most likely the whole layer drawn every frame
                     cart.warnings.append(
-                        f"the full-colour layer: about {max(hd_ms):.0f} ms of the board's 33 ms frame "
+                        f"the full-color layer: about {max(hd_ms):.0f} ms of the board's 33 ms frame "
                         f"({len(slow)} of {len(hd_ms)} frames over {HD_WARN_MS}); the layer keeps what's drawn, so draw "
                         "what doesn't move once and repaint only what changes (clip to a box and redraw just it)")
         if preview and shots and cart.scene is None and cart.hd is None:
@@ -1225,7 +1225,7 @@ def check(path: Path, frames: int, preview: Path | None, theme: str, dump_input:
             "says it needs an update instead of failing at its first ui call")
     elif cart.hd is not None and api < 2:
         res.setdefault("warnings", []).append(
-            "it uses the full-colour layer (API 2): add '-- api: 2' to its header, so a board with older firmware "
+            "it uses the full-color layer (API 2): add '-- api: 2' to its header, so a board with older firmware "
             "says it needs an update instead of failing at its first hd call")
     if not full:
         res.setdefault("warnings", []).append(
@@ -1237,7 +1237,7 @@ def check(path: Path, frames: int, preview: Path | None, theme: str, dump_input:
             f"{idle_frames} of its {quiet_frames} frames without input (at {cart.fps} fps) changed nothing on the screen: give it a lazy rate, fps(60, idle) in _init (60 while touched, a few frames a "
             "second otherwise), and move things by time() (docs/DESIGN.md, 2 and 3)")
     if max(cart.fb) == min(cart.fb) and cart.scene is None and cart.hd is None:
-        res.setdefault("warnings", []).append("the last frame is a single colour: does _draw draw anything?")
+        res.setdefault("warnings", []).append("the last frame is a single color: does _draw draw anything?")
     return res
 
 

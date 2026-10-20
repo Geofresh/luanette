@@ -1,5 +1,5 @@
 // RGB565 pixels as the AMOLED panel takes them: big-endian, and a scanline row (every third, the
-// CRT look) dimmed by a quarter. Used by the full-colour layer (engine/hd.cpp): one formula, one
+// CRT look) dimmed by a quarter. Used by the full-color layer (engine/hd.cpp): one formula, one
 // vector loop, wherever pixels leave for the panel.
 #pragma once
 

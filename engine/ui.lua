@@ -1,4 +1,4 @@
--- The runtime's helpers for the full-colour layer, loaded before every cart (docs/api.md, "ui").
+-- The runtime's helpers for the full-color layer, loaded before every cart (docs/api.md, "ui").
 -- Written on the cart API itself, so check.py runs this same file and the board and the desktop
 -- can't disagree about it. The layer keeps what's drawn; these make drawing only what changed the
 -- easy way to write a screen:

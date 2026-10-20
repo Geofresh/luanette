@@ -180,7 +180,7 @@ void Panel::clear_glass(int x, int y, int width, int rows) {
 }
 
 // The controller's memory is wider than the glass. Nothing else ever writes its edges, and after a
-// power loss they hold noise (a coloured bar at the rim), so all of it is zeroed once, ~20 ms.
+// power loss they hold noise (a colored bar at the rim), so all of it is zeroed once, ~20 ms.
 void Panel::clear_ram() {
   IoLock l(io_lock_);
   const int w = cfg_.width + 2 * cfg_.gap_x, h = cfg_.height + 2 * cfg_.gap_y;

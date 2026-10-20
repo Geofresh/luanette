@@ -78,7 +78,7 @@ for r = 0, 8 do
 end
 local seen, stk = {}, {}     -- scratch marks for the floods
 local mark = 0
-local function cluster(i, r)        -- the same-colour group containing (i, r), as a list
+local function cluster(i, r)        -- the same-color group containing (i, r), as a list
   local out = {}
   local c0 = col(i, r)
   if c0 == 0 then return out end
@@ -207,7 +207,7 @@ local function attach(x, y)
   local cc = cur
   setc(bi, br, cc)
   cur, nxt = nxt, COLS[flr(rnd(ncol())) + 1]
-  local cl = cluster(bi, br)          -- 3 or more of a colour: the whole group goes
+  local cl = cluster(bi, br)          -- 3 or more of a color: the whole group goes
   if #cl >= 3 then
     for _, t in ipairs(cl) do
       flash[#flash + 1] = {x = RX[t[2] + 1][t[1] + 1], y = RY[t[2] + 1], t = tt}

@@ -23,7 +23,7 @@ namespace carts {
 constexpr int kW = 128, kH = 128;
 // A 3D cart's scene runs the glass's width (the board's 410 px, the window at x 12 in it): a scene
 // that stopped at the window's edge met the black margin in a hard vertical edge, which this
-// AMOLED's subpixel layout draws as a coloured zig-zag (a full-width scene never has one).
+// AMOLED's subpixel layout draws as a colored zig-zag (a full-width scene never has one).
 constexpr int kStageW = 410, kStageX = 12;
 constexpr size_t kMaxSource = 32 * 1024;  // 16 KB until 2026-10-14: the dice cart outgrew it
 // check.py holds carts to 30,000 Lua instructions a frame; the board counts none (a count hook puts
@@ -47,7 +47,7 @@ struct Input {
 };
 
 // The cart API's version (docs/api.md, "Versions"): a cart may ask for one with `-- api: N`, and
-// a runtime refuses a cart that needs a newer one. 1: everything before the full-colour layer;
+// a runtime refuses a cart that needs a newer one. 1: everything before the full-color layer;
 // 2: the layer (hd), its images, caps(), touch(true).
 constexpr int kApiVersion = 2;
 
@@ -60,7 +60,7 @@ struct Caps {
   float scale = 1;       // the panel's pixels for each canvas unit
   bool round = false;    // a round window (its corners don't show)
   bool touch = true, tilt = true, buzz = true, sound = false;
-  bool hd = true, stage = true;  // the full-colour layer, the 3D scene
+  bool hd = true, stage = true;  // the full-color layer, the 3D scene
   bool host = true;              // data() and act() reach a host (an app or a computer feeding it)
   std::string board = "unknown";
 };
@@ -107,7 +107,7 @@ struct Frame {
   size_t freed = 0;     // bytes the Lua heap gave back meanwhile (tens of KB: a collection ran in it)
 };
 
-// The 16 colours a cart starts with (the PICO-8 palette), 0xRRGGBB; palette() changes them per cart.
+// The 16 colors a cart starts with (the PICO-8 palette), 0xRRGGBB; palette() changes them per cart.
 constexpr uint32_t kPalette[16] = {0x000000, 0x1D2B53, 0x7E2553, 0x008751, 0xAB5236, 0x5F574F, 0xC2C3C7, 0xFFF1E8,
                                    0xFF004D, 0xFFA300, 0xFFEC27, 0x00E436, 0x29ADFF, 0x83769C, 0xFF77A8, 0xFFCCAA};
 
@@ -137,21 +137,21 @@ class Cart {
   static constexpr int64_t kLazyHoldUs = 500000;
   const uint8_t* picture() const { return fb_; }
   // What each of the picture's 16 indices shows (0xRRGGBB), and a count that moves whenever the cart
-  // changes one (palette()): a port rebuilds its colour tables, and sends every row again, then.
-  const uint32_t* colours() const { return rgb_; }
-  uint32_t colours_version() const { return colours_ver_; }
-  void set_colour(int i, uint32_t rgb) {
+  // changes one (palette()): a port rebuilds its color tables, and sends every row again, then.
+  const uint32_t* colors() const { return rgb_; }
+  uint32_t colors_version() const { return colors_ver_; }
+  void set_color(int i, uint32_t rgb) {
     if (i < 0 || i > 15 || rgb_[i] == (rgb & 0xFFFFFF)) return;
     rgb_[i] = rgb & 0xFFFFFF;
-    ++colours_ver_;
+    ++colors_ver_;
   }
-  void reset_colours() {
-    for (int i = 0; i < 16; ++i) set_colour(i, kPalette[i]);
+  void reset_colors() {
+    for (int i = 0; i < 16; ++i) set_color(i, kPalette[i]);
   }
   // The cart's 3D scene, once it has made anything 3D (docs/api.md, "3D"); then its picture is an
-  // overlay: colour 0 shows the scene through.
+  // overlay: color 0 shows the scene through.
   class Stage* stage() const;
-  // The cart's full-colour layer, once it has drawn into it (docs/api.md, "hd"); nullptr before.
+  // The cart's full-color layer, once it has drawn into it (docs/api.md, "hd"); nullptr before.
   class Hd* hd() const;
   // The cart asked for the whole glass ("-- canvas: full"): its layer is Caps::glass_w x glass_h,
   // in glass pixels (the picture still sits in the window); else the 384 x 384 window.
@@ -190,7 +190,7 @@ class Cart {
   volatile bool in_call_ = false;  // Lua runs (interrupt() applies)
   uint32_t rgb_[16] = {0x000000, 0x1D2B53, 0x7E2553, 0x008751, 0xAB5236, 0x5F574F, 0xC2C3C7, 0xFFF1E8,
                        0xFF004D, 0xFFA300, 0xFFEC27, 0x00E436, 0x29ADFF, 0x83769C, 0xFF77A8, 0xFFCCAA};
-  uint32_t colours_ver_ = 0;
+  uint32_t colors_ver_ = 0;
   Impl* impl_ = nullptr;
 };
 
@@ -200,7 +200,7 @@ namespace carts {
 
 // A 3D cart's picture over its scene: window rows [y0, y0 + rows) of out (`stride` wide, the
 // picture at 3x from column x0), pal and dim (the scanline rows, y % 3 == 2) in out's pixel format.
-// Colour 0 shows the scene through; the picture's edge columns run on to out's edges.
+// Color 0 shows the scene through; the picture's edge columns run on to out's edges.
 void overlay_rows(uint16_t* out, int stride, int x0, int y0, int rows, const uint8_t* pic, const uint16_t* pal, const uint16_t* dim);
 
 // Drawing into any 8-bit picture with the carts' own rules and font (the board's touch pad).

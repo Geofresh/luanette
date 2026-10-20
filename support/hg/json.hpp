@@ -1,7 +1,7 @@
 // Minimal JSON value, parser and serializer for the device protocol.
 //
 // Protocol messages are small (a few hundred bytes), so the representation
-// favours simplicity over memory density. No exceptions, no RTTI.
+// favors simplicity over memory density. No exceptions, no RTTI.
 #pragma once
 
 #include <cstddef>
