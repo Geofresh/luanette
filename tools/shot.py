@@ -55,6 +55,8 @@ def main() -> None:
         sys.exit("no board on USB (/dev/ttyACM*)")
     parts = {}
     with serial.Serial(port, 115200, timeout=0) as s:
+        s.write(b"\n")  # ends any line an earlier connection left half sent (see push.py's Link)
+        time.sleep(0.2)
         s.reset_input_buffer()
         s.write(b"shot\n")
         lines, end = read_answer(s)

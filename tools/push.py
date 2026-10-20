@@ -58,6 +58,9 @@ class Link:
             fail("no board on USB (/dev/ttyACM*)")
         self.port = port
         self.s = serial.Serial(port, 115200, timeout=0)
+        # A newline first: it ends any line an earlier connection left half sent (the board would glue
+        # this one's first command onto it and refuse it), and the board ignores an empty line.
+        self.s.write(b"\n")
         time.sleep(0.2)
         self.s.reset_input_buffer()
         self.pending = b""
