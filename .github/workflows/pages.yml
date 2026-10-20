@@ -24,9 +24,8 @@ jobs:
         with:
           version: 6.0.13
       - run: web/build.sh
+      # Pages must be on, with GitHub Actions as its source (Settings -> Pages), before the first run.
       - uses: actions/configure-pages@v5
-        with:
-          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: web/build/site
