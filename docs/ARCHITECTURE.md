@@ -139,7 +139,7 @@ The player owns the screen while a cart is open. The firmware hosting it impleme
 | screen | `screen_on`, `wake_screen` (a cart's `wake()`) |
 | input | `touch()`: the newest sample, its time and where the finger came down |
 | sensors | `imu_enable` / `imu_read` for `tilt()`; `buzz` / `motor_rest`; all optional |
-| host | `data(channel, &version)` for `data()`; `command(name, arg)` for `act()` and for the "cart" open/close notice |
+| host | `data(channel, &version)` for `data()`; `accepts_command(name)` and `command(name, arg)` for `act()` (each firmware has its own commands), and the "cart" open/close notice |
 | its own screen | `will_open` before a cart takes the screen, `closed` after it gives it back |
 | housekeeping | `timed_out`, and optional hooks for profiling and power |
 
@@ -214,8 +214,8 @@ after the last sound.
 
 ## Settings (`firmware/main/console.cpp`)
 
-Volume (off, low, medium, high: the codec's output at 0, 50, 70 or 90) and brightness (25, 50, 75
-or 100%) are kept in NVS under `luanette`, and published to carts as the `settings` channel. The
+Volume (off, low, medium, high: the codec's output at 0, 50, 70 or 90; low on a new board) and
+brightness (25, 50, 75 or 100%; full on a new board) are kept in NVS under `luanette`, and published to carts as the `settings` channel. The
 launcher changes them with `act("volume", step)` and `act("brightness", step)`; USB has the same
 commands. With the volume off, `sfx()` is dropped before the speaker opens, so a muted board spends
 nothing on sound.

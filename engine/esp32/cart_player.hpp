@@ -65,6 +65,7 @@ class Device {
   // of the cart that opened, "" when it closed).
   virtual const hg::json::Value* data(std::string_view channel, uint32_t* version) = 0;
   virtual void command(std::string_view name, std::string_view arg) = 0;
+  virtual bool accepts_command(std::string_view name) const = 0;  // a cart's act(name): one of the firmware's?
   // The host's screen around a cart: before it opens (stop drawing, let the panel go) and after it
   // closed (draw again). Both on the ticking task.
   virtual void will_open() {}

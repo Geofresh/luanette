@@ -56,6 +56,7 @@ struct TestHost final : carts::Host {
   void buzz(int) override { ++buzzes; }
   void sfx(int) override { ++sfx_n; }
   void wake(double) override {}
+  bool accepts_act(std::string_view) const override { return true; }  // check.py has the list; this replays its runs
   void act(std::string_view name, std::string_view arg) override {
     ++acts;
     if (std::getenv("HG_ACT_LOG"))  // each act() with its time, for tools (a demo's tap marks)

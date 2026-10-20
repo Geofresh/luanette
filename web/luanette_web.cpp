@@ -48,6 +48,9 @@ struct WebHost final : carts::Host {
   }
   void wake(double) override {}
   void act(std::string_view, std::string_view) override {}
+  bool accepts_act(std::string_view name) const override {  // the board's (the launcher's), so carts fail the same way
+    return name == "open" || name == "volume" || name == "brightness";
+  }
   const hg::json::Value* data(std::string_view, uint32_t*) override { return nullptr; }
   carts::Caps caps() override {
     carts::Caps c;  // the AMOLED-2.06's, which the page draws

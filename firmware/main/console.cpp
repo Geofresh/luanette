@@ -45,7 +45,7 @@ constexpr uint32_t kDimMs = 60 * 1000, kDarkMs = 10 * 60 * 1000;
 constexpr uint8_t kVolumes[] = {0, 50, 70, 90};
 constexpr uint8_t kBrightness[] = {25, 50, 75, 100};
 constexpr int kSteps = 4;
-constexpr uint8_t kDefaultVolume = 2, kDefaultBrightness = 3;
+constexpr uint8_t kDefaultVolume = 1, kDefaultBrightness = 3;  // low, full: a new board starts quiet
 constexpr UBaseType_t kIdlePrio = 4, kFramePrio = 6;  // the console task, and while a cart's frames run
 constexpr uint32_t kBatteryEveryMs = 5000;
 // The battery log (`battery log` over USB): a reading every 10 minutes, the last 96 hours. It's
@@ -286,6 +286,9 @@ class Device final : public carts::player::Device {
   }
   // The launcher's act(): "open" a cart (at the top of the next loop, not from inside a frame),
   // and the settings. There's no host to take anything else.
+  bool accepts_command(std::string_view name) const override {
+    return name == "open" || name == "volume" || name == "brightness";
+  }
   void command(std::string_view name, std::string_view arg) override {
     if (name == "open") {
       g.open_name = std::string(arg);

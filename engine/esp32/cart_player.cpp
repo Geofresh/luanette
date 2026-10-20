@@ -182,6 +182,7 @@ class CartHost final : public carts::Host {
     if (secs >= 0) esp_timer_start_once(wake_timer, static_cast<uint64_t>(secs * 1e6));
   }
   void act(std::string_view name, std::string_view arg) override { dev_.command(name, arg); }
+  bool accepts_act(std::string_view name) const override { return dev_.accepts_command(name); }
   const hg::json::Value* data(std::string_view name, uint32_t* version) override { return dev_.data(name, version); }
   // Saves in NVS ("hgcarts", a key from the cart's name). A flash write pauses both cores for
   // a few ms: a save costs a frame, which is why carts save at moments, not every frame.

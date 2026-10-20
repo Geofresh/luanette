@@ -82,6 +82,9 @@ class Host {
   virtual void wake(double secs) = 0;  // light the screen in `secs` (< 0: cancel)
   virtual void level() {}              // tilt() is measured from the pose the board is in now
   virtual void act(std::string_view name, std::string_view arg) = 0;
+  // Whether act(name) is one of this host's commands; a cart calling any other gets an error.
+  // Each host has its own (Luanette's firmware: "open", "volume", "brightness").
+  virtual bool accepts_act(std::string_view name) const { (void)name; return false; }
   // A data channel ("battery", "carts", ...), and a number that changes when it does.
   virtual const hg::json::Value* data(std::string_view name, uint32_t* version) = 0;
   virtual std::string load_save(std::string_view cart) = 0;  // "" when none

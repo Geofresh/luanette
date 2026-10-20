@@ -173,10 +173,6 @@ struct FontTable {
 };
 constexpr FontTable kGlyphs;
 
-// The commands act() may send: "open" another cart by name, and the settings ("volume",
-// "brightness", a step 0-3), all the launcher's; the host decides what it allows. A host with
-// commands of its own adds them here, and to check.py's ACTS.
-constexpr const char* kActs[] = {"open", "volume", "brightness"};
 
 }  // namespace
 
@@ -957,9 +953,7 @@ int f_data(lua_State* L) {
 int f_act(lua_State* L) {
   const char* name = luaL_checkstring(L, 1);
   const char* arg = luaL_optstring(L, 2, "");
-  bool ok = false;
-  for (const char* a : kActs) ok |= std::strcmp(a, name) == 0;
-  if (!ok) return luaL_error(L, "act: unknown command '%s'", name);
+  if (!host_of(L).accepts_act(name)) return luaL_error(L, "act: unknown command '%s'", name);
   host_of(L).act(name, arg);
   return 0;
 }
