@@ -2,7 +2,7 @@ name: release
 
 # Push a tag like v0.1.0: the firmware is built and its four parts are attached to a GitHub
 # release, flashed with
-#   esptool.py --chip esp32s3 write_flash 0x0 bootloader.bin 0x8000 partitions.bin \
+#   esptool --chip esp32s3 write-flash 0x0 bootloader.bin 0x8000 partitions.bin \
 #     0x19000 ota_data_initial.bin 0x20000 luanette.bin
 # Four files, not one merged image: merging fills the gaps between them, and NVS (0x9000-0x19000:
 # saves, the timezone, anything another firmware keeps there) is one of those gaps, so a merged

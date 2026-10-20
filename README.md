@@ -70,7 +70,7 @@ Flash the four files from the [latest release](https://github.com/Geofresh/luane
 
 ```bash
 pip install esptool
-esptool.py --chip esp32s3 write_flash 0x0 bootloader.bin 0x8000 partitions.bin 0x19000 ota_data_initial.bin 0x20000 luanette.bin
+esptool --chip esp32s3 write-flash 0x0 bootloader.bin 0x8000 partitions.bin 0x19000 ota_data_initial.bin 0x20000 luanette.bin
 ```
 
 This leaves the rest of the flash alone, so saves and sent carts survive an update. To build it
