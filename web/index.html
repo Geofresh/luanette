@@ -67,6 +67,9 @@
   #status { font: 13px/1.5 var(--mono); color: var(--muted); white-space: pre-wrap; min-height: 1.5em; }
   #status.error { color: var(--danger); }
   @media (pointer: coarse) { .desk { display: none; } }
+  .volume { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
+  .volume input { width: 140px; accent-color: var(--accent); }
+  #volume-pct { font: 12px var(--mono); min-width: 3.5em; }
   .board { display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--muted); font-size: 13px;
            text-align: center; max-width: 380px; }
   .board button { font-size: 15px; }
@@ -86,6 +89,10 @@
       Tap or click is <kbd>A</kbd>, drag is the d-pad.<span class="desk"> Keys: arrows, <kbd>Z</kbd> for A,
       <kbd>X</kbd> for B, <kbd>Shift</kbd>+arrows to tilt.</span>
     </div>
+    <label class="volume">Volume
+      <input type="range" id="volume" min="0" max="100" step="5" aria-label="The page's volume">
+      <span id="volume-pct"></span>
+    </label>
     <button id="tilt" hidden>Use this phone's tilt</button>
     <div class="board" id="board" hidden>
       <esp-web-install-button id="install" manifest="firmware/manifest.json">

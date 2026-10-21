@@ -123,10 +123,14 @@ if (typeof DeviceOrientationEvent !== "undefined" && matchMedia("(pointer: coars
 // tracker synth (synth.hpp), rendered a little ahead in chunks and queued back to back.
 const AHEAD_S = 0.15, CHUNK = 1024;
 const sound = {
-  ctx: null, buffers: [], next: 0, queued: [],
+  ctx: null, out: null, buffers: [], next: 0, queued: [],
+  level: 0.7,  // the page's volume, 0-1 (the slider); everything plays through `out`
   unlock() {
     if (this.ctx || !window.AudioContext) return;
     this.ctx = new AudioContext();
+    this.out = this.ctx.createGain();
+    this.out.gain.value = this.gainFor(this.level);
+    this.out.connect(this.ctx.destination);
     lw.audio_start(this.ctx.sampleRate);
     const rate = 16000;
     for (let n = 0; n < 8; n++) {
@@ -142,8 +146,14 @@ const sound = {
     if (!this.ctx || !this.buffers[n]) return;
     const src = this.ctx.createBufferSource();
     src.buffer = this.buffers[n];
-    src.connect(this.ctx.destination);
+    src.connect(this.out);
     src.start();
+  },
+  gainFor: (level) => level * level,  // heard loudness follows the square more closely than the level
+  setLevel(level) {
+    this.level = level;
+    try { localStorage.setItem("luanette.volume", String(level)); } catch {}
+    if (this.out) this.out.gain.setTargetAtTime(this.gainFor(level), this.ctx.currentTime, 0.02);  // no click
   },
   // Keeps AHEAD_S of the synth queued while it has anything to play; every frame.
   pump() {
@@ -156,7 +166,7 @@ const sound = {
       buf.copyToChannel(new Float32Array(lw.mod.HEAPF32.buffer, ptr, CHUNK), 0);
       const src = this.ctx.createBufferSource();
       src.buffer = buf;
-      src.connect(this.ctx.destination);
+      src.connect(this.out);
       src.start(this.next);
       src.onended = () => this.queued.splice(this.queued.indexOf(src), 1);
       this.queued.push(src);
@@ -517,6 +527,16 @@ async function main() {
   $("open").onclick = () => $("file").click();
   $("file").onchange = () => { openFile($("file").files[0]); $("file").value = ""; };
   $("save").onclick = saveFile;
+  try {
+    const kept = parseFloat(localStorage.getItem("luanette.volume"));
+    if (kept >= 0 && kept <= 1) sound.level = kept;
+  } catch {}
+  const showLevel = () => {
+    $("volume").value = Math.round(sound.level * 100);
+    $("volume-pct").textContent = sound.level ? Math.round(sound.level * 100) + "%" : "off";
+  };
+  showLevel();
+  $("volume").oninput = () => { sound.unlock(); sound.setLevel($("volume").value / 100); showLevel(); };
   $("share").onclick = shareLink;
   $("sharelink").onfocus = () => $("sharelink").select();
   let saving = 0;  // edits are kept as you type, not only when run
