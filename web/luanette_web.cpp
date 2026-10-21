@@ -22,6 +22,11 @@
 #include "stage.hpp"
 #include "synth.hpp"
 
+extern "C" {
+#include "lauxlib.h"
+#include "lua.h"
+}
+
 // Saves live in the browser's localStorage, one key per cart.
 EM_JS(char*, js_load_save, (const char* cart), {
   const v = localStorage.getItem('luanette.save.' + UTF8ToString(cart)) || '';
@@ -207,6 +212,21 @@ EMSCRIPTEN_KEEPALIVE int lw_frame(int held, int touching, float tx, float ty, fl
 }
 
 EMSCRIPTEN_KEEPALIVE const char* lw_error() { return g_error.c_str(); }
+// Whether a cart's code compiles, without running it: "" or Lua's message ("cart:7: ..."), as the
+// runtime would give it. The editor asks as you type.
+EMSCRIPTEN_KEEPALIVE const char* lw_compile(const char* src) {
+  static std::string out;
+  out.clear();
+  lua_State* L = luaL_newstate();
+  if (!L) return "";
+  if (luaL_loadbufferx(L, src, std::strlen(src), "=cart", "t") != LUA_OK) {
+    const char* m = lua_tostring(L, -1);
+    out = m ? m : "doesn't compile";
+  }
+  lua_close(L);
+  return out.c_str();
+}
+
 // The cart's 16 colors as it shows them now (palette() changes them), "rrggbb" each, spaces between;
 // the starting 16 before a cart runs. The sprite editor and the color strip draw with them.
 EMSCRIPTEN_KEEPALIVE const char* lw_colors() {

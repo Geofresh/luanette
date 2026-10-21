@@ -23,6 +23,7 @@ const image = ctx2d.createImageData(W, H);
 // when the person types and when other code says so (the sound editor writes the code, then does).
 const cm = CodeMirror.fromTextArea($("code"), {
   mode: "lua", theme: "luanette", lineNumbers: true, matchBrackets: true, indentUnit: 2, tabSize: 2,
+  gutters: ["CodeMirror-linenumbers", "compile-gutter"],
   extraKeys: {
     "Ctrl-Enter": () => run(code.value), "Cmd-Enter": () => run(code.value),
     Tab: (ed) => (ed.somethingSelected() ? ed.indentSelection("add") : ed.replaceSelection("  ")),
@@ -118,6 +119,30 @@ cm.getWrapperElement().addEventListener("mousemove", (e) => {
 });
 cm.getWrapperElement().addEventListener("mouseleave", () => { tip.hidden = true; tipFor = ""; });
 cm.on("keydown", () => { tip.hidden = true; });
+
+// ---- errors as you type: the code compiled (not run) half a second after typing stops ----------
+let compiling = 0, compileMark = null;
+function checkCompile() {
+  if (compileMark !== null) {
+    cm.setGutterMarker(compileMark, "compile-gutter", null);
+    cm.removeLineClass(compileMark, "text", "compile-error");
+    compileMark = null;
+  }
+  const msg = lw ? lw.compile(code.value) : "";
+  $("compile-msg").hidden = !msg;
+  if (!msg) return;
+  const m = /cart:(\d+):\s*(.*)/.exec(msg);
+  $("compile-msg").textContent = m ? `Line ${m[1]}: ${m[2]}` : msg;
+  if (!m) return;
+  const line = Math.min(Number(m[1]), cm.lineCount()) - 1;
+  const dot = document.createElement("div");
+  dot.className = "compile-dot";
+  dot.title = m[2];
+  dot.textContent = "●";
+  compileMark = cm.setGutterMarker(line, "compile-gutter", dot);
+  cm.addLineClass(compileMark, "text", "compile-error");
+}
+cm.on("changes", () => { clearTimeout(compiling); compiling = setTimeout(checkCompile, 500); });
 
 // The line an error names ("cart:16: ..."), shown and highlighted.
 let marked = null;
@@ -695,11 +720,14 @@ function run(src) {
   runSrc = src;
   frameNo = 0;
   clearLog();
+  meter.reset();
+  setPaused(false);
   const name = current || "playground";
   sound.stop();
   const ok = lw.ccall("lw_start", "number", ["string", "string"], [name, src]);
   show();
   drainLog();  // what the top of the cart and _init logged: frame 0
+  colorStrip();
   if (!ok) { running = false; say(lw.error(), true); return; }
   say("");
   running = true;
@@ -708,10 +736,27 @@ function run(src) {
   storeSet(sourceKey(name), src);
 }
 
+// One frame of the cart: its input, its log, its sounds; false once it has stopped.
+function frameOnce() {
+  frameNo++;
+  const alive = lw.lw_frame(...input());
+  drainLog();
+  for (let n = lw.lw_sound(); n >= 0; n = lw.lw_sound()) sound.play(n);
+  meter.count(lw.lw_ops());
+  if (!alive) {
+    running = false;
+    const err = lw.error();
+    if (err.includes("over budget")) overBudget = runSrc;  // Send won't take this code
+    say(err || "The cart ended.", !!err);
+  }
+  return alive;
+}
+
 function tick(now) {
   requestAnimationFrame(tick);
-  sound.pump();
-  if (!running) return;
+  if (!paused) sound.pump();
+  meter.show(now);
+  if (!running || paused) { last = now; return; }
   const period = 1000 / lw.lw_fps();
   spare += now - last;
   last = now;
@@ -720,19 +765,53 @@ function tick(now) {
   while (spare >= period && frames < 2) {
     spare -= period;
     frames++;
-    frameNo++;
-    const alive = lw.lw_frame(...input());
-    drainLog();
-    for (let n = lw.lw_sound(); n >= 0; n = lw.lw_sound()) sound.play(n);
-    if (!alive) {
-      running = false;
-      const err = lw.error();
-      if (err.includes("over budget")) overBudget = runSrc;  // Send won't take this code
-      say(err || "The cart ended.", !!err);
-      break;
-    }
+    if (!frameOnce()) break;
   }
   if (frames) show();
+}
+
+// ---- run controls: pause, a frame at a time, restart; the frame's cost against the budget ------
+let paused = false;
+function setPaused(p) {
+  paused = p;
+  $("pause").textContent = p ? "Resume" : "Pause";
+  $("step").disabled = !p;
+  if (!p) sound.next = 0;  // the synth picks up where it stopped
+}
+const meter = {
+  ops: 0, max: 0, frames: 0, since: 0, fps: 0, shown: 0,
+  count(ops) { this.ops = ops; this.max = Math.max(this.max, ops); this.frames++; },
+  reset() { this.ops = this.max = this.frames = 0; this.since = performance.now(); },
+  show(now) {  // a few times a second
+    if (now - this.shown < 250) return;
+    if (now - this.since >= 1000) { this.fps = this.frames * 1000 / (now - this.since); this.frames = 0; this.since = now; }
+    this.shown = now;
+    const share = Math.min(1, this.ops / 30000);
+    $("meter-bar").style.width = (share * 100).toFixed(1) + "%";
+    $("meter-bar").classList.toggle("hot", share > 0.8);
+    const n = (v) => (v ? v.toLocaleString() : "under 100");  // counted in hundreds
+    $("meter-text").textContent = running ? `${n(this.ops)} of 30,000 · ${paused ? "paused" : Math.round(this.fps) + " fps"}` : "stopped";
+    $("meter-text").parentElement.title = `Lua instructions this frame: ${n(this.ops)}, at most ${n(this.max)} since it started, of the 30,000 a frame may have`;
+  },
+};
+
+// ---- the color strip: the cart's 16 colors and their numbers; a click types the number ----------
+let stripColors = "";
+function colorStrip() {
+  const now = lw.colors(), key = now.join();
+  if (key === stripColors) return;
+  stripColors = key;
+  $("color-strip").replaceChildren(...now.map((c, i) => {
+    const b = document.createElement("button");
+    b.className = "swatch";
+    b.style.background = c;
+    const n = parseInt(c.slice(1), 16), luma = 0.3 * (n >> 16) + 0.59 * ((n >> 8) & 255) + 0.11 * (n & 255);
+    b.style.color = luma > 140 ? "#000" : "#fff";
+    b.textContent = i;
+    b.title = `color ${i} (${c}): click to type ${i}`;
+    b.onclick = () => { cm.replaceSelection(String(i)); cm.focus(); };
+    return b;
+  }));
 }
 
 async function select(name, src) {
@@ -782,6 +861,10 @@ async function main() {
   showLevel();
   $("volume").oninput = () => { sound.unlock(); sound.setLevel($("volume").value / 100); showLevel(); };
   $("share").onclick = shareLink;
+  $("pause").onclick = () => setPaused(!paused);
+  $("step").onclick = () => { if (paused && running && frameOnce()) show(); meter.shown = 0; meter.show(performance.now()); };
+  $("restart").onclick = () => { sound.unlock(); run(code.value); };
+  setInterval(() => { if (lw && running) colorStrip(); }, 1000);  // palette() may change them as the cart runs
   $("console-clear").onclick = clearLog;
   $("console").addEventListener("toggle", () => { if (!$("console").open) $("console").dataset.closed = "1"; });
   $("submit").onclick = submitToGallery;
@@ -800,6 +883,7 @@ async function main() {
     lw_ops: mod.cwrap("lw_ops", "number", []),
     log_count: mod.cwrap("lw_log_count", "number", []),
     colors: () => mod.ccall("lw_colors", "string", [], []).split(" ").map((h) => "#" + h),
+    compile: mod.cwrap("lw_compile", "string", ["string"]),
     log: mod.cwrap("lw_log", "string", []),
     lw_full_canvas: mod.cwrap("lw_full_canvas", "number", []),
     lw_pixels: mod.cwrap("lw_pixels", "number", []),

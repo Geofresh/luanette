@@ -95,6 +95,17 @@
   .cm-s-luanette .cm-comment { color: #8b949e; font-style: italic; }
   .cm-s-luanette .cm-variable-2 { color: #ffa657; }
   .error-line { background: rgba(255, 123, 114, 0.18); }
+  .compile-gutter { width: 14px; }
+  .compile-dot { color: var(--danger); font-size: 11px; cursor: help; padding-left: 2px; }
+  .compile-error { text-decoration: underline wavy rgba(255, 123, 114, 0.8); text-underline-offset: 3px; }
+  .color-strip { gap: 3px; }
+  .color-strip .swatch { width: 28px; height: 22px; }
+  .runbar { display: flex; gap: 6px; }
+  .meter { display: flex; flex-direction: column; align-items: center; gap: 4px; width: min(370px, 82vw); }
+  .meter-track { width: 100%; height: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 3px; overflow: hidden; }
+  #meter-bar { height: 100%; width: 0; background: #3fb950; transition: width 0.2s; }
+  #meter-bar.hot { background: var(--danger); }
+  #meter-text { font: 12px var(--mono); color: var(--muted); }
   .CodeMirror-hints { background: #1c2128; border: 1px solid var(--line); border-radius: 6px; font: 13px var(--mono);
                       box-shadow: 0 6px 20px rgba(0,0,0,0.5); max-width: 560px; }
   .CodeMirror-hint { color: var(--text); padding: 3px 8px; display: flex; gap: 12px; white-space: nowrap; }
@@ -140,6 +151,15 @@
       <kbd>X</kbd> for B, <kbd>Shift</kbd>+arrows to tilt. A gamepad works too.</span>
     </div>
     <div class="keys" id="gamepad" hidden></div>
+    <div class="runbar">
+      <button id="pause" title="Stop the frames (the cart keeps its state)">Pause</button>
+      <button id="step" disabled title="One frame, while paused">Step</button>
+      <button id="restart" title="Run the code from the start">Restart</button>
+    </div>
+    <div class="meter" title="Lua instructions this frame, against the 30,000 a frame may have">
+      <div class="meter-track"><div id="meter-bar"></div></div>
+      <span id="meter-text">stopped</span>
+    </div>
     <label class="volume">Volume
       <input type="range" id="volume" min="0" max="100" step="5" aria-label="The page's volume">
       <span id="volume-pct"></span>
@@ -182,7 +202,9 @@
       <button id="tab-sounds">Sounds</button>
       <button id="tab-music">Music</button>
     </div>
+    <div class="brush color-strip" id="color-strip" aria-label="The cart's colors: click one to type its number"></div>
     <textarea id="code" spellcheck="false" aria-label="The cart's Lua source"></textarea>
+    <div id="compile-msg" class="problem" hidden></div>
     <section class="editor" id="sprites" hidden>
       <p class="problem" id="spr-problem" hidden></p>
       <div class="editor" id="spr-body">

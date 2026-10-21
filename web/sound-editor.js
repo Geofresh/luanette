@@ -447,6 +447,8 @@ const SoundEditor = (() => {
     tab = which;
     for (const t of ["code", "sprites", "sounds", "music"]) $("tab-" + t).classList.toggle("on", t === tab);
     code.hidden = tab !== "code";
+    $("color-strip").hidden = tab !== "code";
+    if (tab !== "code") $("compile-msg").hidden = true;
     $("sprites").hidden = tab !== "sprites";
     $("sounds").hidden = tab !== "sounds";
     $("music").hidden = tab !== "music";
