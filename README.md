@@ -10,7 +10,8 @@ The name is Lua plus *lunette*, French for a little moon or a small window.
 
 **[Try it in your browser](https://geofresh.github.io/luanette/).** The six example carts run
 there on the same engine, compiled to WebAssembly, next to an editor, and you can start carts of
-your own or open .lua files, and make sounds and music for them. In Chrome or Edge on a computer, the same page installs the firmware
+your own or open .lua files, make sounds and music for them, and share a cart as a link that opens
+it, songs and all. In Chrome or Edge on a computer, the same page installs the firmware
 on a board over USB and sends it the cart you're editing, with nothing else to set up.
 
 <img src="docs/images/board.jpg" width="320" alt="Luanette's launcher on the Waveshare ESP32-S3-Touch-AMOLED-2.06">

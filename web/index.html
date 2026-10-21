@@ -107,10 +107,14 @@
       <button id="reset">Reset to original</button>
       <button id="open" title="Opens a .lua file as a cart of your own">Open .lua</button>
       <button id="save" title="Saves the editor's text as a .lua file">Save .lua</button>
+      <button id="share" title="Copies a link that opens this cart, with its sounds and song">Share link</button>
       <button id="send" hidden title="Sends this cart to a board on USB, as tools/push.py does">Send to board</button>
       <button id="unsend" hidden title="Takes this cart out of the board's flash">Remove from board</button>
       <input type="file" id="file" accept=".lua,text/plain" hidden>
       <span class="hint desk"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> runs your edits</span>
+    </div>
+    <div class="bar" id="sharebox" hidden>
+      <input type="text" id="sharelink" readonly aria-label="A link to this cart" style="width: 100%">
     </div>
     <div class="tabs" role="tablist">
       <button id="tab-code" class="on">Code</button>
@@ -170,7 +174,8 @@
   this browser. <span id="no-serial">Chrome or Edge on a computer can install the firmware and send carts to a board
   from this page; elsewhere, save a cart as a .lua file and send it with <code>tools/push.py</code>.</span>
   Your own carts (<strong>+ New cart</strong> or <strong>Open .lua</strong>) are kept in this browser; Save .lua
-  keeps a copy anywhere else.
+  keeps a copy anywhere else, and <strong>Share link</strong> copies a link that opens the cart, its sounds and
+  song too, in anyone's browser (the link is the only copy: nothing is uploaded).
   <span id="has-serial" hidden>Send to board puts the cart in the editor on a board plugged in over USB under its
   name; an edited example replaces the built-in one until you restore it. <code>tools/push.py</code> does the same
   from a .lua file.</span>

@@ -255,6 +255,66 @@ function saveFile() {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
+// ---- share links: a cart in a URL --------------------------------------------------------------
+// "#cart=" then the cart ({name, src}: its code, which holds its sounds and song) as JSON, deflated
+// and in base64url ("d" first), or not deflated where the browser can't ("u"). After the "#", so
+// it never reaches a server: the link is the only copy.
+const b64url = (bytes) => {
+  let s = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+};
+const unb64url = (text) => Uint8Array.from(atob(text.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
+async function through(bytes, stream) {
+  return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer());
+}
+
+async function shareLink() {
+  const raw = new TextEncoder().encode(JSON.stringify({ name: current, src: code.value }));
+  const data = typeof CompressionStream === "function"
+    ? "d" + b64url(await through(raw, new CompressionStream("deflate-raw")))
+    : "u" + b64url(raw);
+  const url = location.href.split("#")[0] + "#cart=" + data;
+  let copied = false;
+  try { await navigator.clipboard.writeText(url); copied = true; } catch {}
+  $("sharelink").value = url;
+  $("sharebox").hidden = copied;
+  say(copied ? `Link copied: ${current} with its code, sounds and song (${url.length} characters). Opening it adds the cart to that browser's carts.`
+    : "Copy this link: opening it adds the cart to that browser's carts.");
+}
+
+async function readLink(data) {
+  const bytes = unb64url(data.slice(1));
+  const raw = data[0] === "d" ? await through(bytes, new DecompressionStream("deflate-raw")) : bytes;
+  const cart = JSON.parse(new TextDecoder().decode(raw));
+  if (typeof cart.name !== "string" || typeof cart.src !== "string") throw new Error("not a cart");
+  return cart;
+}
+
+// A link's cart among your carts: under its name, or a new one when that's taken by something else.
+async function openLink(data) {
+  let cart;
+  try { cart = await readLink(data); } catch {
+    say("This link's cart couldn't be read. It may have been cut short when it was copied.", true);
+    return false;
+  }
+  const base = slug(cart.name) || "shared";
+  if (isExample(base)) {  // an example as it ships: the example itself, unless you've edits of your own to it
+    if (!(base in originals)) originals[base] = await (await fetch("examples/" + base + ".lua")).text();
+    const draft = storeGet(sourceKey(base));
+    if (originals[base] === cart.src && (!draft || draft === cart.src)) {
+      select(base);
+      return true;
+    }
+  }
+  let name = nameProblem(base) ? (base + "_shared").slice(0, 32) : base;
+  for (let k = 2; mine.includes(name) && storeGet(sourceKey(name)) !== cart.src; k++) name = (base.slice(0, 28) + "_" + k);
+  addCart(name, cart.src);
+  const title = (/^--\s*title\s*:\s*(.+)$/m.exec(cart.src) || [, name])[1].trim();
+  say(`Opened ${title} from a link. It's in your carts as ${name} now.`);
+  return true;
+}
+
 function deleteCart() {
   if (!confirm(`Delete ${current} from this browser? Save .lua first if you want to keep a copy.`)) return;
   storeDel(sourceKey(current));
@@ -457,6 +517,8 @@ async function main() {
   $("open").onclick = () => $("file").click();
   $("file").onchange = () => { openFile($("file").files[0]); $("file").value = ""; };
   $("save").onclick = saveFile;
+  $("share").onclick = shareLink;
+  $("sharelink").onfocus = () => $("sharelink").select();
   let saving = 0;  // edits are kept as you type, not only when run
   code.addEventListener("input", () => {
     clearTimeout(saving);
@@ -491,7 +553,11 @@ async function main() {
   };
   requestAnimationFrame(tick);
   setUpBoard();
+  addEventListener("hashchange", () => {  // a link pasted into this tab's address bar
+    if (location.hash.startsWith("#cart=")) openLink(location.hash.slice(6));
+  });
   const fromHash = location.hash.slice(1);
+  if (fromHash.startsWith("cart=") && await openLink(fromHash.slice(5))) return;
   select(isExample(fromHash) || mine.includes(fromHash) ? fromHash : CARTS[0][0]);
 }
 
