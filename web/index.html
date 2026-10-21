@@ -7,6 +7,8 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>Luanette playground</title>
 <meta name="description" content="Play and edit Luanette carts in your browser: the same engine that runs on ESP32-S3 boards, compiled to WebAssembly.">
+<link rel="stylesheet" href="vendor/codemirror/codemirror.css">
+<link rel="stylesheet" href="vendor/codemirror/show-hint.css">
 <style>
   :root {
     --bg: #0d1117; --panel: #161b22; --line: #30363d; --text: #e6edf3; --muted: #8b949e;
@@ -64,6 +66,24 @@
   .pattern .num { font: 14px var(--mono); color: var(--muted); width: 2em; }
   .pattern select { width: 9em; }
   .problem { color: var(--danger); font-size: 14px; margin: 0; }
+  /* the code editor: CodeMirror in the page's colors */
+  .CodeMirror { height: 480px; border: 1px solid var(--line); border-radius: 8px; font: 13px/1.5 var(--mono); }
+  .CodeMirror-focused { border-color: var(--muted); }
+  .cm-s-luanette.CodeMirror { background: var(--panel); color: var(--text); }
+  .cm-s-luanette .CodeMirror-gutters { background: var(--panel); border-right: 1px solid var(--line); border-radius: 8px 0 0 8px; }
+  .cm-s-luanette .CodeMirror-linenumber { color: #6e7681; }
+  .cm-s-luanette .CodeMirror-cursor { border-left-color: var(--text); }
+  .cm-s-luanette .CodeMirror-selected, .cm-s-luanette.CodeMirror-focused .CodeMirror-selected { background: #264f78; }
+  .cm-s-luanette .CodeMirror-matchingbracket { color: var(--accent) !important; text-decoration: underline; }
+  .cm-s-luanette .cm-keyword { color: #ff7b72; }
+  .cm-s-luanette .cm-builtin { color: #d2a8ff; }
+  .cm-s-luanette .cm-string, .cm-s-luanette .cm-string-2 { color: #a5d6ff; }
+  .cm-s-luanette .cm-number { color: #79c0ff; }
+  .cm-s-luanette .cm-comment { color: #8b949e; font-style: italic; }
+  .cm-s-luanette .cm-variable-2 { color: #ffa657; }
+  .error-line { background: rgba(255, 123, 114, 0.18); }
+  #status a { color: var(--danger); font-weight: 600; }
+  @media (max-width: 860px) { .CodeMirror { height: 360px; } }
   #status { font: 13px/1.5 var(--mono); color: var(--muted); white-space: pre-wrap; min-height: 1.5em; }
   #status.error { color: var(--danger); }
   @media (pointer: coarse) { .desk { display: none; } }
@@ -188,6 +208,10 @@
   from a .lua file.</span>
 </footer>
 <script src="luanette.js"></script>
+<script src="vendor/codemirror/codemirror.js"></script>
+<script src="vendor/codemirror/lua.js"></script>
+<script src="vendor/codemirror/matchbrackets.js"></script>
+<script src="vendor/codemirror/show-hint.js"></script>
 <script src="board.js"></script>
 <script src="playground.js"></script>
 <script src="sound-editor.js"></script>

@@ -412,7 +412,7 @@ const SoundEditor = (() => {
     $("mus-add").onclick = addPattern;
     $("mus-play").onclick = () => { if (music.size) playSong(Math.min(...music.keys())); };
     addEventListener("keydown", (e) => {  // Space plays the sound being edited
-      if (tab === "sounds" && e.code === "Space" && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) {
+      if (tab === "sounds" && e.code === "Space" && !typing(e)) {
         e.preventDefault();
         playSound();
       }

@@ -64,6 +64,13 @@ web/vendor/esp-web-tools/ is dist/web/ of the npm package esp-web-tools 10.4.0
 improv-wifi-serial-sdk (Apache License 2.0), lit (BSD-3-Clause), pako (MIT and
 zlib), atob-lite (MIT) and tslib (0BSD): LICENSES/esp-web-tools-bundle.txt.
 
+CodeMirror
+----------
+web/vendor/codemirror/ holds files from the npm package codemirror 5.65.21
+(https://codemirror.net/5/), unmodified: the editor, its Lua mode, and the
+matchbrackets and show-hint addons. Copyright (C) 2017 Marijn Haverbeke and
+others, MIT License (LICENSES/CodeMirror-MIT.txt).
+
 Fetched at build time
 ---------------------
 ESP-IDF, esp_codec_dev and esp_lcd_touch_ft5x06 (Apache License 2.0, Espressif

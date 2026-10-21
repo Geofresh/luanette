@@ -15,8 +15,47 @@ const TAP_MAX_MS = 350, DRAG_PX = 18;     // the board's: a tap lifts this soon 
 const LEFT = 1, RIGHT = 2, UP = 4, DOWN = 8, A = 16, B = 32;
 
 const $ = (id) => document.getElementById(id);
-const glass = $("glass"), ctx2d = glass.getContext("2d"), code = $("code"), status = $("status");
+const glass = $("glass"), ctx2d = glass.getContext("2d"), status = $("status");
 const image = ctx2d.createImageData(W, H);
+
+// ---- the code editor (CodeMirror 5, web/vendor/codemirror) -------------------------------------
+// `code` stands in for the textarea it replaced: .value, .hidden, and "input" events, which fire
+// when the person types and when other code says so (the sound editor writes the code, then does).
+const cm = CodeMirror.fromTextArea($("code"), {
+  mode: "lua", theme: "luanette", lineNumbers: true, matchBrackets: true, indentUnit: 2, tabSize: 2,
+  extraKeys: {
+    "Ctrl-Enter": () => run(code.value), "Cmd-Enter": () => run(code.value),
+    Tab: (ed) => (ed.somethingSelected() ? ed.indentSelection("add") : ed.replaceSelection("  ")),
+    "Shift-Tab": (ed) => ed.indentSelection("subtract"),
+  },
+});
+const inputs = [];
+const code = {
+  get value() { return cm.getValue(); },
+  set value(text) { if (text !== cm.getValue()) cm.setValue(text); },
+  // Another cart's code: what was typed before it can't be undone into this one.
+  load(text) { cm.setValue(text); cm.clearHistory(); },
+  get hidden() { return cm.getWrapperElement().hidden; },
+  set hidden(h) { cm.getWrapperElement().hidden = h; if (!h) cm.refresh(); },
+  addEventListener(type, fn) { if (type === "input") inputs.push(fn); },
+  dispatchEvent(e) { if (e.type === "input") for (const fn of inputs) fn(e); },
+};
+cm.on("changes", (_, changes) => {
+  if (changes.some((c) => c.origin !== "setValue")) code.dispatchEvent(new Event("input"));
+});
+// Whether a key is going into the editor or a form field rather than to the cart.
+const typing = (e) => !!e.target.closest?.(".CodeMirror, input, textarea, select");
+
+// The line an error names ("cart:16: ..."), shown and highlighted.
+let marked = null;
+function showLine(n) {
+  if (typeof SoundEditor !== "undefined" && SoundEditor.tab !== "code") SoundEditor.show("code");
+  if (marked !== null) cm.removeLineClass(marked, "background", "error-line");
+  marked = cm.addLineClass(n - 1, "background", "error-line");
+  cm.setCursor({ line: n - 1, ch: 0 });
+  cm.scrollIntoView({ line: n - 1, ch: 0 }, 80);
+  cm.focus();
+}
 
 let lw = null;            // the engine's exports
 let current = null;       // the example being shown
@@ -50,10 +89,7 @@ glass.addEventListener("pointercancel", () => { touch.down = false; });
 
 const KEYMAP = { ArrowLeft: LEFT, ArrowRight: RIGHT, ArrowUp: UP, ArrowDown: DOWN, KeyZ: A, Space: A, Enter: A, KeyX: B };
 addEventListener("keydown", (e) => {
-  if (e.target === code) {
-    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); run(code.value); }
-    return;
-  }
+  if (typing(e)) return;
   if (e.code in KEYMAP) { e.preventDefault(); keys.add(e.code); sound.unlock(); }
 });
 addEventListener("keyup", (e) => keys.delete(e.code));
@@ -447,8 +483,16 @@ function show() {
 }
 
 function say(text, error) {
-  status.textContent = text;
   status.classList.toggle("error", !!error);
+  if (marked !== null) { cm.removeLineClass(marked, "background", "error-line"); marked = null; }
+  const m = error ? /cart:(\d+):/.exec(text) : null;
+  if (!m) { status.textContent = text; return; }
+  const a = document.createElement("a");  // the line, as a link to it
+  a.href = "#";
+  a.textContent = m[0];
+  a.title = "Show line " + m[1];
+  a.onclick = (e) => { e.preventDefault(); showLine(Number(m[1])); };
+  status.replaceChildren(text.slice(0, m.index), a, text.slice(m.index + m[0].length));
 }
 
 function run(src) {
@@ -503,7 +547,7 @@ async function select(name, src) {
     }
     src = storeGet(sourceKey(name)) || (example ? originals[name] : TEMPLATE(name));
   }
-  code.value = src;
+  code.load(src);
   run(code.value);
   if (typeof SoundEditor !== "undefined" && SoundEditor.tab !== "code") SoundEditor.show();
 }
@@ -543,11 +587,6 @@ async function main() {
   code.addEventListener("input", () => {
     clearTimeout(saving);
     saving = setTimeout(() => current && storeSet(sourceKey(current), code.value), 400);
-  });
-  code.addEventListener("keydown", (e) => {  // Tab indents instead of leaving the editor
-    if (e.key !== "Tab" || e.shiftKey) return;
-    e.preventDefault();
-    code.setRangeText("  ", code.selectionStart, code.selectionEnd, "end");
   });
   say("Loading the engine…");
   const mod = await Luanette();
