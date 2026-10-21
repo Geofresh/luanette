@@ -23,7 +23,7 @@ jobs:
       - run: host/build/host_tests
       - run: python tools/gallery_index.py gallery /tmp/gallery.json  # names and headers
       - run: python tools/share_link.py --check docs/tutorial.md .  # its links open its step carts
-      - run: for c in examples/*.lua gallery/*.lua tests/tutorial/*.lua engine/builtin/launcher.lua; do python tools/check.py "$c" > /dev/null || { python tools/check.py "$c"; exit 1; }; done
+      - run: for c in examples/*.lua gallery/*.lua templates/*.lua tests/tutorial/*.lua engine/builtin/launcher.lua; do python tools/check.py "$c" > /dev/null || { python tools/check.py "$c"; exit 1; }; done
       - run: for c in tests/carts/primitives.lua tests/carts/triangles.lua tests/carts/lazy.lua tests/carts/sounds.lua tests/carts/log.lua tests/carts/sprites.lua; do python tests/parity.py "$c"; done
 
   firmware:

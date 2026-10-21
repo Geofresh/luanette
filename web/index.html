@@ -9,6 +9,7 @@
 <meta name="description" content="Play and edit Luanette carts in your browser: the same engine that runs on ESP32-S3 boards, compiled to WebAssembly.">
 <link rel="stylesheet" href="vendor/codemirror/codemirror.css">
 <link rel="stylesheet" href="vendor/codemirror/show-hint.css">
+<link rel="stylesheet" href="vendor/codemirror/dialog.css">
 <style>
   :root {
     --bg: #0d1117; --panel: #161b22; --line: #30363d; --text: #e6edf3; --muted: #8b949e;
@@ -96,6 +97,10 @@
   .cm-s-luanette .cm-variable-2 { color: #ffa657; }
   .error-line { background: rgba(255, 123, 114, 0.18); }
   .compile-gutter { width: 14px; }
+  .cm-s-luanette .CodeMirror-dialog { background: #1c2128; color: var(--text); border-color: var(--line); font: 13px system-ui, sans-serif; }
+  .cm-s-luanette .CodeMirror-dialog input { color: var(--text); font: 13px var(--mono); }
+  .cm-s-luanette .CodeMirror-dialog button { padding: 2px 8px; font-size: 13px; }
+  .cm-s-luanette .cm-searching { background: rgba(240, 180, 41, 0.35); }
   .compile-dot { color: var(--danger); font-size: 11px; cursor: help; padding-left: 2px; }
   .compile-error { text-decoration: underline wavy rgba(255, 123, 114, 0.8); text-underline-offset: 3px; }
   .color-strip { gap: 3px; }
@@ -178,6 +183,9 @@
     <div class="bar" id="newcart" hidden>
       <input type="text" id="newname" placeholder="my_game" maxlength="32" spellcheck="false" autocomplete="off"
              aria-label="The new cart's name: a-z, 0-9, _ and -">
+      <label class="note">Start from <select id="newtemplate" aria-label="The template the cart starts from">
+        <option value="blank">blank</option><option value="platformer">platformer</option>
+        <option value="shooter">shooter</option><option value="puzzle">puzzle</option></select></label>
       <button class="primary" id="create">Create</button>
       <button id="newcancel">Cancel</button>
     </div>
@@ -326,6 +334,9 @@
 <script src="vendor/codemirror/lua.js"></script>
 <script src="vendor/codemirror/matchbrackets.js"></script>
 <script src="vendor/codemirror/show-hint.js"></script>
+<script src="vendor/codemirror/dialog.js"></script>
+<script src="vendor/codemirror/searchcursor.js"></script>
+<script src="vendor/codemirror/search.js"></script>
 <script src="board.js"></script>
 <script src="playground.js"></script>
 <script src="tables.js"></script>

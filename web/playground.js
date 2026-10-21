@@ -29,6 +29,7 @@ const cm = CodeMirror.fromTextArea($("code"), {
     Tab: (ed) => (ed.somethingSelected() ? ed.indentSelection("add") : ed.replaceSelection("  ")),
     "Shift-Tab": (ed) => ed.indentSelection("subtract"),
     "Ctrl-Space": (ed) => suggest(ed, true),
+    "Ctrl-H": "replace", "Cmd-Alt-F": "replace",  // find is Ctrl+F; replace is Ctrl+Shift+F too
   },
 });
 const inputs = [];
@@ -411,13 +412,19 @@ function newCart() {
   $("newname").focus();
   say("");
 }
-function createCart() {
+// A new cart from a template (templates/: blank, platformer, shooter, puzzle), its title its name.
+async function createCart() {
   const name = $("newname").value.trim().toLowerCase();
   if (mine.includes(name)) { say(`You already have ${name}.`, true); return; }
   const problem = nameProblem(name);
   if (problem) { say(problem, true); return; }
   $("newcart").hidden = true;
-  addCart(name, TEMPLATE(name));
+  let src = TEMPLATE(name);
+  try {
+    const r = await fetch("templates/" + $("newtemplate").value + ".lua");
+    if (r.ok) src = (await r.text()).replace(/^-- title: .*$/m, "-- title: " + name);
+  } catch {}
+  addCart(name, src);
 }
 
 async function openFile(file) {

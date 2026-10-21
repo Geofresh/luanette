@@ -68,7 +68,7 @@ CodeMirror
 ----------
 web/vendor/codemirror/ holds files from the npm package codemirror 5.65.21
 (https://codemirror.net/5/), unmodified: the editor, its Lua mode, and the
-matchbrackets and show-hint addons. Copyright (C) 2017 Marijn Haverbeke and
+matchbrackets, show-hint, search, searchcursor and dialog addons. Copyright (C) 2017 Marijn Haverbeke and
 others, MIT License (LICENSES/CodeMirror-MIT.txt).
 
 Fetched at build time
