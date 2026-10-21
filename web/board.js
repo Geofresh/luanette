@@ -88,6 +88,13 @@ const Board = (() => {
 
     async open() {
       if (!this.port.readable) await this.port.open({ baudRate: 115200 });
+      // The S3's USB port holds the chip in reset while RTS is up and DTR down. Chrome can drop DTR
+      // first when it closes the port, which resets the board before it has saved what it was sent.
+      // So both go down now, RTS first (DTR up, RTS down does nothing), and closing has nothing to drop.
+      if (this.port.setSignals) {
+        await this.port.setSignals({ requestToSend: false });
+        await this.port.setSignals({ dataTerminalReady: false });
+      }
       this.writer = this.port.writable.getWriter();
       this.reader = this.port.readable.getReader();
       this.reading = this.readLoop();
@@ -95,6 +102,11 @@ const Board = (() => {
       // this one's first command onto it and refuse it), and the board ignores an empty line.
       await this.write("\n");
       await sleep(200);
+      this.answers.length = 0;
+      // If opening reset the board anyway (some systems change the lines on their own), it answers
+      // once it's up again; any late answers then are dropped, so they can't pass for later ones.
+      await this.ask("status", 1000, 8);
+      await sleep(300);
       this.answers.length = 0;
     }
 
@@ -141,8 +153,8 @@ const Board = (() => {
       });
     }
 
-    async ask(text, timeout = 3000) {
-      for (let i = 0; i < 3; i++) {
+    async ask(text, timeout = 3000, tries = 3) {
+      for (let i = 0; i < tries; i++) {
         await this.send(text);
         const a = await this.answer(timeout);
         if (a) return a;
@@ -162,7 +174,7 @@ const Board = (() => {
     // One message; returns the times it went back.
     async message(msg) {
       const raw = this.encoder.encode(pyJson(msg));
-      if (!(await this.ask("cart msg begin")).startsWith("@ok")) throw new BoardError("The board refused a message.");
+      if (!(await this.ask("cart msg begin")).startsWith("@ok 0")) throw new BoardError("The board refused a message.");
       let off = 0, inflight = [], ignore = 0, back = 0;
       while (off < raw.length || inflight.length) {
         while (off < raw.length && inflight.length < 4) {  // 4 lines of ~2.8 KB: inside the board's 16 KB buffer
@@ -179,6 +191,7 @@ const Board = (() => {
           back++;
           continue;
         }
+        if (!/^@(ok \d+|error at \d+)/.test(a)) continue;  // a late answer to something else
         if (ignore) { ignore--; continue; }  // answers to parts sent after one that failed
         inflight.shift();
         const m = /^@error at (\d+)/.exec(a);
@@ -197,6 +210,23 @@ const Board = (() => {
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+  // The board's status ({"cart": the open one, "uptime_s", ...}), or null.
+  async function status(link) {
+    const a = await link.ask("status");
+    try { return a.startsWith("@status ") ? JSON.parse(a.slice(8)) : null; } catch { return null; }
+  }
+
+  // "@ok" to `cart msg end` means the message arrived; the board saves it a moment later, on another
+  // task. Wait until that's done before the port closes: until the board has the cart open (it opens
+  // it only after saving), or the cart is gone from its list.
+  async function settled(link, done, what) {
+    for (let t = 0; t < 30; t++) {
+      if (await done()) return;
+      await sleep(200);
+    }
+    throw new BoardError(`The board took the message but didn't ${what}. Its log (tools/push.py's port) may say why.`);
+  }
+
   // Sends a cart (its source as it ships: comments out) to the board on `port`, sets the board's
   // clock and timezone on the way, and opens it there. The port is closed again after, so other
   // tools (the installer, push.py) can have it.
@@ -207,13 +237,34 @@ const Board = (() => {
       await link.ask(`time ${Math.floor(Date.now() / 1000)}`);
       const tz = posixTz();
       if (/^[A-Za-z<>+\-0-9,./:]+$/.test(tz)) await link.ask(`tz ${tz}`);
-      return await link.message({ type: "cart", name, title, lua, run: true });
+      const back = await link.message({ type: "cart", name, title, lua, run: true });
+      await settled(link, async () => (await status(link))?.cart === name, "open the cart");
+      return back;
     } finally {
       await link.close();
     }
   }
 
-  return { sendCart, posixTz, crc32, pyJson, BoardError, Link };
+  // Removes a sent cart from the board's flash. A built-in of that name (an example) comes back.
+  async function removeCart(port, name, builtin) {
+    const link = new Link(port);
+    await link.open();
+    try {
+      const back = await link.message({ type: "cart", delete: name });
+      const listed = async () => {
+        const a = await link.ask("cart list");
+        try { return a.startsWith("@carts ") && JSON.parse(a.slice(7)).includes(name); } catch { return false; }
+      };
+      // A deleted example stays listed (the built-in is back), so for those a pause will do.
+      if (builtin) await sleep(1000);
+      else await settled(link, async () => !(await listed()), "remove the cart");
+      return back;
+    } finally {
+      await link.close();
+    }
+  }
+
+  return { sendCart, removeCart, posixTz, crc32, pyJson, BoardError, Link };
 })();
 
 if (typeof module !== "undefined") module.exports = Board;

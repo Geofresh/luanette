@@ -185,6 +185,17 @@ cart msg end <crc32>                   -> @ok
 `web/board.js` (Web Serial), byte for byte the same messages. A cart arrives in well under a second,
 and 356 KB of images in about 2.3 s.
 
+Two things to know when writing a sender of your own:
+
+- `@ok` to `msg end` means the message arrived, not that it's saved. A task saves it to flash a
+  moment later (the erase takes about 100 ms), and only then opens the cart. A sender that has to
+  know waits for `status` to show the cart open, as `board.js` does.
+- The S3's USB port holds the chip in reset while RTS is up and DTR is down. Opening a port raises
+  both, and anything that lowers DTR first resets the board: Chrome does when it closes a Web
+  Serial port, which used to throw away a cart the board hadn't saved yet. `board.js` lowers RTS
+  first, then DTR, as soon as it opens the port. pyserial lowers both together on close, so
+  `push.py` never hit this.
+
 The other USB commands, each answered on one line starting with `@`:
 
 ```

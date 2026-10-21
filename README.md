@@ -9,9 +9,9 @@ it, at up to 60 fps. You write a cart on your computer, check it there, and send
 The name is Lua plus *lunette*, French for a little moon or a small window.
 
 **[Try it in your browser](https://geofresh.github.io/luanette/).** The five example carts run
-there on the same engine, compiled to WebAssembly, next to an editor. In Chrome or Edge on a
-computer, the same page installs the firmware on a board over USB and sends it the cart you're
-editing, with nothing else to set up.
+there on the same engine, compiled to WebAssembly, next to an editor, and you can start carts of
+your own or open .lua files. In Chrome or Edge on a computer, the same page installs the firmware
+on a board over USB and sends it the cart you're editing, with nothing else to set up.
 
 <img src="docs/images/board.jpg" width="320" alt="Luanette's launcher on the Waveshare ESP32-S3-Touch-AMOLED-2.06">
 

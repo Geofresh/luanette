@@ -14,6 +14,7 @@
     --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }  /* over .bar and .board's display: flex */
   html, body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, sans-serif; }
   a { color: var(--accent); }
   header { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; padding: 16px 24px 0; }
@@ -33,6 +34,11 @@
            padding: 6px 12px; cursor: pointer; }
   button:hover { border-color: var(--muted); }
   button.on { border-color: var(--accent); color: var(--accent); }
+  button.mine { font-family: var(--mono); font-size: 14px; }
+  button:disabled { opacity: 0.5; cursor: default; }
+  input[type=text] { font: 14px var(--mono); color: var(--text); background: var(--panel); border: 1px solid var(--line);
+                     border-radius: 8px; padding: 6px 10px; min-width: 0; width: 16em; }
+  input[type=text]:focus { outline: none; border-color: var(--muted); }
   button.primary { background: var(--accent); border-color: var(--accent); color: #1a1300; font-weight: 600; }
   .bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .bar .hint { color: var(--muted); font-size: 13px; margin-left: auto; }
@@ -71,10 +77,20 @@
   </section>
   <section class="side">
     <div class="carts" id="carts"></div>
+    <div class="bar" id="newcart" hidden>
+      <input type="text" id="newname" placeholder="my_game" maxlength="32" spellcheck="false" autocomplete="off"
+             aria-label="The new cart's name: a-z, 0-9, _ and -">
+      <button class="primary" id="create">Create</button>
+      <button id="newcancel">Cancel</button>
+    </div>
     <div class="bar">
       <button class="primary" id="run">Run</button>
       <button id="reset">Reset to original</button>
+      <button id="open" title="Opens a .lua file as a cart of your own">Open .lua</button>
+      <button id="save" title="Saves the editor's text as a .lua file">Save .lua</button>
       <button id="send" hidden title="Sends this cart to a board on USB, as tools/push.py does">Send to board</button>
+      <button id="unsend" hidden title="Takes this cart out of the board's flash">Remove from board</button>
+      <input type="file" id="file" accept=".lua,text/plain" hidden>
       <span class="hint desk"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> runs your edits</span>
     </div>
     <textarea id="code" spellcheck="false" aria-label="The cart's Lua source"></textarea>
@@ -85,8 +101,11 @@
   The API is in <a href="https://github.com/Geofresh/luanette/blob/main/docs/api.md">docs/api.md</a>. Edits stay in
   this browser. <span id="no-serial">Chrome or Edge on a computer can install the firmware and send carts to a board
   from this page; elsewhere, save a cart as a .lua file and send it with <code>tools/push.py</code>.</span>
-  <span id="has-serial" hidden>Send to board puts the cart in the editor on a board plugged in over USB, under the
-  example's name, so it replaces the built-in one; <code>tools/push.py</code> does the same from a .lua file.</span>
+  Your own carts (<strong>+ New cart</strong> or <strong>Open .lua</strong>) are kept in this browser; Save .lua
+  keeps a copy anywhere else.
+  <span id="has-serial" hidden>Send to board puts the cart in the editor on a board plugged in over USB under its
+  name; an edited example replaces the built-in one until you restore it. <code>tools/push.py</code> does the same
+  from a .lua file.</span>
 </footer>
 <script src="luanette.js"></script>
 <script src="board.js"></script>

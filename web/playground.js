@@ -143,6 +143,118 @@ const sound = {
   },
 };
 
+// ---- your carts: made here or opened from a file, kept in this browser ----------------------
+const NAME_RE = /^[a-z0-9_-]{1,32}$/;  // the board keys a cart by name (under 48 bytes); also its file name
+const TEMPLATE = (name) => `-- title: ${name}
+-- by: you
+-- about: a dot you move with your finger
+
+x, y = 64, 64
+
+function _update()
+  if btn(0) then x = x - 1 end
+  if btn(1) then x = x + 1 end
+  if btn(2) then y = y - 1 end
+  if btn(3) then y = y + 1 end
+end
+
+function _draw()
+  cls(1)
+  circfill(x, y, 4, 8)
+  print("hello", 2, 2, 7)
+end
+`;
+const isExample = (name) => CARTS.some(([n]) => n === name);
+const storeGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+const storeSet = (k, v) => { try { localStorage.setItem(k, v); return true; } catch { return false; } };
+const storeDel = (k) => { try { localStorage.removeItem(k); } catch {} };
+// An example's edits are a draft over the original; your own cart's source is all there is.
+const sourceKey = (name) => (isExample(name) ? "luanette.draft." : "luanette.cart.") + name;
+
+let mine = [];  // your carts' names, in the order made
+try { mine = JSON.parse(storeGet("luanette.mine") || "[]").filter((n) => NAME_RE.test(n) && !isExample(n)); } catch {}
+const saveMine = () => storeSet("luanette.mine", JSON.stringify(mine));
+
+function nameProblem(name) {
+  if (!NAME_RE.test(name)) return "A name is 1 to 32 characters: a-z, 0-9, _ and -.";
+  if (isExample(name)) return `${name} is an example's name. Pick another, or edit that example.`;
+  if (name === "launcher") return "That's the launcher's name. Pick another.";
+  return "";
+}
+// A file's name made into a cart's: "My Game.lua" -> "my_game".
+const slug = (file) => file.toLowerCase().replace(/\.lua$/, "").replace(/[^a-z0-9_-]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 32);
+
+function addCart(name, src) {
+  if (!mine.includes(name)) mine.push(name);
+  const kept = saveMine() && storeSet(sourceKey(name), src);
+  renderCarts();
+  select(name, src);
+  if (!kept) say("This browser isn't keeping data for this page, so the cart goes when the tab does. Save .lua keeps a copy.", true);
+}
+
+function newCart() {
+  $("newcart").hidden = false;
+  $("newname").value = "";
+  $("newname").focus();
+  say("");
+}
+function createCart() {
+  const name = $("newname").value.trim().toLowerCase();
+  if (mine.includes(name)) { say(`You already have ${name}.`, true); return; }
+  const problem = nameProblem(name);
+  if (problem) { say(problem, true); return; }
+  $("newcart").hidden = true;
+  addCart(name, TEMPLATE(name));
+}
+
+async function openFile(file) {
+  if (!file) return;
+  if (file.size > 256 * 1024) { say(`${file.name} is too big to be a cart.`, true); return; }
+  const src = await file.text();
+  let name = slug(file.name) || "cart";
+  if (isExample(name) || name === "launcher") name = (name + "_mine").slice(0, 32);
+  if (mine.includes(name) && storeGet(sourceKey(name)) !== src &&
+      !confirm(`You already have a cart called ${name} here. Replace it with ${file.name}?`)) return;
+  addCart(name, src);
+}
+
+function saveFile() {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([code.value], { type: "text/plain" }));
+  a.download = current + ".lua";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+function deleteCart() {
+  if (!confirm(`Delete ${current} from this browser? Save .lua first if you want to keep a copy.`)) return;
+  storeDel(sourceKey(current));
+  mine = mine.filter((n) => n !== current);
+  saveMine();
+  renderCarts();
+  select(CARTS[0][0]);
+}
+
+function renderCarts() {
+  const row = $("carts");
+  row.replaceChildren();
+  const add = (name, title, cls) => {
+    const b = document.createElement("button");
+    b.textContent = title;
+    b.dataset.name = name;
+    if (cls) b.classList.add(cls);
+    b.onclick = () => select(name);
+    row.appendChild(b);
+  };
+  for (const [name, title] of CARTS) add(name, title);
+  for (const name of mine) add(name, name, "mine");
+  const b = document.createElement("button");
+  b.textContent = "+ New cart";
+  b.onclick = newCart;
+  row.appendChild(b);
+  for (const c of row.children) c.classList.toggle("on", c.dataset.name === current);
+}
+
 // ---- the board: install the firmware, send carts (Web Serial: Chrome and Edge) -------------
 const ESPRESSIF = 0x303a;  // the USB vendor of the S3's own port
 let sending = false;
@@ -153,8 +265,8 @@ async function boardPort() {
   return known[0] || navigator.serial.requestPort({ filters: [{ usbVendorId: ESPRESSIF }] });
 }
 
-// The cart in the editor, to the board under the example's name (as push.py names a cart by its
-// file), so it takes the built-in one's place. Checked first as far as a page can: it runs here,
+// The cart in the editor, to the board under its name (as push.py names a cart by its file): an
+// example's takes the built-in one's place. Checked first as far as a page can: it runs here,
 // has its header, and fits; check.py's instruction budget is the one check it skips.
 async function send() {
   if (sending || !current) return;
@@ -180,13 +292,34 @@ async function send() {
   say(`Sending ${title} to the board…`);
   try {
     await Board.sendCart(port, { name: current, title, lua: src });
-    say(`${title} is on the board and open there. It stays in its flash, in place of the built-in one.`);
+    say(`${title} is on the board and open there. It stays in its flash` +
+      (isExample(current) ? ", in place of the built-in one." : " until you remove it."));
   } catch (e) {
-    say(e instanceof Board.BoardError ? e.message
-      : `Couldn't use the board's port (${e.message}). Is the installer, another tab or push.py using it?`, true);
+    portTrouble(e);
   } finally {
     sending = false;
     $("send").disabled = false;
+  }
+}
+
+const portTrouble = (e) => say(e instanceof Board.BoardError ? e.message
+  : `Couldn't use the board's port (${e.message}). Is the installer, another tab or push.py using it?`, true);
+
+// Takes the cart of this name out of the board's flash; for an example, the built-in one is back.
+async function removeFromBoard() {
+  if (sending || !current) return;
+  let port;
+  try { port = await boardPort(); } catch { return; }
+  sending = true;
+  $("unsend").disabled = true;
+  try {
+    await Board.removeCart(port, current, isExample(current));
+    say(isExample(current) ? `The board has its built-in ${current} again.` : `${current} is off the board.`);
+  } catch (e) {
+    portTrouble(e);
+  } finally {
+    sending = false;
+    $("unsend").disabled = false;
   }
 }
 
@@ -196,6 +329,8 @@ async function setUpBoard() {
   $("has-serial").hidden = false;
   $("send").hidden = false;
   $("send").onclick = send;
+  $("unsend").hidden = false;
+  $("unsend").onclick = removeFromBoard;
   try {  // the Install button, once there's a release behind it (web/firmware.sh)
     const r = await fetch("firmware/manifest.json");
     if (!r.ok) return;
@@ -226,7 +361,7 @@ function run(src) {
   running = true;
   last = performance.now();
   spare = 0;
-  try { localStorage.setItem("luanette.draft." + name, src); } catch {}
+  storeSet(sourceKey(name), src);
 }
 
 function tick(now) {
@@ -252,35 +387,49 @@ function tick(now) {
   if (frames) show();
 }
 
-async function select(name) {
+async function select(name, src) {
   current = name;
   for (const b of $("carts").children) b.classList.toggle("on", b.dataset.name === name);
   if (location.hash !== "#" + name) history.replaceState(null, "", "#" + name);
-  if (!(name in originals)) {
-    const r = await fetch("examples/" + name + ".lua");
-    originals[name] = await r.text();
+  const example = isExample(name);
+  $("reset").textContent = example ? "Reset to original" : "Delete";
+  $("unsend").textContent = example ? "Restore the built-in on the board" : "Remove from board";
+  $("newcart").hidden = true;
+  if (src === undefined) {
+    if (example && !(name in originals)) {
+      const r = await fetch("examples/" + name + ".lua");
+      originals[name] = await r.text();
+    }
+    src = storeGet(sourceKey(name)) || (example ? originals[name] : TEMPLATE(name));
   }
-  let draft = null;
-  try { draft = localStorage.getItem("luanette.draft." + name); } catch {}
-  code.value = draft || originals[name];
+  code.value = src;
   run(code.value);
 }
 
 async function main() {
-  for (const [name, title] of CARTS) {
-    const b = document.createElement("button");
-    b.textContent = title;
-    b.dataset.name = name;
-    b.onclick = () => select(name);
-    $("carts").appendChild(b);
-  }
+  renderCarts();
   $("run").onclick = () => run(code.value);
   $("reset").onclick = () => {
     if (!current) return;
-    try { localStorage.removeItem("luanette.draft." + current); } catch {}
+    if (!isExample(current)) { deleteCart(); return; }
+    storeDel(sourceKey(current));
     code.value = originals[current];
     run(code.value);
   };
+  $("create").onclick = createCart;
+  $("newcancel").onclick = () => { $("newcart").hidden = true; };
+  $("newname").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") createCart();
+    if (e.key === "Escape") $("newcart").hidden = true;
+  });
+  $("open").onclick = () => $("file").click();
+  $("file").onchange = () => { openFile($("file").files[0]); $("file").value = ""; };
+  $("save").onclick = saveFile;
+  let saving = 0;  // edits are kept as you type, not only when run
+  code.addEventListener("input", () => {
+    clearTimeout(saving);
+    saving = setTimeout(() => current && storeSet(sourceKey(current), code.value), 400);
+  });
   code.addEventListener("keydown", (e) => {  // Tab indents instead of leaving the editor
     if (e.key !== "Tab" || e.shiftKey) return;
     e.preventDefault();
@@ -305,7 +454,7 @@ async function main() {
   requestAnimationFrame(tick);
   setUpBoard();
   const fromHash = location.hash.slice(1);
-  select(CARTS.some(([n]) => n === fromHash) ? fromHash : CARTS[0][0]);
+  select(isExample(fromHash) || mine.includes(fromHash) ? fromHash : CARTS[0][0]);
 }
 
 main();
