@@ -106,7 +106,7 @@ brackets; it defaults to the last color used (7 at start).
 | `cls([c])` | clear the screen (default 0) |
 | `pset(x, y, [c])` / `pget(x, y)` | set / read one pixel (`pget` returns the color index) |
 | `line(x0, y0, x1, y1, [c])` | a line |
-| `rect(x0, y0, x1, y1, [c])` / `rectfill(...)` | a box outline / filled box (corners inclusive) |
+| `rect(x0, y0, x1, y1, [c])` / `rectfill(x0, y0, x1, y1, [c])` | a box outline / filled box (corners inclusive) |
 | `circ(x, y, r, [c])` / `circfill(x, y, r, [c])` | a circle outline / filled circle |
 | `trifill(x0, y0, x1, y1, x2, y2, [c])` | a filled triangle. Fractions count (to 1/16 px): triangles sharing an edge meet with no gap and no overlap, so meshes tile cleanly. For solid 3D: drop faces turned away, draw far to near |
 | `print(text, x, y, [c])` | text in the 4x6 font (3x5 glyphs, 4 px a character, so 32 a line); returns the x after the text. Letters show as capitals; `\n` starts a new line at `x`; whole numbers print without `.0` |
@@ -375,6 +375,7 @@ The console that runs the cart gives it data and takes commands. In Luanette's f
 
 | call | does |
 |---|---|
+| `caps()` | what the cart runs on, as a table: the canvas size, where the picture sits, the board's name, what it has (touch, tilt, sound...). The fields are under "Versions and what a cart runs on" |
 | `data(name)` | the latest value of a channel as a table, or `nil`: `"battery"` (mv, percent, charging, usb), `"carts"` (the carts on the board: a list of name, title, about), `"settings"` (volume and brightness, each a step from 0 to 3) |
 | `act(name, [arg])` | a command to the console: `"open"` opens the cart named `arg`; `"volume"` and `"brightness"` set that setting to the step `arg` ("0" to "3"). The launcher uses all three |
 

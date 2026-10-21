@@ -82,6 +82,18 @@
   .cm-s-luanette .cm-comment { color: #8b949e; font-style: italic; }
   .cm-s-luanette .cm-variable-2 { color: #ffa657; }
   .error-line { background: rgba(255, 123, 114, 0.18); }
+  .CodeMirror-hints { background: #1c2128; border: 1px solid var(--line); border-radius: 6px; font: 13px var(--mono);
+                      box-shadow: 0 6px 20px rgba(0,0,0,0.5); max-width: 560px; }
+  .CodeMirror-hint { color: var(--text); padding: 3px 8px; display: flex; gap: 12px; white-space: nowrap; }
+  li.CodeMirror-hint-active { background: #264f78; color: var(--text); }
+  .hint-sig { color: var(--accent); }
+  .hint-does { color: var(--muted); overflow: hidden; text-overflow: ellipsis; font-family: system-ui, sans-serif; }
+  .api-tip { position: fixed; z-index: 20; max-width: 420px; background: #1c2128; border: 1px solid var(--line);
+             border-radius: 8px; padding: 8px 12px; font-size: 13px; color: var(--text); pointer-events: none;
+             box-shadow: 0 6px 20px rgba(0,0,0,0.5); }
+  .api-tip code { display: block; font: 13px var(--mono); color: var(--accent); }
+  .api-tip p { margin: 2px 0 8px; color: var(--muted); }
+  .api-tip p:last-child { margin-bottom: 0; }
   #status a { color: var(--danger); font-weight: 600; }
   @media (max-width: 860px) { .CodeMirror { height: 360px; } }
   #status { font: 13px/1.5 var(--mono); color: var(--muted); white-space: pre-wrap; min-height: 1.5em; }

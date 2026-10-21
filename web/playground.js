@@ -27,6 +27,7 @@ const cm = CodeMirror.fromTextArea($("code"), {
     "Ctrl-Enter": () => run(code.value), "Cmd-Enter": () => run(code.value),
     Tab: (ed) => (ed.somethingSelected() ? ed.indentSelection("add") : ed.replaceSelection("  ")),
     "Shift-Tab": (ed) => ed.indentSelection("subtract"),
+    "Ctrl-Space": (ed) => suggest(ed, true),
   },
 });
 const inputs = [];
@@ -45,6 +46,78 @@ cm.on("changes", (_, changes) => {
 });
 // Whether a key is going into the editor or a form field rather than to the cart.
 const typing = (e) => !!e.target.closest?.(".CodeMirror, input, textarea, select");
+
+// ---- API help: names, signatures and what they do, from docs/api.md (api.json, tools/api_index.py)
+const API = new Map();
+fetch("api.json").then((r) => r.json()).then((list) => { for (const e of list) API.set(e.name, e); }).catch(() => {});
+
+// The API name (dots and all, "hd.text") around column ch of a line: [start, end].
+function nameAt(line, ch) {
+  let a = ch, b = ch;
+  while (a > 0 && /[\w.]/.test(line[a - 1])) a--;
+  while (b < line.length && /[\w.]/.test(line[b])) b++;
+  return [a, b];
+}
+const inCode = (ed, pos) => !/comment|string/.test(ed.getTokenTypeAt(pos) || "");
+
+// Autocomplete: the API's names that start with what's typed, each with its signature.
+function apiHint(ed) {
+  const cur = ed.getCursor(), line = ed.getLine(cur.line);
+  const [start] = nameAt(line, cur.ch);
+  const typed = line.slice(start, cur.ch);
+  if (!typed) return null;
+  const list = [...API.values()].filter((e) => e.name.startsWith(typed) && e.name !== typed).map((e) => ({
+    text: e.name,
+    render(el) {
+      const sig = document.createElement("span");
+      sig.className = "hint-sig";
+      sig.textContent = e.help[0].sig + (e.help.length > 1 ? `  +${e.help.length - 1}` : "");
+      const does = document.createElement("span");
+      does.className = "hint-does";
+      does.textContent = e.help[0].does.length > 70 ? e.help[0].does.slice(0, 68) + "…" : e.help[0].does;
+      el.append(sig, does);
+    },
+  }));
+  return list.length ? { list, from: CodeMirror.Pos(cur.line, start), to: cur } : null;
+}
+function suggest(ed, asked) {
+  if (!API.size || ed.state.completionActive || !inCode(ed, ed.getCursor())) return;
+  ed.showHint({ hint: apiHint, completeSingle: false, alignWithWord: true, closeCharacters: /[\s()\[\]{};:>,=+\-*\/]/ });
+}
+cm.on("inputRead", (ed, change) => {  // as you type a name: two letters, or a dot (hd.)
+  if (change.origin !== "+input" || !/^[\w.]$/.test(change.text[0])) return;
+  const cur = ed.getCursor(), line = ed.getLine(cur.line), [start] = nameAt(line, cur.ch);
+  if (cur.ch - start >= 2 || change.text[0] === ".") suggest(ed);
+});
+
+// Hover help: what a name under the mouse does.
+const tip = document.createElement("div");
+tip.className = "api-tip";
+tip.hidden = true;
+document.body.appendChild(tip);
+let tipFor = "";
+cm.getWrapperElement().addEventListener("mousemove", (e) => {
+  const pos = cm.coordsChar({ left: e.clientX, top: e.clientY }, "window");
+  const line = cm.getLine(pos.line) || "", [a, b] = nameAt(line, pos.ch);
+  const name = line.slice(a, b).replace(/\.$/, "");
+  const entry = pos.ch < b && pos.ch >= a && inCode(cm, { line: pos.line, ch: a + 1 }) ? API.get(name) : null;
+  if (!entry) { tip.hidden = true; tipFor = ""; return; }
+  if (tipFor !== name) {
+    tipFor = name;
+    tip.replaceChildren(...entry.help.flatMap((h) => {
+      const sig = document.createElement("code");
+      sig.textContent = h.sig;
+      const does = document.createElement("p");
+      does.textContent = h.does;
+      return [sig, does];
+    }));
+  }
+  tip.hidden = false;
+  tip.style.left = Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 8) + "px";
+  tip.style.top = (e.clientY + 18 + tip.offsetHeight > innerHeight ? e.clientY - tip.offsetHeight - 10 : e.clientY + 18) + "px";
+});
+cm.getWrapperElement().addEventListener("mouseleave", () => { tip.hidden = true; tipFor = ""; });
+cm.on("keydown", () => { tip.hidden = true; });
 
 // The line an error names ("cart:16: ..."), shown and highlighted.
 let marked = null;
