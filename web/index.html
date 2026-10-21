@@ -40,6 +40,9 @@
   #status { font: 13px/1.5 var(--mono); color: var(--muted); white-space: pre-wrap; min-height: 1.5em; }
   #status.error { color: var(--danger); }
   @media (pointer: coarse) { .desk { display: none; } }
+  .board { display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--muted); font-size: 13px;
+           text-align: center; max-width: 380px; }
+  .board button { font-size: 15px; }
   footer { color: var(--muted); font-size: 13px; padding: 0 24px 24px; }
 </style>
 </head>
@@ -57,12 +60,19 @@
       <kbd>X</kbd> for B, <kbd>Shift</kbd>+arrows to tilt.</span>
     </div>
     <button id="tilt" hidden>Use this phone's tilt</button>
+    <div class="board" id="board" hidden>
+      <esp-web-install-button id="install" manifest="firmware/manifest.json">
+        <button slot="activate">Install the firmware on a board</button>
+      </esp-web-install-button>
+      <span id="board-note">Plug in the board over USB. Leave “Erase device” unticked to keep its saves and carts.</span>
+    </div>
   </section>
   <section class="side">
     <div class="carts" id="carts"></div>
     <div class="bar">
       <button class="primary" id="run">Run</button>
       <button id="reset">Reset to original</button>
+      <button id="send" hidden title="Sends this cart to a board on USB, as tools/push.py does">Send to board</button>
       <span class="hint desk"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> runs your edits</span>
     </div>
     <textarea id="code" spellcheck="false" aria-label="The cart's Lua source"></textarea>
@@ -71,9 +81,13 @@
 </main>
 <footer>
   The API is in <a href="https://github.com/Geofresh/luanette/blob/main/docs/api.md">docs/api.md</a>. Edits stay in
-  this browser; to put a cart on a board, save it as a .lua file and send it with <code>tools/push.py</code>.
+  this browser. <span id="no-serial">Chrome or Edge on a computer can install the firmware and send carts to a board
+  from this page; elsewhere, save a cart as a .lua file and send it with <code>tools/push.py</code>.</span>
+  <span id="has-serial" hidden>Send to board puts the cart in the editor on a board plugged in over USB, under the
+  example's name, so it replaces the built-in one; <code>tools/push.py</code> does the same from a .lua file.</span>
 </footer>
 <script src="luanette.js"></script>
+<script src="board.js"></script>
 <script src="playground.js"></script>
 </body>
 </html>

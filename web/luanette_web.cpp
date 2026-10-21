@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "cart.hpp"
+#include "cartsrc.hpp"
 #include "hd.hpp"
 #include "sfx.hpp"
 #include "stage.hpp"
@@ -204,5 +205,13 @@ EMSCRIPTEN_KEEPALIVE int16_t* lw_pcm(int n, int rate) {
   return g_pcm.data();
 }
 EMSCRIPTEN_KEEPALIVE int lw_pcm_len() { return static_cast<int>(g_pcm.size()); }
+
+// A cart's source as it ships (comments out, as push.py sends it), and the most the board takes.
+EMSCRIPTEN_KEEPALIVE const char* lw_shipped(const char* src) {
+  static std::string out;
+  out = carts::shipped(src);
+  return out.c_str();
+}
+EMSCRIPTEN_KEEPALIVE int lw_max_source() { return static_cast<int>(carts::kMaxSource); }
 
 }  // extern "C"

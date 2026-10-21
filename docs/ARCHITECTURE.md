@@ -40,7 +40,9 @@ firmware/                 the console firmware (ESP-IDF project, built with Plat
   main/usb_link.*         the USB serial port, one command line in, one answer out
   main/builtin_carts.cpp  the carts the firmware carries (the examples)
 host/                     CMake project for the desktop builds (cartrun, sfx_wav, stagerun, host_tests)
-web/                      the browser playground: the engine as WebAssembly (web/build.sh)
+web/                      the browser playground: the engine as WebAssembly (web/build.sh), the
+                          latest release's firmware for its Install button (web/firmware.sh), and
+                          board.js, which sends carts over Web Serial as push.py does
 tools/                    check.py, push.py, shot.py, pack_images.py, cartsrc.py, build_lupa32.py,
                           hd_fonts.py
 tests/                    parity.py and its carts, the host tests
@@ -179,7 +181,8 @@ cart msg <offset> <crc32> <base64>     -> @ok <bytes so far>   or   @error at <b
 cart msg end <crc32>                   -> @ok
 ```
 
-`tools/push.py` speaks this, with four parts in flight. A cart arrives in well under a second,
+`tools/push.py` speaks this, with four parts in flight, and so does the playground's
+`web/board.js` (Web Serial), byte for byte the same messages. A cart arrives in well under a second,
 and 356 KB of images in about 2.3 s.
 
 The other USB commands, each answered on one line starting with `@`:

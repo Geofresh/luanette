@@ -1,6 +1,7 @@
 name: pages
 
-# The playground (web/): the engine as WebAssembly, published to GitHub Pages from main.
+# The playground (web/): the engine as WebAssembly, published to GitHub Pages from main, with the
+# latest release's firmware for its Install button (release.yml runs this again after a release).
 on:
   push:
     branches: [main]
@@ -24,6 +25,12 @@ jobs:
         with:
           version: 6.0.13
       - run: web/build.sh
+      # The latest release's firmware, for the page's Install button (ESP Web Tools fetches it
+      # from the same site; release assets on GitHub can't be fetched from a page).
+      - run: web/firmware.sh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
       # Pages must be on, with GitHub Actions as its source (Settings -> Pages), before the first run.
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

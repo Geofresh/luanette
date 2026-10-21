@@ -9,7 +9,9 @@ it, at up to 60 fps. You write a cart on your computer, check it there, and send
 The name is Lua plus *lunette*, French for a little moon or a small window.
 
 **[Try it in your browser](https://geofresh.github.io/luanette/).** The five example carts run
-there on the same engine, compiled to WebAssembly, next to an editor.
+there on the same engine, compiled to WebAssembly, next to an editor. In Chrome or Edge on a
+computer, the same page installs the firmware on a board over USB and sends it the cart you're
+editing, with nothing else to set up.
 
 <img src="docs/images/board.jpg" width="320" alt="Luanette's launcher on the Waveshare ESP32-S3-Touch-AMOLED-2.06">
 
@@ -66,7 +68,9 @@ full-color carts, doesn't build yet, and `push.py` needs `--port COM3` or simila
 
 ## Quick start
 
-Flash the four files from the [latest release](https://github.com/Geofresh/luanette/releases/latest):
+The quickest way is the [playground](https://geofresh.github.io/luanette/) in Chrome or Edge: plug
+the board in, press **Install Luanette**, and leave "Erase device" unticked. Or flash the four files
+from the [latest release](https://github.com/Geofresh/luanette/releases/latest) yourself:
 
 ```bash
 pip install esptool

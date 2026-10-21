@@ -1,6 +1,8 @@
 // The playground: loads the engine (luanette.js / .wasm), runs a cart at its own frame rate, and
 // turns the browser's input into the board's: a tap is A and a drag is the d-pad (as the board's
 // player does it), keys stand in for the buttons, and a phone's tilt (or Shift+arrows) for tilt().
+// Where the browser has Web Serial, it also installs the firmware (ESP Web Tools) and sends the
+// cart being edited to a board on USB (board.js).
 "use strict";
 
 const CARTS = [
@@ -141,6 +143,69 @@ const sound = {
   },
 };
 
+// ---- the board: install the firmware, send carts (Web Serial: Chrome and Edge) -------------
+const ESPRESSIF = 0x303a;  // the USB vendor of the S3's own port
+let sending = false;
+
+// The board's port: the one this page was allowed before, or the one the person picks.
+async function boardPort() {
+  const known = (await navigator.serial.getPorts()).filter((p) => p.getInfo().usbVendorId === ESPRESSIF);
+  return known[0] || navigator.serial.requestPort({ filters: [{ usbVendorId: ESPRESSIF }] });
+}
+
+// The cart in the editor, to the board under the example's name (as push.py names a cart by its
+// file), so it takes the built-in one's place. Checked first as far as a page can: it runs here,
+// has its header, and fits; check.py's instruction budget is the one check it skips.
+async function send() {
+  if (sending || !current) return;
+  run(code.value);
+  if (!running) return;  // run() says why
+  const src = lw.shipped(code.value);
+  const head = src.split("\n").slice(0, 12).join("\n");
+  const missing = ["title", "by", "about"].filter((k) => !new RegExp(`^--\\s*${k}\\s*:\\s*\\S`, "m").test(head));
+  if (missing.length) {
+    say("The board wants these at the top first: " + missing.map((k) => `-- ${k}: ...`).join(", "), true);
+    return;
+  }
+  const bytes = new TextEncoder().encode(src).length;
+  if (bytes > lw.max_source()) {
+    say(`The cart is ${bytes} bytes without its comments; the board takes ${lw.max_source()}.`, true);
+    return;
+  }
+  const title = /^--\s*title\s*:\s*(.+)$/m.exec(head)[1].trim();
+  let port;
+  try { port = await boardPort(); } catch { return; }  // the chooser was closed
+  sending = true;
+  $("send").disabled = true;
+  say(`Sending ${title} to the board…`);
+  try {
+    await Board.sendCart(port, { name: current, title, lua: src });
+    say(`${title} is on the board and open there. It stays in its flash, in place of the built-in one.`);
+  } catch (e) {
+    say(e instanceof Board.BoardError ? e.message
+      : `Couldn't use the board's port (${e.message}). Is the installer, another tab or push.py using it?`, true);
+  } finally {
+    sending = false;
+    $("send").disabled = false;
+  }
+}
+
+async function setUpBoard() {
+  if (!("serial" in navigator)) return;
+  $("no-serial").hidden = true;
+  $("has-serial").hidden = false;
+  $("send").hidden = false;
+  $("send").onclick = send;
+  try {  // the Install button, once there's a release behind it (web/firmware.sh)
+    const r = await fetch("firmware/manifest.json");
+    if (!r.ok) return;
+    const { version } = await r.json();
+    await import("https://unpkg.com/esp-web-tools@10.4.0/dist/web/install-button.js?module");
+    $("install").querySelector("button").textContent = `Install Luanette ${version} on a board`;
+    $("board").hidden = false;
+  } catch {}
+}
+
 // ---- running -------------------------------------------------------------------------------
 function show() {
   image.data.set(new Uint8ClampedArray(lw.mod.HEAPU8.buffer, lw.lw_pixels(), W * H * 4));
@@ -233,9 +298,12 @@ async function main() {
     lw_pcm: mod.cwrap("lw_pcm", "number", ["number", "number"]),
     lw_pcm_len: mod.cwrap("lw_pcm_len", "number", []),
     error: mod.cwrap("lw_error", "string", []),
+    shipped: mod.cwrap("lw_shipped", "string", ["string"]),
+    max_source: mod.cwrap("lw_max_source", "number", []),
     ccall: mod.ccall,
   };
   requestAnimationFrame(tick);
+  setUpBoard();
   const fromHash = location.hash.slice(1);
   select(CARTS.some(([n]) => n === fromHash) ? fromHash : CARTS[0][0]);
 }

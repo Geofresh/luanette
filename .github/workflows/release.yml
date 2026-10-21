@@ -13,6 +13,7 @@ on:
 
 permissions:
   contents: write
+  actions: write  # to run pages.yml, which puts the new firmware behind the playground's Install button
 
 jobs:
   firmware:
@@ -30,5 +31,9 @@ jobs:
           cp bootloader.bin partitions.bin ota_data_initial.bin "$GITHUB_WORKSPACE/out/"
           cp firmware.bin "$GITHUB_WORKSPACE/out/luanette.bin"
       - run: gh release create "$GITHUB_REF_NAME" out/*.bin --title "$GITHUB_REF_NAME" --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+      # A release made with this workflow's token doesn't start other workflows on its own.
+      - run: gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref main
         env:
           GH_TOKEN: ${{ github.token }}
