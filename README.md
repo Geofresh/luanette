@@ -194,6 +194,22 @@ A cart gets 32 KB of source (comments don't count), 1 MB of memory and 2 KB of s
 `check.py` and the playground allow 30,000 Lua instructions a frame; the board stops a frame that runs
 past 100 ms.
 
+## Making carts with an agent
+
+Carts are plain text, so coding agents can make them too. The command-line tool runs the console's
+own engine in Node, with nothing to build:
+
+```bash
+npx luanette new game --template platformer
+npx luanette check game.lua             # JSON: ok, the error and its line, warnings, the log
+npx luanette run game.lua --input play.json --shots 1,30,90   # play it, then look at the PNGs
+npx luanette link game.lua              # a link that opens it in the playground
+```
+
+`npx luanette mcp` is the same as an MCP server (`claude mcp add luanette -- npx -y luanette mcp`
+for Claude Code). An agent should read [`AGENTS.md`](AGENTS.md) first; [`docs/cli.md`](docs/cli.md)
+has every command, and [`llms.txt`](llms.txt) points at the rest.
+
 ## How it works
 
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) covers the engine: how a frame gets from Lua to

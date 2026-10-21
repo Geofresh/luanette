@@ -37,6 +37,9 @@ def index(folder: Path) -> list[dict]:
             entry[key] = header(src, key)
             if not entry[key]:
                 problems.append(f"{path.name}: no '-- {key}: ...' in its header")
+        made = header(src, "made with")  # optional: the agent or tool that made it
+        if made:
+            entry["made_with"] = made
         out.append(entry)
     if problems:
         sys.exit("gallery: " + "; ".join(problems))

@@ -576,7 +576,13 @@ function renderCarts() {
   gal.replaceChildren(...[Object.assign(document.createElement("span"), { className: "row-label", textContent: "Gallery" })].concat(GALLERY.map((g) => {
     const b = document.createElement("button");
     b.textContent = g.title;
-    b.title = `${g.about} (by ${g.by})`;
+    b.title = `${g.about} (by ${g.by}${g.made_with ? ", made with " + g.made_with : ""})`;
+    if (g.made_with) {  // "-- made with:" in its header: made with an agent
+      const tag = document.createElement("span");
+      tag.className = "agent-tag";
+      tag.textContent = "agent-made";
+      b.append(" ", tag);
+    }
     b.dataset.name = "gallery/" + g.name;
     b.classList.toggle("on", b.dataset.name === current);
     b.onclick = () => { sound.unlock(); select(b.dataset.name); };

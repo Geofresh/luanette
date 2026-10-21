@@ -17,6 +17,8 @@ What a gallery cart needs:
 - It runs in the playground, and Send to board takes it (so `check.py` passes).
 - Its header has `-- title:`, `-- by:` (your name or handle) and `-- about:`.
 - It's fine for all ages.
+- Made with a coding agent? Say so in the header, `-- made with: Claude Code` (or whichever).
+  The gallery marks it "agent-made". Agent-made carts are as welcome as any.
 
 ## For maintainers
 

@@ -12,5 +12,6 @@ cp -r vendor build/site/
 python3 ../tools/api_index.py ../docs/api.md build/site/api.json  # the editor's API help
 mkdir -p build/site/gallery && cp ../gallery/*.lua build/site/gallery/
 mkdir -p build/site/templates && cp ../templates/*.lua build/site/templates/  # + New cart starts from these
+cp ../llms.txt ../AGENTS.md build/site/  # for agents that start from the playground's address
 python3 ../tools/gallery_index.py ../gallery build/site/gallery.json  # the Gallery row
 echo "built web/build/site (serve it: python3 -m http.server -d web/build/site)"

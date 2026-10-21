@@ -451,5 +451,6 @@ async function main() {
 }
 
 if (process.argv[1] && fs.realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  process.stdout.on("error", (err) => { if (err.code === "EPIPE") process.exit(0); throw err; });  // `| head` closed it: fine
   main().catch((err) => { process.stderr.write(`luanette: ${err.message}\n`); process.exitCode = 1; });
 }
