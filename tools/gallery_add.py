@@ -10,29 +10,23 @@ cart of that name. Then look it over, run it in the playground, and commit it.
 from __future__ import annotations
 
 import argparse
-import base64
 import json
 import re
 import subprocess
 import sys
-import zlib
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
+sys.path.insert(0, str(HERE))
+import share_link  # noqa: E402
 
 
 def read_link(link: str) -> dict:
-    """The cart in a share link: {"name", "src"} (web/playground.js shareLink: deflate-raw or not, base64url)."""
-    m = re.search(r"cart=([du])([A-Za-z0-9_-]+)", link)
-    if not m:
-        sys.exit("that isn't a playground share link (no #cart=...)")
-    data = base64.urlsafe_b64decode(m.group(2) + "=" * (-len(m.group(2)) % 4))
-    raw = zlib.decompress(data, -15) if m.group(1) == "d" else data
-    cart = json.loads(raw.decode())
-    if not isinstance(cart.get("name"), str) or not isinstance(cart.get("src"), str):
-        sys.exit("the link's cart is missing its name or code")
-    return cart
+    try:
+        return share_link.read(link)
+    except ValueError as e:
+        sys.exit(f"that link won't do: {e}")
 
 
 def main() -> None:

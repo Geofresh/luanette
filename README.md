@@ -150,6 +150,9 @@ There's no Wi-Fi to set up: carts arrive over the USB cable, and the board needs
 
 ## Writing a cart
 
+New to it? [`docs/tutorial.md`](docs/tutorial.md) makes a small game from nothing in the
+playground, with its own sounds and a song, in about half an hour.
+
 ```lua
 -- title: Hello
 -- by: you
