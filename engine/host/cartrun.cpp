@@ -55,6 +55,7 @@ struct TestHost final : carts::Host {
   void release(void* p) override { std::free(p); }
   void buzz(int) override { ++buzzes; }
   void sfx(int) override { ++sfx_n; }
+  void sound(std::shared_ptr<const carts::Sound> s) override { sfx_n += s ? 1 : 0; }
   void wake(double) override {}
   bool accepts_act(std::string_view) const override { return true; }  // check.py has the list; this replays its runs
   void act(std::string_view name, std::string_view arg) override {

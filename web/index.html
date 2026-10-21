@@ -45,6 +45,25 @@
   textarea { width: 100%; min-height: 420px; resize: vertical; background: var(--panel); color: var(--text);
              border: 1px solid var(--line); border-radius: 8px; padding: 12px; font: 13px/1.5 var(--mono); tab-size: 2; }
   textarea:focus { outline: none; border-color: var(--muted); }
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); }
+  .tabs button { border-radius: 8px 8px 0 0; border-bottom: none; }
+  .editor { display: flex; flex-direction: column; gap: 10px; min-height: 420px; }
+  .editor label { color: var(--muted); font-size: 13px; display: inline-flex; align-items: center; gap: 6px; }
+  .editor input[type=number] { font: 14px var(--mono); color: var(--text); background: var(--panel); border: 1px solid var(--line);
+                               border-radius: 6px; padding: 4px 6px; width: 4.5em; }
+  .editor select { font: 14px var(--mono); color: var(--text); background: var(--panel); border: 1px solid var(--line);
+                   border-radius: 6px; padding: 4px 6px; max-width: 100%; }
+  .editor .brush { display: flex; flex-wrap: wrap; gap: 4px; }
+  .editor .brush button { font-size: 13px; padding: 3px 8px; }
+  .editor code { font: 13px var(--mono); color: var(--accent); }
+  .editor .note { color: var(--muted); font-size: 13px; margin: 0; }
+  #snd-canvas { width: 100%; height: auto; aspect-ratio: auto; border: 1px solid var(--line); border-radius: 8px;
+                touch-action: none; cursor: crosshair; }
+  #snd-info { font: 13px var(--mono); color: var(--muted); min-height: 1.5em; }
+  .pattern { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
+  .pattern .num { font: 14px var(--mono); color: var(--muted); width: 2em; }
+  .pattern select { width: 9em; }
+  .problem { color: var(--danger); font-size: 14px; margin: 0; }
   #status { font: 13px/1.5 var(--mono); color: var(--muted); white-space: pre-wrap; min-height: 1.5em; }
   #status.error { color: var(--danger); }
   @media (pointer: coarse) { .desk { display: none; } }
@@ -93,7 +112,56 @@
       <input type="file" id="file" accept=".lua,text/plain" hidden>
       <span class="hint desk"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> runs your edits</span>
     </div>
+    <div class="tabs" role="tablist">
+      <button id="tab-code" class="on">Code</button>
+      <button id="tab-sounds">Sounds</button>
+      <button id="tab-music">Music</button>
+    </div>
     <textarea id="code" spellcheck="false" aria-label="The cart's Lua source"></textarea>
+    <section class="editor" id="sounds" hidden>
+      <p class="problem" id="snd-problem" hidden></p>
+      <div class="editor" id="snd-body">
+        <div class="bar">
+          <label>Sound <select id="snd-slot" aria-label="The sound being edited"></select></label>
+          <input type="text" id="snd-name" placeholder="name" maxlength="24" aria-label="Its name" style="width: 9em">
+          <button id="snd-new">+ New sound</button>
+          <select id="snd-preset" aria-label="A new sound from a preset"><option value="">New from…</option></select>
+          <span class="note" id="snd-count"></span>
+        </div>
+        <div class="bar">
+          <button class="primary" id="snd-play" title="Space plays it too">Play</button>
+          <button id="snd-stop">Stop</button>
+          <label>Speed <input type="number" id="snd-speed" min="1" max="255" title="Ticks of 1/120 s per note"></label>
+          <label>Notes <input type="number" id="snd-len" min="1" max="32"></label>
+          <label>Loop <input type="number" id="snd-ls" min="0" max="32"> to <input type="number" id="snd-le" min="0" max="32"></label>
+          <button id="snd-delete">Delete</button>
+        </div>
+        <p class="note" id="snd-empty">Sound <span id="snd-empty-num">8</span> is empty. Make it with <strong>+ New sound</strong>,
+          or start it from a preset with <strong>New from…</strong>.</p>
+        <div class="brush" id="snd-inst" aria-label="Instrument"></div>
+        <div class="brush" id="snd-fx" aria-label="Effect"></div>
+        <canvas id="snd-canvas" aria-label="The sound's notes: draw pitch at the top, volume below, and paint the instrument and effect on the bottom strip"></canvas>
+        <div id="snd-info"></div>
+        <p class="note">Draw notes at the top with the instrument and effect picked above; volume goes in the row
+          below them, and the bottom strip paints the picked instrument and effect. Play it in your cart with
+          <code id="snd-call">sfx(8)</code>.</p>
+      </div>
+    </section>
+    <section class="editor" id="music" hidden>
+      <p class="problem" id="mus-problem" hidden></p>
+      <div class="editor" id="mus-body">
+        <div class="bar">
+          <button class="primary" id="mus-play">Play the song</button>
+          <button id="mus-stop">Stop</button>
+          <button id="mus-add">+ Pattern</button>
+        </div>
+        <p class="note" id="mus-empty">No song yet. A song is a list of patterns; each plays up to four of your sounds at
+          once, for as long as the longest of them. Add one with <strong>+ Pattern</strong>.</p>
+        <div id="mus-list"></div>
+        <p class="note">Patterns play in order. "Loop back" returns to the last "loop start"; "stop" ends the song there.
+          Start it in your cart with <code id="mus-call">music(0)</code>; <code>music(-1)</code> stops it.</p>
+      </div>
+    </section>
     <div id="status"></div>
   </section>
 </main>
@@ -110,5 +178,6 @@
 <script src="luanette.js"></script>
 <script src="board.js"></script>
 <script src="playground.js"></script>
+<script src="sound-editor.js"></script>
 </body>
 </html>

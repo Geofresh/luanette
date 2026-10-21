@@ -18,7 +18,7 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${ROOT}/engine/u
 configure_file(${ROOT}/engine/ui_lua.hpp.in gen/ui_lua.hpp @ONLY)
 
 if(NOT WIN32)  # cartrun's frame deadline is a POSIX timer signal
-  add_executable(cartrun ${ROOT}/engine/host/cartrun.cpp ${ROOT}/engine/cart.cpp ${ROOT}/engine/cartsrc.cpp ${ROOT}/engine/stage.cpp
+  add_executable(cartrun ${ROOT}/engine/host/cartrun.cpp ${ROOT}/engine/cart.cpp ${ROOT}/engine/cartsrc.cpp ${ROOT}/engine/synth.cpp ${ROOT}/engine/stage.cpp
                  ${ROOT}/engine/hd.cpp ${ROOT}/engine/hd_fonts.cpp ${ROOT}/support/src/json.cpp
                  ${ROOT}/support/src/crypto.cpp ${LUA_SRCS} ${JET_SRCS})
   target_include_directories(cartrun PRIVATE ${ROOT}/engine ${ROOT}/engine/lua ${ROOT}/engine/jet ${ROOT}/support
@@ -31,8 +31,8 @@ add_executable(sfx_wav ${ROOT}/engine/host/sfx_wav.cpp ${ROOT}/engine/sfx.cpp)
 target_include_directories(sfx_wav PRIVATE ${ROOT}/engine)
 
 # The host tests: the synth, comment stripping, and the battery gauge's percent and charging logic.
-add_executable(host_tests ${ROOT}/tests/main.cpp ${ROOT}/tests/test_sfx.cpp ${ROOT}/tests/test_battery_curve.cpp
-               ${ROOT}/tests/test_cartsrc.cpp ${ROOT}/engine/sfx.cpp ${ROOT}/engine/cartsrc.cpp ${ROOT}/board/axp2101.cpp)
+add_executable(host_tests ${ROOT}/tests/main.cpp ${ROOT}/tests/test_sfx.cpp ${ROOT}/tests/test_synth.cpp ${ROOT}/tests/test_battery_curve.cpp
+               ${ROOT}/tests/test_cartsrc.cpp ${ROOT}/engine/sfx.cpp ${ROOT}/engine/synth.cpp ${ROOT}/engine/cartsrc.cpp ${ROOT}/board/axp2101.cpp)
 target_include_directories(host_tests PRIVATE ${ROOT}/tests ${ROOT}/engine ${ROOT}/board ${ROOT}/support)
 
 # The 3D stage's test scene on the desktop, band by band as the board draws it (stagerun [segs] [out.ppm]).

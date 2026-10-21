@@ -174,6 +174,8 @@ class CartHost final : public carts::Host {
     buzz_noted_ = true;
   }
   void sfx(int n) override { carts::sound::play(n); }  // (esp32/sound.hpp; silent without a speaker)
+  void sound(std::shared_ptr<const carts::Sound> s) override { carts::sound::play(std::move(s)); }
+  void music(std::shared_ptr<const carts::Song> song) override { carts::sound::music(std::move(song)); }
   bool level_due = false;  // the cart asked for level(): the next reading sets the table
   void level() override { level_due = true; }
   void wake(double secs) override {

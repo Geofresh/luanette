@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <ctime>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -48,8 +49,12 @@ struct Input {
 
 // The cart API's version (docs/api.md, "Versions"): a cart may ask for one with `-- api: N`, and
 // a runtime refuses a cart that needs a newer one. 1: everything before the full-color layer;
-// 2: the layer (hd), its images, caps(), touch(true).
-constexpr int kApiVersion = 2;
+// 2: the layer (hd), its images, caps(), touch(true); 3: the cart's own sounds and music (SOUNDS,
+// MUSIC, sfx 8-63, music()).
+constexpr int kApiVersion = 3;
+
+struct Sound;  // synth.hpp
+struct Song;
 
 // What a cart runs on (caps()).
 struct Caps {
@@ -79,6 +84,11 @@ class Host {
   virtual void release_fast(void* p) { release(p); }
   virtual void buzz(int ms) = 0;
   virtual void sfx(int n) = 0;
+  // The cart's own sounds and music (synth.hpp), for the host's Synth. nullptr stops them; a
+  // closing cart stops both. The host keeps what it's given as long as it plays. Hosts without
+  // sound leave these.
+  virtual void sound(std::shared_ptr<const Sound> s) { (void)s; }
+  virtual void music(std::shared_ptr<const Song> song) { (void)song; }
   virtual void wake(double secs) = 0;  // light the screen in `secs` (< 0: cancel)
   virtual void level() {}              // tilt() is measured from the pose the board is in now
   virtual void act(std::string_view name, std::string_view arg) = 0;

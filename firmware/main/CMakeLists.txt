@@ -18,7 +18,7 @@ idf_component_register(
          "${ROOT}/board/board.cpp" "${ROOT}/board/panel.cpp" "${ROOT}/board/touch.cpp" "${ROOT}/board/buttons.cpp"
          "${ROOT}/board/speaker.cpp" "${ROOT}/board/axp2101.cpp"
          "${ROOT}/engine/cart.cpp" "${ROOT}/engine/cartsrc.cpp" "${ROOT}/engine/hd.cpp" "${ROOT}/engine/hd_fonts.cpp" "${ROOT}/engine/stage.cpp"
-         "${ROOT}/engine/sfx.cpp" "${ROOT}/engine/hd_pie.S" "${ROOT}/engine/stage_pie.S"
+         "${ROOT}/engine/sfx.cpp" "${ROOT}/engine/synth.cpp" "${ROOT}/engine/hd_pie.S" "${ROOT}/engine/stage_pie.S"
          "${ROOT}/engine/esp32/cart_player.cpp" "${ROOT}/engine/esp32/cart_store.cpp"
          "${ROOT}/engine/esp32/scan_sync.cpp" "${ROOT}/engine/esp32/sound.cpp"
          "${ROOT}/support/src/json.cpp" "${ROOT}/support/src/crypto.cpp"
@@ -27,7 +27,7 @@ idf_component_register(
     PRIV_INCLUDE_DIRS "${ROOT}/engine/lua" "${ROOT}/engine/jet"
     EMBED_TXTFILES "${ROOT}/engine/builtin/launcher.lua"
                    "${ROOT}/examples/lockload.lua" "${ROOT}/examples/bubbles.lua" "${ROOT}/examples/night_swarm.lua"
-                   "${ROOT}/examples/dice.lua" "${ROOT}/examples/mochi.lua"
+                   "${ROOT}/examples/dice.lua" "${ROOT}/examples/mochi.lua" "${ROOT}/examples/overdrive.lua"
     PRIV_REQUIRES
         driver esp_driver_gpio esp_driver_i2c esp_driver_i2s esp_driver_spi esp_driver_gptimer
         esp_driver_usb_serial_jtag esp_lcd esp_partition esp_timer esp_pm esp_app_format nvs_flash

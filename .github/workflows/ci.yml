@@ -22,7 +22,7 @@ jobs:
       - run: cmake -S host -B host/build && cmake --build host/build -j
       - run: host/build/host_tests
       - run: for c in examples/*.lua engine/builtin/launcher.lua; do python tools/check.py "$c" > /dev/null || { python tools/check.py "$c"; exit 1; }; done
-      - run: for c in tests/carts/primitives.lua tests/carts/triangles.lua tests/carts/lazy.lua; do python tests/parity.py "$c"; done
+      - run: for c in tests/carts/primitives.lua tests/carts/triangles.lua tests/carts/lazy.lua tests/carts/sounds.lua; do python tests/parity.py "$c"; done
 
   firmware:
     runs-on: ubuntu-latest

@@ -38,7 +38,8 @@ Everything else is up to the cart. Globals persist between frames.
 ## Versions and what a cart runs on
 
 The API has a version. Version 1 is everything before the full-color layer; version 2 adds the
-layer (`hd`), its images, the `ui` helpers, `caps()` and `touch(true)`. A runtime older than a
+layer (`hd`), its images, the `ui` helpers, `caps()` and `touch(true)`; version 3 adds the cart's own
+sounds and music (`SOUNDS`, `MUSIC`, `sfx(8-63)`, `music()`). A runtime older than a
 cart's `-- api: N` refuses it with a message saying so ("it needs API 2; this runtime has 1
 (update the firmware)") instead of failing at the first call it doesn't know. `check.py` refuses
 a version the board doesn't have, and asks for `-- api: 2` when a cart uses the layer.
@@ -55,7 +56,7 @@ a version the board doesn't have, and asks for `-- api: 2` when a cart uses the 
 | `touch`, `tilt`, `buzz`, `sound` | true, true, false (no vibration motor is fitted), true (the speaker plays `sfx`) |
 | `hd`, `stage` | the full-color layer and the 3D scene: true, true |
 | `host` | `data()` and `act()` reach the console: true |
-| `version` | the API version the runtime has: 2 |
+| `version` | the API version the runtime has: 3 |
 | `board` | `"waveshare-amoled-206"` (`"browser"` in the playground) |
 
 ## Limits
@@ -295,13 +296,60 @@ one finger. `btn()` with no argument gives all six as bits.
 | call | does |
 |---|---|
 | `buzz(ms)` | the vibration motor, 10-500 ms (this board has none: `caps().buzz` is false) |
-| `sfx(n)` | a built-in sound: 0 blip, 1 coin, 2 hit, 3 jump, 4 explosion, 5 select, 6 error, 7 success |
+| `sfx(n)` | a built-in sound: 0 blip, 1 coin, 2 hit, 3 jump, 4 explosion, 5 select, 6 error, 7 success; 8-63 your own (below); `sfx(-1)` stops yours |
+| `music(n)` / `music(-1)` | your song from pattern `n` on / stop it (below) |
 | `wake(secs)` / `wake()` | light the screen in `secs` seconds even if it went dark (a timer that's up) / cancel. The cart's frames resume then |
 
 `sfx` plays short 8-bit-style effects on the board's speaker, built from square, triangle and
 noise voices, up to four at once. On a board without a speaker `caps().sound` is false and `sfx`
 does nothing. To hear them on a computer, the desktop build's `sfx_wav DIR` writes all eight as WAV
 files; `engine/sfx.cpp` is the synth, the same code the board runs.
+
+## Sound and music
+
+A cart can make its own sounds and a song (API 3: put `-- api: 3` in the header). The playground's
+Sounds and Music tabs are the easy way: draw notes, hear them, and the editor writes the tables
+below into the cart's code. They're plain text, so they can be edited by hand too.
+
+A **sound** is up to 32 notes played one after another at a speed. Each note has a pitch, an
+instrument, a volume and an effect. `SOUNDS[n]` (8 to 63) is one sound as hex digits, spaces
+anywhere:
+
+```lua
+SOUNDS = {
+  [8] = "04 0000 2f160 34165",  -- speed 4; no loop; two notes
+}
+```
+
+- The first 6 digits: the speed (ticks of 1/120 s per note, `01`-`ff`), then the loop's first
+  note and the note it loops at (`00 00`: no loop). A sound that loops plays to its loop end, then
+  goes back to the loop start until `sfx(-1)` stops it.
+- Then 5 digits per note: the pitch (`00` is C2, `3f` is D#7, a semitone each), the instrument,
+  the volume (`0`-`7`; 0 is a rest) and the effect.
+- Instruments: 0 square, 1 pulse, 2 thin pulse, 3 triangle, 4 saw, 5 sine, 6 organ, 7 noise
+  (higher notes hiss, lower ones rumble).
+- Effects: 0 none, 1 slide (from the note before), 2 vibrato, 3 drop (to nothing), 4 fade in,
+  5 fade out, 6 and 7 a fast and a slow arpeggio (through the four notes of its group: 1-4, 5-8, ...).
+
+A **song** is a list of patterns in `MUSIC[0]` to `MUSIC[63]`. A pattern plays up to four sounds at
+once, one per channel, for as long as the longest of them takes, then the next pattern plays:
+
+```lua
+MUSIC = {
+  [0] = "01 08 09 -- --",  -- loop start; sounds 8 and 9 (hex), two channels free
+  [1] = "02 08 0a -- --",  -- then back to the loop start
+}
+```
+
+The first two digits are flags, as in PICO-8: 1 a loop starts here, 2 go back to the last loop
+start after this pattern, 4 stop after it (add them up). Then each channel's sound, in hex
+(`08`-`3f`), or `--`.
+
+There are four channels. A song uses the ones its pattern needs; `sfx(n)` plays on a free one if
+there is one, else on one the song is using (the song keeps time there unheard until the sound
+ends). The built-in sounds 0-7 play on top of all that. A mistake in a sound or pattern is an error
+at the `sfx` or `music` that plays it, saying what's wrong (`sfx(8): SOUNDS[8] note 3: ...`);
+`check.py` finds it the same way. A cart that's closed stops its sounds and song.
 
 ## Time, numbers, saving
 

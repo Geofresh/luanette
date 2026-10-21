@@ -7,7 +7,9 @@
 #include "cart.hpp"
 #include "cartsrc.hpp"
 #include "hd.hpp"
+#include "sfx.hpp"
 #include "stage.hpp"
+#include "synth.hpp"
 #include "ui_lua.hpp"
 
 #include <algorithm>
@@ -195,6 +197,12 @@ struct Cart::Impl {
   };
   std::vector<CachedImage> images;
   size_t image_bytes = 0;
+  // The cart's own sounds, parsed on first play and kept while their text stays the same.
+  struct OwnSound {
+    std::string text;
+    std::shared_ptr<const Sound> sound;
+  };
+  OwnSound sounds[kSoundLast + 1];
   static constexpr size_t kImageCache = 1024 * 1024;
   // An image by name, unpacked on first use and kept (least recently used dropped past kImageCache).
   const HdImage* image(std::string_view name) {
@@ -597,10 +605,64 @@ int f_buzz(lua_State* L) {
   host_of(L).buzz(std::clamp(coord(L, 1), 10, 500));
   return 0;
 }
+// TABLE[i] when it's a string (it lives as long as the table keeps it), else null.
+const char* text_at(lua_State* L, const char* table, int i) {
+  const char* s = nullptr;
+  const int top = lua_gettop(L);
+  if (lua_getglobal(L, table) == LUA_TTABLE && lua_rawgeti(L, -1, i) == LUA_TSTRING) s = lua_tostring(L, -1);
+  lua_settop(L, top);
+  return s;
+}
+
+// sfx(n): 0-7 built in, 8-63 the cart's SOUNDS, -1 stops the cart's.
 int f_sfx(lua_State* L) {
   const int n = coord(L, 1);
-  if (n < 0 || n > 7) return luaL_error(L, "sfx(%d): sounds are 0-7", n);
-  host_of(L).sfx(n);
+  if (n == -1) {
+    host_of(L).sound(nullptr);
+    return 0;
+  }
+  if (n >= 0 && n < kSfxCount) {
+    host_of(L).sfx(n);
+    return 0;
+  }
+  if (n < kSoundFirst || n > kSoundLast) return luaL_error(L, "sfx(%d): sounds are 0-7 (built in) and 8-63 (your SOUNDS); -1 stops yours", n);
+  const char* text = text_at(L, "SOUNDS", n);
+  if (!text) return luaL_error(L, "sfx(%d): SOUNDS[%d] isn't there (a string from the sound editor)", n, n);
+  Cart::Impl::OwnSound& own = S->sounds[n];
+  if (!own.sound || own.text != text) {
+    char why[128] = "";
+    {  // luaL_error doesn't unwind C++: nothing with a destructor may be alive when it's called
+      auto sound = std::make_shared<Sound>();
+      const std::string w = parse_sound(text, *sound);
+      if (w.empty()) {
+        own.text = text;
+        own.sound = std::move(sound);
+      } else {
+        std::snprintf(why, sizeof why, "%s", w.c_str());
+      }
+    }
+    if (*why) return luaL_error(L, "sfx(%d): SOUNDS[%d] %s", n, n, why);
+  }
+  host_of(L).sound(own.sound);
+  return 0;
+}
+
+// music(n): the cart's song from MUSIC[n] on; -1 stops it.
+int f_music(lua_State* L) {
+  const int n = coord(L, 1);
+  if (n == -1) {
+    host_of(L).music(nullptr);
+    return 0;
+  }
+  if (n < 0 || n >= kPatterns) return luaL_error(L, "music(%d): patterns are 0-63; -1 stops the song", n);
+  char why[160] = "";
+  {
+    std::shared_ptr<const Song> song;
+    const std::string w = build_song(n, [L](int i) { return text_at(L, "MUSIC", i); }, [L](int i) { return text_at(L, "SOUNDS", i); }, song);
+    if (w.empty()) host_of(L).music(std::move(song));
+    else std::snprintf(why, sizeof why, "%s", w.c_str());
+  }
+  if (*why) return luaL_error(L, "music(%d): %s", n, why);
   return 0;
 }
 int f_wake(lua_State* L) {
@@ -1319,6 +1381,8 @@ Cart::~Cart() {
   if (S == impl_) S = nullptr;
   if (L_) lua_close(L_);
   if (impl_) {
+    host_.sound(nullptr);  // its sounds and song end with it
+    host_.music(nullptr);
     impl_->heap.close();
     if (fb_) host_.release_fast(fb_);
     impl_->drop_images();
@@ -1492,7 +1556,7 @@ bool Cart::start(std::string_view name, std::string_view src) {
       {"cls", f_cls},       {"pset", f_pset},   {"pget", f_pget},     {"line", f_line},   {"rect", f_rect},
       {"rectfill", f_rectfill}, {"circ", f_circ}, {"circfill", f_circfill}, {"print", f_print}, {"spr", f_spr},
       {"pal", f_pal},       {"palette", f_palette}, {"camera", f_camera}, {"clip", f_clip},   {"btn", f_btn},     {"btnp", f_btnp},
-      {"touch", f_touch},   {"tilt", f_tilt},     {"level", f_level},   {"buzz", f_buzz},     {"sfx", f_sfx},     {"wake", f_wake},
+      {"touch", f_touch},   {"tilt", f_tilt},     {"level", f_level},   {"buzz", f_buzz},     {"sfx", f_sfx},     {"music", f_music}, {"wake", f_wake},
       {"time", f_time},     {"fps", f_fps},     {"rnd", f_rnd},     {"srand", f_srand},   {"flr", f_flr},     {"ceil", f_ceil},
       {"sin", f_sin},       {"cos", f_cos},     {"trifill", f_trifill}, {"abs", f_abs},       {"sgn", f_sgn},     {"min", f_min},       {"max", f_max},     {"mid", f_mid},
       {"save", f_save},     {"load", f_load},     {"now", f_now},       {"date", f_date},   {"data", f_data},     {"act", f_act},     {"stat", f_stat},

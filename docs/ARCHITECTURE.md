@@ -24,6 +24,7 @@ engine/                   the engine; no board code
   jet/                    Jet (CubeCoders, MIT), vendored and patched; the stage builds on it
   lua/                    Lua 5.4.7, vendored, built with LUA_32BITS
   sfx.hpp, sfx.cpp        the eight built-in sounds, synthesized
+  synth.hpp, synth.cpp    the carts' own sounds and music: a four-channel tracker synth
   ui.lua                  helpers every cart gets (ui.changed, ui.scroller); compiled in
   builtin/                the launcher, itself a cart
   host/                   cartrun (the runtime on a PC), sfx_wav and stagerun
@@ -31,7 +32,7 @@ engine/                   the engine; no board code
     cart_player.*         runs the open cart and sends its frames (the Device interface lives here)
     scan_sync.*           the panel's refresh timing (TE)
     cart_store.*          carts and images in flash, and the messages that deliver them
-    sound.*               plays sfx() on a speaker
+    sound.*               plays sfx() and music() on a speaker
 board/                    the Waveshare AMOLED-2.06: pins, panel, touch, keys, speaker, PMIC, RTC
 support/                  small shared pieces: JSON, CRC32 and base64, the audio/power interfaces
 firmware/                 the console firmware (ESP-IDF project, built with PlatformIO)
@@ -46,7 +47,7 @@ web/                      the browser playground: the engine as WebAssembly (web
 tools/                    check.py, push.py, shot.py, pack_images.py, cartsrc.py, build_lupa32.py,
                           hd_fonts.py
 tests/                    parity.py and its carts, the host tests
-examples/                 five complete carts, also built into the firmware (examples/README.md)
+examples/                 six complete carts, also built into the firmware (examples/README.md)
 docs/                     api.md, DESIGN.md, 3d-stage.md, this file
 ```
 
@@ -217,14 +218,26 @@ shot                    a screenshot, in checked parts (tools/shot.py)
 
 The log shares the port, so a reader takes only lines that start with `@` as answers.
 
-## Sound (`sfx.cpp`, `esp32/sound.*`)
+## Sound (`sfx.cpp`, `synth.cpp`, `esp32/sound.*`)
 
-`sfx_render` synthesizes the eight effects as 16 kHz PCM, from square, triangle and noise
-voices with pitch slides and linear envelopes. The same code runs on the board and in
-`host/sfx_wav`, which writes them as WAV files for listening. On the board a task on core 0
-mixes up to four at once in 10 ms frames, opens the speaker for them, and lets it go after;
-the speaker's amplifier draws power only while sound plays, and the codec sleeps two seconds
-after the last sound.
+Two kinds of sound share the speaker:
+
+- The eight built-in effects. `sfx_render` synthesizes each once as 16 kHz PCM, from square,
+  triangle and noise voices with pitch slides and linear envelopes. The same code runs in
+  `host/sfx_wav`, which writes them as WAV files for listening.
+- A cart's own sounds and song (`SOUNDS`, `MUSIC`; api.md "Sound and music"). `synth.cpp` parses
+  their text (`parse_sound`, `parse_pattern`, `build_song`: one copy of the rules, which
+  `check.py` mirrors word for word) and plays them live on four channels: a `Synth` renders the
+  next samples on request, so songs and loops go on as long as they like. Pitch and volume are
+  worked out every 32 samples, the waves per sample; about 1% of a core at 16 kHz.
+
+The runtime parses a sound when a cart first plays it (and again if its text changes), a song at
+each `music()`, and hands them to the host as shared pointers (`Host::sound`, `Host::music`), so
+the host can keep them playing after the cart has gone; closing a cart stops both. On the board a
+task on core 0 owns a `Synth` and mixes it with up to four built-in effects in 10 ms frames, opens
+the speaker while anything plays, and lets it go after; the speaker's amplifier draws power only
+while sound plays, and the codec sleeps two seconds after the last sound. The playground runs the
+same `Synth` in WebAssembly at the browser's rate and queues what it renders about 150 ms ahead.
 
 ## Settings (`firmware/main/console.cpp`)
 
@@ -335,8 +348,7 @@ the `Device` implementation, screen timeouts and the USB commands, about 630 lin
 ## Known limits
 
 - One board. The geometry above is the reason.
-- No map editor, sprite editor or music. `sfx` plays eight fixed effects; carts can't define
-  their own sounds yet.
+- No map editor or sprite editor. Sounds and music have the playground's editor.
 - Not PICO-8 compatible. The shape and palette are familiar, but the API differs and PICO-8
   carts don't run.
 - Carts arrive over USB only. There is no Wi-Fi or Bluetooth delivery yet; `on_message` is

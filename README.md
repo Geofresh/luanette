@@ -8,9 +8,9 @@ it, at up to 60 fps. You write a cart on your computer, check it there, and send
 
 The name is Lua plus *lunette*, French for a little moon or a small window.
 
-**[Try it in your browser](https://geofresh.github.io/luanette/).** The five example carts run
+**[Try it in your browser](https://geofresh.github.io/luanette/).** The six example carts run
 there on the same engine, compiled to WebAssembly, next to an editor, and you can start carts of
-your own or open .lua files. In Chrome or Edge on a computer, the same page installs the firmware
+your own or open .lua files, and make sounds and music for them. In Chrome or Edge on a computer, the same page installs the firmware
 on a board over USB and sends it the cart you're editing, with nothing else to set up.
 
 <img src="docs/images/board.jpg" width="320" alt="Luanette's launcher on the Waveshare ESP32-S3-Touch-AMOLED-2.06">
@@ -53,7 +53,7 @@ Measured on the AMOLED-2.06:
 - `firmware/`: the firmware, with a launcher and the examples built in
 - `tools/`: check a cart, preview it, send it, take a screenshot
 - `web/`: the browser playground
-- `examples/`: five complete carts
+- `examples/`: six complete carts
 
 ## What you need
 
@@ -85,7 +85,7 @@ cd firmware
 pio run -t upload
 ```
 
-The board boots into the launcher with the five examples. Then set up the tools:
+The board boots into the launcher with the six examples. Then set up the tools:
 
 ```bash
 python -m venv .venv && . .venv/bin/activate
@@ -154,7 +154,7 @@ python tools/push.py hello.lua
   sound and saves.
 - [`docs/DESIGN.md`](docs/DESIGN.md) covers making a cart run well. Read it before writing
   anything big.
-- [`examples/`](examples/) has five complete carts, from a bubble shooter to a 3D rail shooter.
+- [`examples/`](examples/) has six complete carts, from a bubble shooter to a 3D rail shooter and a chiptune.
 
 A cart gets 32 KB of source (comments don't count), 1 MB of memory and 2 KB of saved data.
 `check.py` allows 30,000 Lua instructions a frame; the board stops a frame that runs past 100 ms.
@@ -173,7 +173,7 @@ It works, but so far it's had one user (me) and one board. Expect rough edges.
 - One board. The engine doesn't depend on it, but the screen layout is set for this panel.
   `docs/ARCHITECTURE.md` lists what a port needs.
 - Carts arrive over USB only.
-- There's no sprite, map or music editor, and `sfx()` plays eight built-in sounds.
+- There's no sprite or map editor yet. Sounds and music have one, in the playground.
 
 ## Credits
 

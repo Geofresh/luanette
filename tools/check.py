@@ -38,7 +38,7 @@ SCALE = 3
 MAX_SOURCE = 32 * 1024
 BUDGET = 30_000
 MAX_SAVE = 2048
-API_VERSION = 2  # engine/cart.hpp kApiVersion: 1 before the full-color layer, 2 with it
+API_VERSION = 3  # engine/cart.hpp kApiVersion: 1 before the full-color layer, 2 with it, 3 with sound and music
 # The board's runtime built for this computer (engine/host/cartrun.cpp): a 3D cart's preview
 # is drawn by it (the stage's own code), and it must agree that the cart runs.
 ROOT = Path(__file__).resolve().parents[1]
@@ -118,7 +118,7 @@ class Cart:
         self.saved = None
         self.wall0 = int(time.time())
         self.rgb = list(PICO)
-        self.calls = {"buzz": 0, "sfx": 0, "wake": 0, "act": [], "save": 0, "data": set()}
+        self.calls = {"buzz": 0, "sfx": 0, "music": 0, "wake": 0, "act": [], "save": 0, "data": set()}
         self.scene = None  # a 3D cart's, once it makes anything 3D
         self.hd = None  # the full-color layer's calls, once the cart draws on it
         self.hd_w, self.hd_h = HD_W, HD_H  # the canvas: the window, or the glass ("-- canvas: full")
@@ -360,9 +360,37 @@ class Cart:
         self.calls["buzz"] += 1
 
     def sfx(self, n):
-        if not 0 <= int(n) <= 7:
-            raise ValueError(f"sfx({n}): sounds are 0-7")
+        n = int(n)
+        if n == -1 or 0 <= n <= 7:
+            self.calls["sfx"] += n >= 0
+            return
+        if not 8 <= n <= 63:
+            raise ValueError(f"sfx({n}): sounds are 0-7 (built in) and 8-63 (your SOUNDS); -1 stops yours")
+        text = self._text_at("SOUNDS", n)
+        if text is None:
+            raise ValueError(f"sfx({n}): SOUNDS[{n}] isn't there (a string from the sound editor)")
+        why = sound_problem(text)
+        if why:
+            raise ValueError(f"sfx({n}): SOUNDS[{n}] {why}")
         self.calls["sfx"] += 1
+
+    def music(self, n):
+        n = int(n)
+        if n == -1:
+            return
+        if not 0 <= n <= 63:
+            raise ValueError(f"music({n}): patterns are 0-63; -1 stops the song")
+        why = song_problem(n, lambda i: self._text_at("MUSIC", i), lambda i: self._text_at("SOUNDS", i))
+        if why:
+            raise ValueError(f"music({n}): {why}")
+        self.calls["music"] += 1
+
+    def _text_at(self, table, i):
+        t = self.env[table] if self.env is not None else None
+        if t is None or lua54.lua_type(t) != "table":
+            return None
+        v = t[i]
+        return v if isinstance(v, str) else None
 
     def time_us(self):  # whole microseconds, as the board's clock (and cartrun's) counts them
         return self.base_us + (self.frame - self.base_n) * 1_000_000 // self.clock_rate
@@ -890,7 +918,7 @@ class Cart:
 
     def api(self):
         names = ["cls", "pset", "pget", "line", "rect", "rectfill", "circ", "circfill", "spr", "pal", "palette", "camera",
-                 "clip", "btn", "btnp", "touch", "tilt", "buzz", "sfx", "time", "now", "date", "rnd", "srand", "save", "load",
+                 "clip", "btn", "btnp", "touch", "tilt", "buzz", "sfx", "music", "time", "now", "date", "rnd", "srand", "save", "load",
                  "data", "ask", "say", "act", "wake", "stat", "level", "trifill", "sin", "cos",
                  "shape", "obj", "place", "orient", "hide", "paint", "view", "light", "sky", "project", "ground", "shadow",
                  "res", "texture", "skin", "caps"]
@@ -1052,6 +1080,84 @@ def run_3d(path: Path, fps: int, inputs: list, shots: list[int], bundle: bytes =
         return {"ok": False, "why": f"gave no result ({p.stderr.strip()[:200]})"}
     out["shots"] = [str(d / f"frame_{n}.ppm") for n in shots if (d / f"frame_{n}.ppm").exists()]
     return out
+
+
+# The cart's own sounds and music, checked as engine/synth.cpp parses them (same words when wrong).
+def _hex(text: str, dashes: bool = False):
+    out = []
+    for c in text:
+        if c in " \t\n":
+            continue
+        if c in "0123456789abcdefABCDEF":
+            out.append(int(c, 16))
+        elif dashes and c == "-":
+            out.append(None)
+        else:
+            return None
+    return out
+
+
+def sound_problem(text: str) -> str:
+    d = _hex(text)
+    if d is None:
+        return "should be hex digits (the sound editor writes them)"
+    if len(d) < 11 or (len(d) - 6) % 5:
+        return "should be 6 digits (speed, loop) and then 5 for each note"
+    speed, start, end, count = d[0] * 16 + d[1], d[2] * 16 + d[3], d[4] * 16 + d[5], (len(d) - 6) // 5
+    if count > 32:
+        return f"has {count} notes; a sound has at most 32"
+    if speed < 1:
+        return "has speed 0; it's 1 to 255"
+    for i in range(count):
+        n = d[6 + i * 5: 11 + i * 5]
+        if n[0] * 16 + n[1] > 63 or n[2] > 7 or n[3] > 7 or n[4] > 7:
+            return f"note {i + 1}: pitch 0-3f, instrument 0-7, volume 0-7, effect 0-7"
+    if end > start and end > count:
+        return f"loops to note {end}; it has {count}"
+    return ""
+
+
+def pattern_sounds(text: str):
+    """A pattern's sounds (None for none), or the problem as a string."""
+    d = _hex(text, dashes=True)
+    if d is None or len(d) != 10:
+        return 'should be 2 digits of flags and then a sound per channel ("00 08 09 -- --")'
+    if d[0] is None or d[1] is None:
+        return "should start with 2 digits of flags"
+    out = []
+    for c in range(4):
+        a, b = d[2 + c * 2], d[3 + c * 2]
+        if a is None and b is None:
+            out.append(None)
+            continue
+        if a is None or b is None or not 8 <= a * 16 + b <= 63:
+            return f"channel {c + 1}: a sound is 08-3f (hex), or -- for none"
+        out.append(a * 16 + b)
+    return out
+
+
+def song_problem(start: int, pattern_text, sound_text) -> str:
+    has = set()
+    for i in range(64):
+        text = pattern_text(i)
+        if text is None:
+            continue
+        sounds = pattern_sounds(text)
+        if isinstance(sounds, str):
+            return f"MUSIC[{i}] {sounds}"
+        has.add(i)
+        for c, s in enumerate(sounds):
+            if s is None:
+                continue
+            st = sound_text(s)
+            if st is None:
+                return f"MUSIC[{i}] channel {c + 1}: SOUNDS[{s}] isn't there"
+            why = sound_problem(st)
+            if why:
+                return f"MUSIC[{i}] channel {c + 1}: SOUNDS[{s}] {why}"
+    if start not in has:
+        return f"MUSIC[{start}] isn't there"
+    return ""
 
 
 def shipped_src(path: Path) -> str:
@@ -1227,6 +1333,10 @@ def check(path: Path, frames: int, preview: Path | None, theme: str, dump_input:
         res.setdefault("warnings", []).append(
             "it uses the full-color layer (API 2): add '-- api: 2' to its header, so a board with older firmware "
             "says it needs an update instead of failing at its first hd call")
+    if api < 3 and (cart.calls.get("music") or re.search(r"^\s*(SOUNDS|MUSIC)\s*=", src, re.M)):
+        res.setdefault("warnings", []).append(
+            "it has its own sounds or music (API 3): add '-- api: 3' to its header, so a board with older firmware "
+            "says it needs an update instead of failing at its first sfx or music call")
     if not full:
         res.setdefault("warnings", []).append(
             "it shows in the 384 x 384 window, about 30% of the glass left dark: add '-- canvas: full' (and '-- api: 2') "

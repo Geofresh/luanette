@@ -5,6 +5,7 @@
 // one RGBA image of the whole glass, which the page puts on a canvas.
 #include <emscripten/emscripten.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -18,6 +19,7 @@
 #include "hd.hpp"
 #include "sfx.hpp"
 #include "stage.hpp"
+#include "synth.hpp"
 
 // Saves live in the browser's localStorage, one key per cart.
 EM_JS(char*, js_load_save, (const char* cart), {
@@ -47,6 +49,8 @@ struct WebHost final : carts::Host {
   void sfx(int n) override {
     if (sounds.size() < 16) sounds.push_back(n);
   }
+  void sound(std::shared_ptr<const carts::Sound> s) override;
+  void music(std::shared_ptr<const carts::Song> song) override;
   void wake(double) override {}
   void act(std::string_view, std::string_view) override {}
   bool accepts_act(std::string_view name) const override {  // the board's (the launcher's), so carts fail the same way
@@ -73,7 +77,18 @@ struct WebHost final : carts::Host {
   bool deadline_by_polling() const override { return true; }
 };
 
+std::unique_ptr<carts::Synth> g_synth;  // the cart's own sounds and song, once the page has audio (lw_audio_start)
+std::shared_ptr<const carts::Song> g_song;  // the cart's song, kept so it starts when audio does
+std::vector<float> g_audio;
+
 WebHost g_host;
+void WebHost::sound(std::shared_ptr<const carts::Sound> s) {
+  if (g_synth) g_synth->sfx(std::move(s));
+}
+void WebHost::music(std::shared_ptr<const carts::Song> song) {
+  g_song = song;  // a browser allows no sound until a click: a song started before it plays from then
+  if (g_synth) g_synth->music(std::move(song));
+}
 std::unique_ptr<carts::Cart> g_cart;
 std::string g_error;
 std::vector<uint16_t> g_glass(static_cast<size_t>(kW) * kH);  // RGB565, the panel's byte order
@@ -213,5 +228,56 @@ EMSCRIPTEN_KEEPALIVE const char* lw_shipped(const char* src) {
   return out.c_str();
 }
 EMSCRIPTEN_KEEPALIVE int lw_max_source() { return static_cast<int>(carts::kMaxSource); }
+
+// ---- the cart's own sounds and song, and the sound editor's -------------------------------
+// The page has audio at `rate` (its AudioContext's): a synth for the cart's sounds and song.
+EMSCRIPTEN_KEEPALIVE void lw_audio_start(int rate) {
+  g_synth = std::make_unique<carts::Synth>(rate);
+  if (g_song) g_synth->music(g_song);
+}
+EMSCRIPTEN_KEEPALIVE int lw_audio_busy() { return g_synth && g_synth->busy() ? 1 : 0; }
+// The next n samples, -1 to 1, for the page to queue.
+EMSCRIPTEN_KEEPALIVE float* lw_audio_render(int n) {
+  static std::vector<int32_t> acc;
+  acc.assign(static_cast<size_t>(n), 0);
+  g_audio.resize(static_cast<size_t>(n));
+  if (g_synth) g_synth->render(acc.data(), n);
+  for (int k = 0; k < n; ++k) g_audio[static_cast<size_t>(k)] = std::clamp(acc[static_cast<size_t>(k)], -32768, 32767) / 32768.0f;
+  return g_audio.data();
+}
+EMSCRIPTEN_KEEPALIVE void lw_audio_stop() {
+  if (!g_synth) return;
+  g_synth->sfx(nullptr);
+  g_synth->music(nullptr);
+}
+
+// The editor plays a sound's text: "" when it's fine (and plays), else what's wrong.
+EMSCRIPTEN_KEEPALIVE const char* lw_play_sound(const char* text) {
+  static std::string why;
+  auto s = std::make_shared<carts::Sound>();
+  why = carts::parse_sound(text, *s);
+  if (why.empty() && g_synth) g_synth->sfx(std::move(s));
+  return why.c_str();
+}
+
+// The editor plays its song from pattern `start`: {"music": {"0": "...", ...}, "sounds": {"8": "...", ...}}.
+EMSCRIPTEN_KEEPALIVE const char* lw_play_song(const char* json, int start) {
+  static std::string why;
+  hg::json::Value v;
+  if (!hg::json::parse(json, v) || !v.is_object()) {
+    why = "not a song";
+    return why.c_str();
+  }
+  auto text = [&v](const char* table) {
+    return [&v, table](int i) -> const char* {
+      const hg::json::Value& e = v[table][std::to_string(i)];
+      return e.is_string() ? e.as_string().c_str() : nullptr;
+    };
+  };
+  std::shared_ptr<const carts::Song> song;
+  why = carts::build_song(start, text("music"), text("sounds"), song);
+  if (why.empty() && g_synth) g_synth->music(std::move(song));
+  return why.c_str();
+}
 
 }  // extern "C"

@@ -7,7 +7,7 @@
 
 const CARTS = [
   ["lockload", "Lock & Load"], ["bubbles", "Bubbles"], ["night_swarm", "Night Swarm"],
-  ["dice", "Dice"], ["mochi", "Mochi"],
+  ["dice", "Dice"], ["mochi", "Mochi"], ["overdrive", "Overdrive"],
 ];
 const W = 410, H = 502;                  // the glass
 const WIN_X = 12, WIN_Y = 60, SCALE = 3;  // where the 128x128 picture sits on it, and its scale
@@ -118,12 +118,16 @@ if (typeof DeviceOrientationEvent !== "undefined" && matchMedia("(pointer: coars
   };
 }
 
-// ---- sound: the board's own synth, rendered once per effect --------------------------------
+// ---- sound: the board's own synth --------------------------------------------------------------
+// The built-in effects are rendered once each; the cart's own sounds and song come from the engine's
+// tracker synth (synth.hpp), rendered a little ahead in chunks and queued back to back.
+const AHEAD_S = 0.15, CHUNK = 1024;
 const sound = {
-  ctx: null, buffers: [],
+  ctx: null, buffers: [], next: 0, queued: [],
   unlock() {
     if (this.ctx || !window.AudioContext) return;
     this.ctx = new AudioContext();
+    lw.audio_start(this.ctx.sampleRate);
     const rate = 16000;
     for (let n = 0; n < 8; n++) {
       const ptr = lw.lw_pcm(n, rate), len = lw.lw_pcm_len();
@@ -140,6 +144,31 @@ const sound = {
     src.buffer = this.buffers[n];
     src.connect(this.ctx.destination);
     src.start();
+  },
+  // Keeps AHEAD_S of the synth queued while it has anything to play; every frame.
+  pump() {
+    if (!this.ctx || !lw.audio_busy()) return;
+    const now = this.ctx.currentTime, rate = this.ctx.sampleRate;
+    if (this.next < now + 0.01) this.next = now + 0.03;  // starting (again): a moment to get going
+    while (this.next < now + AHEAD_S) {
+      const ptr = lw.audio_render(CHUNK);
+      const buf = this.ctx.createBuffer(1, CHUNK, rate);
+      buf.copyToChannel(new Float32Array(lw.mod.HEAPF32.buffer, ptr, CHUNK), 0);
+      const src = this.ctx.createBufferSource();
+      src.buffer = buf;
+      src.connect(this.ctx.destination);
+      src.start(this.next);
+      src.onended = () => this.queued.splice(this.queued.indexOf(src), 1);
+      this.queued.push(src);
+      this.next += CHUNK / rate;
+    }
+  },
+  // Silences the synth now, what's queued too (a restart, a stop button).
+  stop() {
+    if (!lw) return;
+    lw.audio_stop();
+    for (const src of this.queued.splice(0)) { try { src.stop(); } catch {} }
+    this.next = 0;
   },
 };
 
@@ -243,7 +272,7 @@ function renderCarts() {
     b.textContent = title;
     b.dataset.name = name;
     if (cls) b.classList.add(cls);
-    b.onclick = () => select(name);
+    b.onclick = () => { sound.unlock(); select(name); };  // a click: the browser allows sound from here
     row.appendChild(b);
   };
   for (const [name, title] of CARTS) add(name, title);
@@ -354,6 +383,7 @@ function say(text, error) {
 
 function run(src) {
   const name = current || "playground";
+  sound.stop();
   const ok = lw.ccall("lw_start", "number", ["string", "string"], [name, src]);
   show();
   if (!ok) { running = false; say(lw.error(), true); return; }
@@ -366,6 +396,7 @@ function run(src) {
 
 function tick(now) {
   requestAnimationFrame(tick);
+  sound.pump();
   if (!running) return;
   const period = 1000 / lw.lw_fps();
   spare += now - last;
@@ -404,11 +435,12 @@ async function select(name, src) {
   }
   code.value = src;
   run(code.value);
+  if (typeof SoundEditor !== "undefined" && SoundEditor.tab !== "code") SoundEditor.show();
 }
 
 async function main() {
   renderCarts();
-  $("run").onclick = () => run(code.value);
+  $("run").onclick = () => { sound.unlock(); run(code.value); };
   $("reset").onclick = () => {
     if (!current) return;
     if (!isExample(current)) { deleteCart(); return; }
@@ -449,6 +481,12 @@ async function main() {
     error: mod.cwrap("lw_error", "string", []),
     shipped: mod.cwrap("lw_shipped", "string", ["string"]),
     max_source: mod.cwrap("lw_max_source", "number", []),
+    audio_start: mod.cwrap("lw_audio_start", null, ["number"]),
+    audio_busy: mod.cwrap("lw_audio_busy", "number", []),
+    audio_render: mod.cwrap("lw_audio_render", "number", ["number"]),
+    audio_stop: mod.cwrap("lw_audio_stop", null, []),
+    play_sound: mod.cwrap("lw_play_sound", "string", ["string"]),
+    play_song: mod.cwrap("lw_play_song", "string", ["string", "number"]),
     ccall: mod.ccall,
   };
   requestAnimationFrame(tick);
