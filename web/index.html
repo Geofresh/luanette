@@ -62,6 +62,7 @@
   #snd-canvas { width: 100%; height: auto; aspect-ratio: auto; border: 1px solid var(--line); border-radius: 8px;
                 touch-action: none; cursor: crosshair; }
   #snd-info { font: 13px var(--mono); color: var(--muted); min-height: 1.5em; }
+  .pattern.playing { background: rgba(240, 180, 41, 0.12); box-shadow: inset 3px 0 0 var(--accent); }
   .pattern { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
   .pattern .num { font: 14px var(--mono); color: var(--muted); width: 2em; }
   .pattern select { width: 9em; }
@@ -179,6 +180,14 @@
           <label>Loop <input type="number" id="snd-ls" min="0" max="32"> to <input type="number" id="snd-le" min="0" max="32"></label>
           <button id="snd-delete">Delete</button>
         </div>
+        <div class="bar">
+          <button id="snd-undo" title="Ctrl+Z">Undo</button>
+          <button id="snd-redo" title="Ctrl+Shift+Z">Redo</button>
+          <button id="snd-copy" title="Ctrl+C: the notes picked with Shift-drag, or all of them">Copy</button>
+          <button id="snd-paste" title="Ctrl+V: over the picked notes, or after the last">Paste</button>
+          <button id="snd-dup" title="This sound again, at the next empty number">Duplicate sound</button>
+          <span id="snd-octaves" hidden><button id="snd-down">Octave ▼</button> <button id="snd-up">Octave ▲</button></span>
+        </div>
         <p class="note" id="snd-empty">Sound <span id="snd-empty-num">8</span> is empty. Make it with <strong>+ New sound</strong>,
           or start it from a preset with <strong>New from…</strong>.</p>
         <div class="brush" id="snd-inst" aria-label="Instrument"></div>
@@ -186,8 +195,8 @@
         <canvas id="snd-canvas" aria-label="The sound's notes: draw pitch at the top, volume below, and paint the instrument and effect on the bottom strip"></canvas>
         <div id="snd-info"></div>
         <p class="note">Draw notes at the top with the instrument and effect picked above; volume goes in the row
-          below them, and the bottom strip paints the picked instrument and effect. Play it in your cart with
-          <code id="snd-call">sfx(8)</code>.</p>
+          below them, and the bottom strip paints the picked instrument and effect. Shift-drag picks notes to copy.
+          Play it in your cart with <code id="snd-call">sfx(8)</code>.</p>
       </div>
     </section>
     <section class="editor" id="music" hidden>
@@ -197,6 +206,8 @@
           <button class="primary" id="mus-play">Play the song</button>
           <button id="mus-stop">Stop</button>
           <button id="mus-add">+ Pattern</button>
+          <button id="mus-undo" title="Ctrl+Z">Undo</button>
+          <button id="mus-redo" title="Ctrl+Shift+Z">Redo</button>
         </div>
         <p class="note" id="mus-empty">No song yet. A song is a list of patterns; each plays up to four of your sounds at
           once, for as long as the longest of them. Add one with <strong>+ Pattern</strong>.</p>

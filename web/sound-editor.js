@@ -116,7 +116,38 @@ const SoundEditor = (() => {
   let slot = FIRST;                            // the sound being edited, or an empty number to make one at
   let brush = { i: 0, e: 0, v: 5 };
   let playing = null;                          // {start, speed, ls, le, count} for the playhead
+  let songPlay = null;                         // {start, from}: the song playing, for the Music tab's playhead
+  let selection = null;                        // {a, b}: notes picked with Shift-drag, for Copy
+  let clipboard = null;                        // notes copied
   let problem = "";
+
+  // Undo: each edit keeps the tables as they were before it (a drag is one edit). The history
+  // goes when the code changes some other way (typed in the Code tab, another cart).
+  let past = [], future = [], written = null;  // `written`: the code as this editor last left it
+  const snapshot = () => JSON.stringify({ s: [...sounds], m: [...music], slot });
+  function remember() {
+    past.push(snapshot());
+    if (past.length > 200) past.shift();
+    future = [];
+    undoButtons();
+  }
+  function undoButtons() {
+    for (const t of ["snd", "mus"]) {
+      $(t + "-undo").disabled = !past.length;
+      $(t + "-redo").disabled = !future.length;
+    }
+  }
+  function restore(state) {
+    const d = JSON.parse(state);
+    sounds = new Map(d.s);
+    music = new Map(d.m);
+    slot = d.slot;
+    selection = null;
+    save();
+    refresh();
+  }
+  function undo() { if (past.length) { future.push(snapshot()); restore(past.pop()); } }
+  function redo() { if (future.length) { past.push(snapshot()); restore(future.pop()); } }
 
   function load() {
     const a = readTable(code.value, "SOUNDS"), b = readTable(code.value, "MUSIC");
@@ -124,15 +155,27 @@ const SoundEditor = (() => {
     sounds = a.map || new Map();
     music = b.map || new Map();
     if (slot < FIRST || slot > LAST) slot = sounds.size ? Math.min(...sounds.keys()) : FIRST;
+    if (code.value !== written) {
+      past = [];
+      future = [];
+      written = code.value;
+    }
+    undoButtons();
   }
 
   function save() {
     let src = writeTable(code.value, "SOUNDS", sounds, "sounds (the playground's sound editor writes this table)");
     src = writeTable(src, "MUSIC", music, "the song (the playground's music editor writes this table)");
     if (sounds.size || music.size) src = withApi(src);
+    written = src;
     if (src === code.value) return;
     code.value = src;
     code.dispatchEvent(new Event("input"));  // kept as typed code is
+  }
+
+  // The tab on show drawn again from the tables (after an undo).
+  function refresh() {
+    if (tab === "sounds") { fillSlots(); draw(); } else if (tab === "music") fillMusic();
   }
 
   const current = () => (slot >= 0 && sounds.has(slot) ? decodeSound(sounds.get(slot).text) : null);
@@ -143,7 +186,24 @@ const SoundEditor = (() => {
   }
 
   // ---- sounds ---------------------------------------------------------------------------------
-  const W = 640, PITCH_H = 64 * 4, VOL_Y = PITCH_H + 8, VOL_H = 8 * 6, STRIP_Y = VOL_Y + VOL_H + 8, H = STRIP_Y + 32;
+  // The canvas: pitch rows on top (all 64 on a wide screen; on a phone two octaves at a time, taller,
+  // moved with the octave buttons), then volume, then the instrument and effect strip.
+  const W = 640, VOL_H = 8 * 6;
+  let span = 64, lo = 0, PITCH_H = 256, ROW = 4, VOL_Y, STRIP_Y, H;
+  const narrow = matchMedia("(max-width: 600px)");
+  function layout() {
+    span = narrow.matches ? 24 : 64;
+    PITCH_H = narrow.matches ? 384 : 256;
+    ROW = PITCH_H / span;
+    lo = narrow.matches ? Math.min(lo || 24, 64 - span) : 0;  // C4 to B5 to start
+    VOL_Y = PITCH_H + 8;
+    STRIP_Y = VOL_Y + VOL_H + 8;
+    H = STRIP_Y + 32;
+    const cv = $("snd-canvas");
+    cv.width = W;
+    cv.height = H;
+    $("snd-octaves").hidden = !narrow.matches;
+  }
 
   function fillSlots() {
     const sel = $("snd-slot"), options = [];
@@ -156,7 +216,8 @@ const SoundEditor = (() => {
     $("snd-count").textContent = `${sounds.size} of ${LAST - FIRST + 1} used`;
     $("snd-empty-num").textContent = slot;
     const s = current();
-    for (const id of ["snd-play", "snd-delete", "snd-speed", "snd-len", "snd-ls", "snd-le", "snd-name"]) $(id).disabled = !s;
+    for (const id of ["snd-play", "snd-delete", "snd-speed", "snd-len", "snd-ls", "snd-le", "snd-name", "snd-copy", "snd-dup"]) $(id).disabled = !s;
+    $("snd-paste").disabled = !s || !clipboard;
     $("snd-empty").hidden = !!s;
     $("snd-canvas").hidden = !s;
     if (!s) return;
@@ -173,13 +234,13 @@ const SoundEditor = (() => {
     if (!s) return;
     g.fillStyle = "#0d1117";
     g.fillRect(0, 0, W, H);
-    for (let o = 0; o <= 5; o++) {  // a line at each C
-      const y = PITCH_H - o * 12 * 4;
+    for (let p = Math.ceil(lo / 12) * 12; p <= lo + span; p += 12) {  // a line at each C on show
+      const y = PITCH_H - (p - lo) * ROW;
       g.fillStyle = "#30363d";
       g.fillRect(0, y - 1, W, 1);
       g.fillStyle = "#8b949e";
-      g.font = "10px monospace";
-      if (o < 5) g.fillText("C" + (2 + o), 2, y - 3);
+      g.font = narrow.matches ? "20px monospace" : "10px monospace";  // a phone shows the canvas at half size
+      if (p < lo + span) g.fillText("C" + (2 + p / 12), 2, y - 3);
     }
     const cols = Math.max(16, s.notes.length), cw = W / cols;  // a short sound gets wide cells
     let at = -1;
@@ -195,6 +256,10 @@ const SoundEditor = (() => {
         g.fillStyle = "#30363d";
         g.fillRect(x, 0, cw, H);
       }
+      if (selection && k >= Math.min(selection.a, selection.b) && k <= Math.max(selection.a, selection.b)) {
+        g.fillStyle = "rgba(240, 180, 41, 0.16)";
+        g.fillRect(x, 0, cw, H);
+      }
       if (s.le > s.ls && (k === s.ls || k === s.le)) {
         g.fillStyle = "#f0b429";
         g.fillRect(x, 0, 1, H);
@@ -206,7 +271,9 @@ const SoundEditor = (() => {
       }
       if (n.v > 0) {
         g.fillStyle = COLORS[n.i];
-        g.fillRect(x + pad, PITCH_H - (n.p + 1) * 4 - 2, cw - 2 * pad, 6);
+        if (n.p < lo) g.fillRect(x + pad, PITCH_H - 3, cw - 2 * pad, 3);  // below the window: a mark at its edge
+        else if (n.p >= lo + span) g.fillRect(x + pad, 0, cw - 2 * pad, 3);
+        else g.fillRect(x + pad, PITCH_H - (n.p - lo + 1) * ROW - 1, cw - 2 * pad, Math.max(4, ROW + 2));
       }
       g.fillStyle = "#161b22";
       g.fillRect(x + pad, VOL_Y, cw - 2 * pad, VOL_H);
@@ -221,19 +288,23 @@ const SoundEditor = (() => {
     if (playing) requestAnimationFrame(draw);
   }
 
+  function noteAt(e, s) {
+    const r = $("snd-canvas").getBoundingClientRect();
+    const x = (e.clientX - r.left) * W / r.width, y = (e.clientY - r.top) * H / r.height;
+    return { k: Math.floor(x / (W / Math.max(16, s.notes.length))), y };
+  }
+
   // Drawing with the pointer: the pitch area sets a note's pitch (with the brush's instrument and
   // effect, and its volume if the note was silent); the volume area sets volume; the strip paints.
-  let dragging = false;
+  let dragging = false, selecting = false;
   function paint(e) {
     const s = current();
     if (!s) return;
-    const r = $("snd-canvas").getBoundingClientRect();
-    const x = (e.clientX - r.left) * W / r.width, y = (e.clientY - r.top) * H / r.height;
-    const k = Math.floor(x / (W / Math.max(16, s.notes.length)));
+    const { k, y } = noteAt(e, s);
     if (k < 0 || k >= s.notes.length) return;
     const n = s.notes[k];
     if (y < PITCH_H) {
-      Object.assign(n, { p: Math.max(0, Math.min(63, Math.floor((PITCH_H - y) / 4))), i: brush.i, e: brush.e });
+      Object.assign(n, { p: Math.max(0, Math.min(63, lo + Math.floor((PITCH_H - y) / ROW))), i: brush.i, e: brush.e });
       if (!n.v) n.v = brush.v;
     } else if (y >= VOL_Y && y < VOL_Y + VOL_H + 4) {
       n.v = Math.max(0, Math.min(7, Math.round((VOL_Y + VOL_H - y) / 6)));
@@ -276,6 +347,7 @@ const SoundEditor = (() => {
     let n = sounds.has(slot) ? FIRST : slot;
     while (sounds.has(n) && n <= LAST) n++;
     if (n > LAST) { say("A cart has room for sounds 8 to 63, and they're all used.", true); return; }
+    remember();
     const [speed, notes] = PRESETS[preset || "Blip"];
     sounds.set(n, { text: encodeSound({ speed, ls: 0, le: 0, notes: notes.map(([p, i, v, e]) => ({ p, i, v, e })) }), name: (preset || "").toLowerCase() });
     slot = n;
@@ -286,12 +358,79 @@ const SoundEditor = (() => {
   function setField(fn) {
     const s = current();
     if (!s) return;
+    remember();
     fn(s);
     put(s);
     fillSlots();
   }
 
+  // Copy: the picked notes (Shift-drag), or the whole sound. Paste: over the picked notes from the
+  // first, or after the last note; a sound keeps at most 32.
+  function copyNotes() {
+    const s = current();
+    if (!s) return;
+    const [a, b] = selection ? [Math.min(selection.a, selection.b), Math.max(selection.a, selection.b)] : [0, s.notes.length - 1];
+    clipboard = s.notes.slice(a, b + 1).map((n) => ({ ...n }));
+    say(`Copied ${clipboard.length} note${clipboard.length > 1 ? "s" : ""}.`);
+    $("snd-paste").disabled = false;
+  }
+  function pasteNotes() {
+    const s = current();
+    if (!s || !clipboard) return;
+    remember();
+    const at = selection ? Math.min(selection.a, selection.b) : s.notes.length;
+    clipboard.forEach((n, i) => { if (at + i < NOTES) s.notes[at + i] = { ...n }; });
+    const fit = Math.max(0, Math.min(clipboard.length, NOTES - at));
+    selection = fit ? { a: at, b: at + fit - 1 } : null;
+    put(s);
+    fillSlots();
+    say(fit < clipboard.length ? `Pasted ${fit} of ${clipboard.length} notes: a sound has room for 32.` : `Pasted ${fit} note${fit > 1 ? "s" : ""}.`);
+  }
+  function duplicateSound() {
+    if (!sounds.has(slot)) return;
+    let n = FIRST;
+    while (sounds.has(n) && n <= LAST) n++;
+    if (n > LAST) { say("A cart has room for sounds 8 to 63, and they're all used.", true); return; }
+    remember();
+    const from = sounds.get(slot);
+    sounds.set(n, { text: from.text, name: (from.name ? from.name + " copy" : "").slice(0, 24) });
+    slot = n;
+    save();
+    show();
+  }
+
   // ---- music ----------------------------------------------------------------------------------
+  // How long a pattern plays, in seconds: as the synth works it out (engine/synth.cpp start_pattern).
+  function patternSeconds(p) {
+    let ticks = 0;
+    for (const c of p.ch) {
+      const snd = c >= 0 && sounds.has(c) ? decodeSound(sounds.get(c).text) : null;
+      if (snd) ticks = Math.max(ticks, snd.notes.length * snd.speed);
+    }
+    return ticks ? ticks / 120 : 0.25;
+  }
+  // The pattern playing `t` seconds into the song from `from`, following its flags; -1 when it's over.
+  function songAt(from, t) {
+    let n = from, loopTo = -1;
+    for (let guard = 0; guard < 10000; guard++) {
+      const p = music.has(n) ? decodePattern(music.get(n).text) : null;
+      if (!p) return -1;
+      if (p.flags & 1) loopTo = n;
+      const len = patternSeconds(p);
+      if (t < len) return n;
+      t -= len;
+      if (p.flags & 4) return -1;
+      n = (p.flags & 2) && loopTo >= 0 ? loopTo : n + 1;
+    }
+    return -1;
+  }
+  function followSong() {
+    if (!songPlay || !sound.ctx) return;
+    const n = songAt(songPlay.from, sound.ctx.currentTime - songPlay.start);
+    for (const row of $("mus-list").children) row.classList.toggle("playing", Number(row.dataset.n) === n);
+    if (n < 0) songPlay = null; else requestAnimationFrame(followSong);
+  }
+
   function fillMusic() {
     const rows = [...music.keys()].sort((a, b) => a - b);
     const list = $("mus-list");
@@ -301,6 +440,7 @@ const SoundEditor = (() => {
       const p = decodePattern(music.get(n).text) || { flags: 0, ch: [-1, -1, -1, -1] };
       const row = document.createElement("div");
       row.className = "pattern";
+      row.dataset.n = n;
       const label = document.createElement("span");
       label.textContent = n;
       label.className = "num";
@@ -310,7 +450,7 @@ const SoundEditor = (() => {
         sel.setAttribute("aria-label", `pattern ${n} channel ${c + 1}`);
         sel.append(new Option("—", -1), ...[...sounds.keys()].sort((a, b) => a - b).map((k) => new Option(`${k}${sounds.get(k).name ? " " + sounds.get(k).name : ""}`, k)));
         sel.value = s;
-        sel.onchange = () => { p.ch[c] = Number(sel.value); music.get(n).text = encodePattern(p); save(); };
+        sel.onchange = () => { remember(); p.ch[c] = Number(sel.value); music.get(n).text = encodePattern(p); save(); };
         row.appendChild(sel);
       });
       for (const [bit, name] of [[1, "loop start"], [2, "loop back"], [4, "stop"]]) {
@@ -318,7 +458,7 @@ const SoundEditor = (() => {
         const box = document.createElement("input");
         box.type = "checkbox";
         box.checked = !!(p.flags & bit);
-        box.onchange = () => { p.flags = box.checked ? p.flags | bit : p.flags & ~bit; music.get(n).text = encodePattern(p); save(); };
+        box.onchange = () => { remember(); p.flags = box.checked ? p.flags | bit : p.flags & ~bit; music.get(n).text = encodePattern(p); save(); };
         l.append(box, " " + name);
         row.appendChild(l);
       }
@@ -327,7 +467,7 @@ const SoundEditor = (() => {
       play.onclick = () => playSong(n);
       const del = document.createElement("button");
       del.textContent = "Delete";
-      del.onclick = () => { music.delete(n); save(); fillMusic(); };
+      del.onclick = () => { remember(); music.delete(n); save(); fillMusic(); };
       row.append(play, del);
       list.appendChild(row);
     }
@@ -341,12 +481,15 @@ const SoundEditor = (() => {
     for (const [k, v] of music) json.music[k] = v.text;
     for (const [k, v] of sounds) json.sounds[k] = v.text;
     const why = lw.play_song(JSON.stringify(json), start);
-    if (why) say(`music(${start}): ${why}`, true);
+    if (why) { say(`music(${start}): ${why}`, true); return; }
+    songPlay = { start: sound.ctx.currentTime + 0.03, from: start };
+    followSong();
   }
 
   function addPattern() {
     const n = music.size ? Math.max(...music.keys()) + 1 : 0;
     if (n >= PATTERNS) { say("A song has room for patterns 0 to 63.", true); return; }
+    remember();
     const last = music.size ? decodePattern(music.get(n - 1)?.text || "") : null;
     music.set(n, { text: encodePattern(last ? { flags: 0, ch: last.ch } : { flags: 0, ch: [sounds.size ? Math.min(...sounds.keys()) : -1, -1, -1, -1] }), name: "" });
     save();
@@ -374,18 +517,25 @@ const SoundEditor = (() => {
     const presets = $("snd-preset");
     presets.append(...Object.keys(PRESETS).map((k) => new Option(k, k)));
     presets.onchange = () => { if (presets.value) newSound(presets.value); presets.value = ""; };
-    for (const t of ["code", "sounds", "music"]) $("tab-" + t).onclick = () => { sound.stop(); show(t); };
+    for (const t of ["code", "sounds", "music"]) $("tab-" + t).onclick = () => { sound.stop(); playing = songPlay = null; show(t); };
     $("snd-slot").onchange = () => { slot = Number($("snd-slot").value); fillSlots(); draw(); };
     $("snd-new").onclick = () => newSound();
     $("snd-play").onclick = playSound;
-    $("snd-stop").onclick = $("mus-stop").onclick = () => { sound.stop(); playing = null; draw(); };
+    $("snd-stop").onclick = $("mus-stop").onclick = () => { sound.stop(); playing = songPlay = null; draw(); followSongOff(); };
     $("snd-delete").onclick = () => {
       if (!confirm(`Delete sound ${slot}?`)) return;
+      remember();
       sounds.delete(slot);  // the number stays picked, empty now
       save();
       show();
     };
-    $("snd-name").oninput = () => { sounds.get(slot).name = $("snd-name").value.replace(/[\n"]/g, "").slice(0, 24); save(); };
+    let naming = false;  // one undo step for a name typed in one go
+    $("snd-name").onfocus = () => { naming = false; };
+    $("snd-name").oninput = () => {
+      if (!naming) { remember(); naming = true; }
+      sounds.get(slot).name = $("snd-name").value.replace(/[\n"]/g, "").slice(0, 24);
+      save();
+    };
     $("snd-name").onchange = fillSlots;
     const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, Number(v) || lo));
     $("snd-speed").onchange = () => setField((s) => { s.speed = clamp($("snd-speed").value, 1, 255); });
@@ -403,20 +553,57 @@ const SoundEditor = (() => {
     });
     $("snd-ls").onchange = $("snd-le").onchange = loop;
     const cv = $("snd-canvas");
-    cv.width = W;
-    cv.height = H;
-    cv.addEventListener("pointerdown", (e) => { dragging = true; cv.setPointerCapture(e.pointerId); paint(e); });
-    cv.addEventListener("pointermove", (e) => { if (dragging) paint(e); });
-    cv.addEventListener("pointerup", () => { dragging = false; });
-    cv.addEventListener("pointercancel", () => { dragging = false; });
-    $("mus-add").onclick = addPattern;
-    $("mus-play").onclick = () => { if (music.size) playSong(Math.min(...music.keys())); };
-    addEventListener("keydown", (e) => {  // Space plays the sound being edited
-      if (tab === "sounds" && e.code === "Space" && !typing(e)) {
-        e.preventDefault();
-        playSound();
+    layout();
+    narrow.addEventListener("change", () => { layout(); draw(); });
+    $("snd-up").onclick = () => { lo = Math.min(64 - span, lo + 12); draw(); };
+    $("snd-down").onclick = () => { lo = Math.max(0, lo - 12); draw(); };
+    cv.addEventListener("pointerdown", (e) => {
+      const s = current();
+      if (!s) return;
+      cv.setPointerCapture(e.pointerId);
+      if (e.shiftKey) {  // Shift-drag picks notes
+        const { k } = noteAt(e, s);
+        selecting = true;
+        selection = { a: Math.max(0, Math.min(k, s.notes.length - 1)), b: Math.max(0, Math.min(k, s.notes.length - 1)) };
+        draw();
+        return;
+      }
+      selection = null;
+      remember();  // a drag is one edit
+      dragging = true;
+      paint(e);
+    });
+    cv.addEventListener("pointermove", (e) => {
+      if (dragging) paint(e);
+      else if (selecting) {
+        const s = current();
+        selection.b = Math.max(0, Math.min(noteAt(e, s).k, s.notes.length - 1));
+        draw();
       }
     });
+    cv.addEventListener("pointerup", () => { dragging = selecting = false; });
+    cv.addEventListener("pointercancel", () => { dragging = selecting = false; });
+    $("snd-undo").onclick = $("mus-undo").onclick = undo;
+    $("snd-redo").onclick = $("mus-redo").onclick = redo;
+    $("snd-copy").onclick = copyNotes;
+    $("snd-paste").onclick = pasteNotes;
+    $("snd-dup").onclick = duplicateSound;
+    $("mus-add").onclick = addPattern;
+    $("mus-play").onclick = () => { if (music.size) playSong(Math.min(...music.keys())); };
+    addEventListener("keydown", (e) => {  // Space plays the sound; Ctrl+Z / Ctrl+Shift+Z (or Ctrl+Y); Ctrl+C / Ctrl+V; Escape
+      if (tab === "code" || typing(e)) return;
+      const mod = e.ctrlKey || e.metaKey, key = e.key.toLowerCase();
+      if (tab === "sounds" && e.code === "Space" && !mod) { e.preventDefault(); playSound(); }
+      else if (mod && key === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); }
+      else if (mod && key === "y") { e.preventDefault(); redo(); }
+      else if (tab === "sounds" && mod && key === "c" && !getSelection().toString()) { e.preventDefault(); copyNotes(); }
+      else if (tab === "sounds" && mod && key === "v") { e.preventDefault(); pasteNotes(); }
+      else if (tab === "sounds" && e.key === "Escape" && selection) { selection = null; draw(); }
+    });
+  }
+
+  function followSongOff() {
+    for (const row of $("mus-list").children) row.classList.remove("playing");
   }
 
   return { setUp, show, get tab() { return tab; } };
