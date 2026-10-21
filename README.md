@@ -4,15 +4,15 @@
 
 A Lua game console for ESP32-S3 boards. A game, or cart, is one Lua file. It draws into a
 128x128 picture of 16 colors, and can add a lit 3D scene under it and a full-color layer over
-it, at up to 60 fps. You write a cart on your computer, check it there, and send it to the board over USB.
+it, at up to 60 fps. It can play its own sounds and music too. You write a cart in the browser or
+on your computer, and send it to the board over USB.
 
 The name is Lua plus *lunette*, French for a little moon or a small window.
 
 **[Try it in your browser](https://geofresh.github.io/luanette/).** The six example carts run
-there on the same engine, compiled to WebAssembly, next to an editor, and you can start carts of
-your own or open .lua files, make sounds and music for them, and share a cart as a link that opens
-it, songs and all. In Chrome or Edge on a computer, the same page installs the firmware
-on a board over USB and sends it the cart you're editing, with nothing else to set up.
+there on the same engine, compiled to WebAssembly, next to an editor. The same page can put the
+firmware on a board and send it your cart, so a board, a cable and Chrome or Edge are all you need
+to start.
 
 <img src="docs/images/board.jpg" width="320" alt="Luanette's launcher on the Waveshare ESP32-S3-Touch-AMOLED-2.06">
 
@@ -47,22 +47,43 @@ Measured on the AMOLED-2.06:
 
 `docs/ARCHITECTURE.md` explains how each of these works.
 
+## The playground
+
+[geofresh.github.io/luanette](https://geofresh.github.io/luanette/) is an editor and the console
+side by side. Edit a cart's code and press Run (or Ctrl+Enter) to see the change.
+
+- **Your own carts.** + New cart starts one from a small template. Open .lua and Save .lua move
+  them in and out as files. They're kept in your browser as you type.
+- **Sounds and music.** The Sounds tab is a note grid: pick an instrument and an effect, draw
+  pitch and volume, and press Play. The Music tab strings sounds into a song, up to four playing at
+  once.
+  Both write their results into the cart's code. Open Overdrive to see a finished song.
+- **Share link** copies a link with the whole cart in it, code, sounds and song. Whoever opens it
+  gets the cart in their playground. Nothing is uploaded; the link is the only copy.
+- **On a board** (Chrome or Edge on a computer): Install puts the latest firmware on it, and Send
+  to board sends the cart you're editing. Remove from board takes one off again; on an example
+  it's Restore the built-in.
+- The volume slider under the screen sets the page's volume only, not the board's.
+
+On Linux, Chrome can only open the board's port if your user is in the `dialout` group.
+
 ## What's in the repo
 
-- `engine/`: the Lua runtime, the renderer, the 3D stage and the sound synth
+- `engine/`: the Lua runtime, the renderer, the 3D stage, and the synth for sounds and music
 - `board/`: drivers for the AMOLED-2.06
 - `firmware/`: the firmware, with a launcher and the examples built in
 - `tools/`: check a cart, preview it, send it, take a screenshot
-- `web/`: the browser playground
+- `web/`: the playground
 - `examples/`: six complete carts
 
 ## What you need
 
 - A Waveshare ESP32-S3-Touch-AMOLED-2.06 and a USB-C cable.
-- `esptool` to flash the prebuilt firmware, or [PlatformIO](https://platformio.org/) to build
-  it yourself. PlatformIO fetches ESP-IDF on its own.
-- For the tools: Python 3.10 or newer with its development headers (`python3-dev` or
-  `python3-devel`, or a Python from uv or pyenv), a C++17 compiler and CMake.
+- Chrome or Edge, for the playground's Install and Send to board. That's enough to get going.
+- To work from the command line instead: `esptool` to flash the prebuilt firmware, or
+  [PlatformIO](https://platformio.org/) to build it (it fetches ESP-IDF on its own); and for the
+  tools, Python 3.10 or newer with its development headers (`python3-dev` or `python3-devel`, or a
+  Python from uv or pyenv), a C++17 compiler and CMake.
 
 I've only used it on Linux. macOS should work. On Windows, `cartrun`, which previews 3D and
 full-color carts, doesn't build yet, and `push.py` needs `--port COM3` or similar.
@@ -70,8 +91,11 @@ full-color carts, doesn't build yet, and `push.py` needs `--port COM3` or simila
 ## Quick start
 
 The quickest way is the [playground](https://geofresh.github.io/luanette/) in Chrome or Edge: plug
-the board in, press **Install Luanette**, and leave "Erase device" unticked. Or flash the four files
-from the [latest release](https://github.com/Geofresh/luanette/releases/latest) yourself:
+the board in, press **Install Luanette**, and leave "Erase device" unticked. Then pick a cart, change
+something, and press **Send to board**.
+
+Or flash the four files from the [latest release](https://github.com/Geofresh/luanette/releases/latest)
+yourself:
 
 ```bash
 pip install esptool
@@ -151,8 +175,13 @@ python tools/check.py hello.lua --preview hello.png   # runs it here and enforce
 python tools/push.py hello.lua
 ```
 
+A cart's own sounds and song live in its code, in two tables, `SOUNDS` and `MUSIC`. They're
+text, but the easy way to make them is the playground's Sounds and Music tabs. `sfx(8)` plays a
+sound, `music(0)` starts the song, and `-1` stops either. The eight built-in sounds, `sfx(0)` to
+`sfx(7)`, need nothing.
+
 - [`docs/api.md`](docs/api.md) is the full API: drawing, input, the color layer, images, 3D,
-  sound and saves.
+  sound and music, and saves.
 - [`docs/DESIGN.md`](docs/DESIGN.md) covers making a cart run well. Read it before writing
   anything big.
 - [`examples/`](examples/) has six complete carts, from a bubble shooter to a 3D rail shooter and a chiptune.
@@ -174,7 +203,7 @@ It works, but so far it's had one user (me) and one board. Expect rough edges.
 - One board. The engine doesn't depend on it, but the screen layout is set for this panel.
   `docs/ARCHITECTURE.md` lists what a port needs.
 - Carts arrive over USB only.
-- There's no sprite or map editor yet. Sounds and music have one, in the playground.
+- There's no sprite or map editor yet.
 
 ## Credits
 
