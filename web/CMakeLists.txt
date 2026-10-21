@@ -16,13 +16,22 @@ file(READ "${ROOT}/engine/ui.lua" HG_UI_LUA)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${ROOT}/engine/ui.lua")
 configure_file(${ROOT}/engine/ui_lua.hpp.in gen/ui_lua.hpp @ONLY)
 
-add_executable(luanette ${CMAKE_CURRENT_LIST_DIR}/luanette_web.cpp ${ROOT}/engine/cart.cpp ${ROOT}/engine/cartsrc.cpp
-               ${ROOT}/engine/stage.cpp ${ROOT}/engine/hd.cpp ${ROOT}/engine/hd_fonts.cpp ${ROOT}/engine/sfx.cpp ${ROOT}/engine/synth.cpp
-               ${ROOT}/support/src/json.cpp ${ROOT}/support/src/crypto.cpp ${LUA_SRCS} ${JET_SRCS})
-target_include_directories(luanette PRIVATE ${ROOT}/engine ${ROOT}/engine/lua ${ROOT}/engine/jet ${ROOT}/support
+# The engine's objects once, linked twice: for the page (luanette.js + .wasm) and for Node, the
+# command-line tool (luanette-node.js, the wasm inside it).
+add_library(luanette_objs OBJECT ${CMAKE_CURRENT_LIST_DIR}/luanette_web.cpp ${ROOT}/engine/cart.cpp ${ROOT}/engine/cartsrc.cpp
+            ${ROOT}/engine/stage.cpp ${ROOT}/engine/hd.cpp ${ROOT}/engine/hd_fonts.cpp ${ROOT}/engine/sfx.cpp ${ROOT}/engine/synth.cpp
+            ${ROOT}/support/src/json.cpp ${ROOT}/support/src/crypto.cpp ${LUA_SRCS} ${JET_SRCS})
+target_include_directories(luanette_objs PRIVATE ${ROOT}/engine ${ROOT}/engine/lua ${ROOT}/engine/jet ${ROOT}/support
                            "${CMAKE_CURRENT_BINARY_DIR}/gen")
-target_compile_definitions(luanette PRIVATE LUA_32BITS=1)
-target_compile_options(luanette PRIVATE -O3)
-target_link_options(luanette PRIVATE -O3 -sMODULARIZE=1 -sEXPORT_NAME=Luanette -sALLOW_MEMORY_GROWTH=1
-                    -sENVIRONMENT=web "-sEXPORTED_RUNTIME_METHODS=['ccall','cwrap','HEAPU8','HEAP16','HEAPF32']"
-                    "-sDEFAULT_LIBRARY_FUNCS_TO_INCLUDE=['$stringToNewUTF8','$UTF8ToString']")
+target_compile_definitions(luanette_objs PRIVATE LUA_32BITS=1)
+target_compile_options(luanette_objs PRIVATE -O3)
+set(LW_LINK -O3 -sMODULARIZE=1 -sEXPORT_NAME=Luanette -sALLOW_MEMORY_GROWTH=1
+    "-sEXPORTED_RUNTIME_METHODS=['ccall','cwrap','HEAPU8','HEAP16','HEAPF32']"
+    "-sDEFAULT_LIBRARY_FUNCS_TO_INCLUDE=['$stringToNewUTF8','$UTF8ToString']")
+
+add_executable(luanette $<TARGET_OBJECTS:luanette_objs>)
+target_link_options(luanette PRIVATE ${LW_LINK} -sENVIRONMENT=web)
+
+add_executable(luanette_node $<TARGET_OBJECTS:luanette_objs>)
+set_target_properties(luanette_node PROPERTIES OUTPUT_NAME luanette-node)
+target_link_options(luanette_node PRIVATE ${LW_LINK} -sENVIRONMENT=node -sSINGLE_FILE=1)

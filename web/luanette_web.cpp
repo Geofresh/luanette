@@ -28,13 +28,17 @@ extern "C" {
 }
 
 // Saves live in the browser's localStorage, one key per cart.
+// (In Node, the command-line tool, there's no page: saves last as long as the process.)
 EM_JS(char*, js_load_save, (const char* cart), {
-  const v = localStorage.getItem('luanette.save.' + UTF8ToString(cart)) || '';
-  return stringToNewUTF8(v);
+  const k = 'luanette.save.' + UTF8ToString(cart);
+  const v = typeof window !== 'undefined' ? localStorage.getItem(k) : (globalThis.luanetteSaves || {})[k];
+  return stringToNewUTF8(v || '');
 });
 EM_JS(int, js_store_save, (const char* cart, const char* json), {
+  const k = 'luanette.save.' + UTF8ToString(cart);
   try {
-    localStorage.setItem('luanette.save.' + UTF8ToString(cart), UTF8ToString(json));
+    if (typeof window !== 'undefined') localStorage.setItem(k, UTF8ToString(json));
+    else (globalThis.luanetteSaves = globalThis.luanetteSaves || {})[k] = UTF8ToString(json);
     return 1;
   } catch (e) {
     return 0;
@@ -48,7 +52,8 @@ constexpr int kH = 502;
 
 struct WebHost final : carts::Host {
   std::deque<int> sounds;  // sfx() calls the page hasn't played yet
-  int64_t now_us() override { return static_cast<int64_t>(emscripten_get_now() * 1000.0); }
+  int64_t clock_us = -1;  // >= 0: a clock of the tool's (lw_clock), a frame's time each frame, as check.py's
+  int64_t now_us() override { return clock_us >= 0 ? clock_us : static_cast<int64_t>(emscripten_get_now() * 1000.0); }
   void* alloc(size_t n) override { return std::malloc(n); }
   void release(void* p) override { std::free(p); }
   void buzz(int) override {}
@@ -249,8 +254,13 @@ EMSCRIPTEN_KEEPALIVE const char* lw_log() {
   return line.c_str();
 }
 
+// The clock the cart sees, in microseconds; < 0 goes back to the real one. The command-line tool moves
+// it a frame at a time, so time() is the same however fast the frames run.
+EMSCRIPTEN_KEEPALIVE void lw_clock(double us) { g_host.clock_us = static_cast<int64_t>(us); }
+
 // The last frame's Lua instructions (by 100s, as check.py counts them).
 EMSCRIPTEN_KEEPALIVE int lw_ops() { return g_cart ? g_cart->last().ops : 0; }
+EMSCRIPTEN_KEEPALIVE int lw_lazy() { return g_cart && g_cart->lazy() ? 1 : 0; }  // fps(active, idle)
 EMSCRIPTEN_KEEPALIVE int lw_fps() { return g_cart ? g_cart->fps() : 30; }
 EMSCRIPTEN_KEEPALIVE int lw_full_canvas() { return g_cart && g_cart->hd() && g_cart->full_canvas() ? 1 : 0; }
 EMSCRIPTEN_KEEPALIVE uint8_t* lw_pixels() { return g_rgba.data(); }

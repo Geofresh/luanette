@@ -39,3 +39,26 @@ jobs:
           key: pio-${{ hashFiles('firmware/platformio.ini', 'firmware/main/idf_component.yml') }}
       - run: pip install platformio==6.2.0
       - run: pio run -d firmware
+
+  cli:
+    # The command-line tool (cli/, npm "luanette"): the engine built for Node, every cart in the
+    # repository through its check, a run and a song, and the package as it would be published.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 6.0.13
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: web/build.sh
+      - run: cli/build.sh
+      - run: for c in examples/*.lua gallery/*.lua templates/*.lua tests/tutorial/*.lua; do node cli/luanette.mjs check "$c" > /dev/null || { node cli/luanette.mjs check "$c"; exit 1; }; done
+      - run: node cli/luanette.mjs run templates/platformer.lua --frames 60 --gif --out /tmp/run && test -s /tmp/run/run.gif && test -s /tmp/run/shots.png
+      - run: node cli/luanette.mjs song examples/overdrive.lua --wav /tmp/song.wav && test -s /tmp/song.wav
+      - run: cd cli && npm pack
+      - uses: actions/upload-artifact@v4
+        with:
+          name: luanette-npm
+          path: cli/luanette-*.tgz
