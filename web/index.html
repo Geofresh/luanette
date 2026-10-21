@@ -63,6 +63,17 @@
   #snd-canvas { width: 100%; height: auto; aspect-ratio: auto; border: 1px solid var(--line); border-radius: 8px;
                 touch-action: none; cursor: crosshair; }
   #snd-info { font: 13px var(--mono); color: var(--muted); min-height: 1.5em; }
+  .spr-row { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-start; }
+  .spr-main { display: flex; flex-direction: column; gap: 10px; width: min(320px, 100%); }
+  .spr-side { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  #spr-grid { width: 100%; height: auto; aspect-ratio: 1; border: 1px solid var(--line); border-radius: 8px; touch-action: none;
+              cursor: crosshair; image-rendering: pixelated; }
+  #spr-sheet { width: 256px; max-width: 100%; height: auto; aspect-ratio: 1; border: 1px solid var(--line); border-radius: 8px;
+               cursor: pointer; image-rendering: pixelated; }
+  .spr-previews { display: flex; gap: 8px; align-items: center; }
+  .spr-previews canvas { width: auto; aspect-ratio: auto; border-radius: 4px; border: 1px solid var(--line); image-rendering: pixelated; }
+  .swatch { width: 34px; height: 30px; padding: 0; font: 11px var(--mono); border-radius: 6px; }
+  .swatch.on { outline: 2px solid var(--accent); outline-offset: 1px; }
   .pattern.playing { background: rgba(240, 180, 41, 0.12); box-shadow: inset 3px 0 0 var(--accent); }
   .pattern { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
   .pattern .num { font: 14px var(--mono); color: var(--muted); width: 2em; }
@@ -167,10 +178,50 @@
     </div>
     <div class="tabs" role="tablist">
       <button id="tab-code" class="on">Code</button>
+      <button id="tab-sprites">Sprites</button>
       <button id="tab-sounds">Sounds</button>
       <button id="tab-music">Music</button>
     </div>
     <textarea id="code" spellcheck="false" aria-label="The cart's Lua source"></textarea>
+    <section class="editor" id="sprites" hidden>
+      <p class="problem" id="spr-problem" hidden></p>
+      <div class="editor" id="spr-body">
+        <div class="bar">
+          <span>Sprite <strong id="spr-num">0</strong></span>
+          <input type="text" id="spr-name" placeholder="name" maxlength="24" aria-label="Its name" style="width: 9em">
+          <span class="note" id="spr-count"></span>
+          <span class="note">Draw with <code id="spr-call">spr(0, x, y)</code></span>
+        </div>
+        <div class="spr-row">
+          <div class="spr-main">
+            <canvas id="spr-grid" aria-label="The sprite's 8 by 8 pixels: draw on it; Alt-click or right-click picks a color up"></canvas>
+            <div class="brush" id="spr-colors" aria-label="Colors (keys 0-9 and a-f)"></div>
+          </div>
+          <div class="spr-side">
+            <div class="bar">
+              <button id="spr-pencil" class="on">Pencil</button><button id="spr-fill">Fill</button>
+              <button id="spr-undo" title="Ctrl+Z">Undo</button><button id="spr-redo" title="Ctrl+Shift+Z">Redo</button>
+            </div>
+            <div class="bar">
+              <button id="spr-flipx" title="Flip left to right">Flip ↔</button><button id="spr-flipy" title="Flip top to bottom">Flip ↕</button>
+              <button id="spr-left" title="Shift left (wraps round)">←</button><button id="spr-right" title="Shift right">→</button>
+              <button id="spr-up" title="Shift up">↑</button><button id="spr-down" title="Shift down">↓</button>
+            </div>
+            <div class="bar">
+              <button id="spr-copy" title="Ctrl+C">Copy</button><button id="spr-paste" title="Ctrl+V">Paste</button>
+              <button id="spr-clear">Clear</button><button id="spr-delete">Delete</button>
+            </div>
+            <div class="spr-previews"><canvas id="spr-1x" width="24" height="24" aria-label="At its size"></canvas>
+              <canvas id="spr-4x" width="48" height="48" aria-label="At 4 times its size"></canvas></div>
+            <canvas id="spr-sheet" aria-label="All 64 sprites: pick one"></canvas>
+          </div>
+        </div>
+        <div id="spr-info" class="note"></div>
+        <p class="note">Color 0 is see-through when <code>spr()</code> draws. Keys 0-9 and a-f pick a color; Alt-click or
+          right-click on the sprite picks one up. The editor writes a <code>SPRITES</code> table into the code, each
+          sprite a row at a time.</p>
+      </div>
+    </section>
     <section class="editor" id="sounds" hidden>
       <p class="problem" id="snd-problem" hidden></p>
       <div class="editor" id="snd-body">
@@ -255,6 +306,8 @@
 <script src="vendor/codemirror/show-hint.js"></script>
 <script src="board.js"></script>
 <script src="playground.js"></script>
+<script src="tables.js"></script>
 <script src="sound-editor.js"></script>
+<script src="sprite-editor.js"></script>
 </body>
 </html>

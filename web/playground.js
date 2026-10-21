@@ -799,6 +799,7 @@ async function main() {
     lw_fps: mod.cwrap("lw_fps", "number", []),
     lw_ops: mod.cwrap("lw_ops", "number", []),
     log_count: mod.cwrap("lw_log_count", "number", []),
+    colors: () => mod.ccall("lw_colors", "string", [], []).split(" ").map((h) => "#" + h),
     log: mod.cwrap("lw_log", "string", []),
     lw_full_canvas: mod.cwrap("lw_full_canvas", "number", []),
     lw_pixels: mod.cwrap("lw_pixels", "number", []),

@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <deque>
@@ -206,6 +207,18 @@ EMSCRIPTEN_KEEPALIVE int lw_frame(int held, int touching, float tx, float ty, fl
 }
 
 EMSCRIPTEN_KEEPALIVE const char* lw_error() { return g_error.c_str(); }
+// The cart's 16 colors as it shows them now (palette() changes them), "rrggbb" each, spaces between;
+// the starting 16 before a cart runs. The sprite editor and the color strip draw with them.
+EMSCRIPTEN_KEEPALIVE const char* lw_colors() {
+  static char out[16 * 7];
+  for (int i = 0; i < 16; ++i) {
+    const uint32_t rgb = g_cart ? g_cart->colors()[i] : carts::kPalette[i];
+    std::snprintf(out + i * 7, 8, "%06x", static_cast<unsigned>(rgb & 0xFFFFFF));
+    out[i * 7 + 6] = i < 15 ? ' ' : '\0';
+  }
+  return out;
+}
+
 // log() lines the page hasn't shown yet, and the next of them.
 EMSCRIPTEN_KEEPALIVE int lw_log_count() { return static_cast<int>(g_host.logs.size()); }
 EMSCRIPTEN_KEEPALIVE const char* lw_log() {

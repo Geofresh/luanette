@@ -6,7 +6,7 @@ cd "$(dirname "$0")"
 emcmake cmake -S . -B build -DCMAKE_BUILD_TYPE=Release > /dev/null
 cmake --build build -j
 rm -rf build/site && mkdir -p build/site/examples
-cp index.html playground.js board.js sound-editor.js build/luanette.js build/luanette.wasm build/site/
+cp index.html playground.js board.js tables.js sound-editor.js sprite-editor.js build/luanette.js build/luanette.wasm build/site/
 cp ../examples/*.lua build/site/examples/
 cp -r vendor build/site/
 python3 ../tools/api_index.py ../docs/api.md build/site/api.json  # the editor's API help

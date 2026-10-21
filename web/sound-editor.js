@@ -2,10 +2,11 @@
 // code, lets you draw sounds (pitch and volume per note, an instrument and an effect each) and
 // lay out a song's patterns, and writes the tables back into the code as you go. The formats are
 // engine/synth.hpp's; the engine plays what you hear here, as the board will.
-// Uses the playground's globals: $, code, lw, sound, say.
+// Uses the playground's globals: $, code, lw, sound, say; and Tables (web/tables.js).
 "use strict";
 
 const SoundEditor = (() => {
+  const { readTable, writeTable, withApi } = Tables;  // web/tables.js
   const FIRST = 8, LAST = 63, NOTES = 32, PATTERNS = 64;
   const INSTRUMENTS = ["square", "pulse", "thin pulse", "triangle", "saw", "sine", "organ", "noise"];
   const EFFECTS = ["none", "slide", "vibrato", "drop", "fade in", "fade out", "arp fast", "arp slow"];
@@ -54,62 +55,6 @@ const SoundEditor = (() => {
     return { flags: parseInt(d.slice(0, 2), 16), ch };
   }
   const encodePattern = (p) => hex2(p.flags) + " " + p.ch.map((s) => (s < 0 ? "--" : hex2(s))).join(" ");
-
-  // NAME = { [n] = "text", -- comment ... } in the code: the entries, or why the editor can't read it.
-  function readTable(src, name) {
-    const m = new RegExp(`^${name}\\s*=\\s*\\{([^]*?)^\\}`, "m").exec(src);
-    if (!m) {
-      return new RegExp(`(^|[^\\w.])${name}\\s*(=|\\[)`, "m").test(src)
-        ? { problem: `${name} is set up in the code in a way the editor can't read. Change it there, or delete it to start over here.` }
-        : { map: new Map() };
-    }
-    const map = new Map();
-    for (const raw of m[1].split("\n")) {
-      const line = raw.trim();
-      if (!line || line.startsWith("--")) continue;
-      const e = /^\[(\d+)\]\s*=\s*"([0-9a-fA-F \-]*)",?\s*(?:--\s*(.*))?$/.exec(line);
-      if (!e) return { problem: `The editor can't read this line of ${name}: ${line}` };
-      map.set(Number(e[1]), { text: e[2], name: (e[3] || "").trim() });
-    }
-    return { map };
-  }
-
-  function writeTable(src, name, map, intro) {
-    const keys = [...map.keys()].sort((a, b) => a - b);
-    const body = keys.map((k) => `  [${k}] = "${map.get(k).text}",${map.get(k).name ? " -- " + map.get(k).name : ""}`).join("\n");
-    const block = keys.length ? `${name} = {\n${body}\n}` : "";
-    const said = intro.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");  // the intro as a pattern
-    const re = new RegExp(`(^-- ${said}\\n)?^${name}\\s*=\\s*\\{[^]*?^\\}\\n?`, "m");
-    if (re.test(src)) return src.replace(re, block ? `-- ${intro}\n${block}\n` : "");
-    if (!block) return src;
-    // After the header (the comment lines at the top) and a SOUNDS table if there is one.
-    const lines = src.split("\n");
-    let at = 0;
-    while (at < lines.length && lines[at].startsWith("--")) at++;
-    const sounds = /^SOUNDS\s*=\s*\{[^]*?^\}\n?/m.exec(src);
-    if (name === "MUSIC" && sounds) {
-      const end = sounds.index + sounds[0].length;
-      return src.slice(0, end) + `-- ${intro}\n${block}\n` + src.slice(end);
-    }
-    lines.splice(at, 0, "", `-- ${intro}`, block);
-    return lines.join("\n");
-  }
-
-  // Sounds need API 3: the header says so, or the board would run it as an older cart.
-  function withApi(src) {
-    const lines = src.split("\n");
-    for (let i = 0; i < Math.min(lines.length, 12); i++) {
-      const m = /^--\s*api\s*:\s*(\d+)\s*$/.exec(lines[i]);
-      if (m) {
-        if (Number(m[1]) < 3) lines[i] = "-- api: 3";
-        return lines.join("\n");
-      }
-    }
-    let at = 0;
-    while (at < lines.length && lines[at].startsWith("--") && at < 12) at++;
-    lines.splice(at, 0, "-- api: 3");
-    return lines.join("\n");
-  }
 
   // ---- state ----------------------------------------------------------------------------------
   let sounds = new Map(), music = new Map();  // number -> {text, name}
@@ -166,7 +111,7 @@ const SoundEditor = (() => {
   function save() {
     let src = writeTable(code.value, "SOUNDS", sounds, "sounds (the playground's sound editor writes this table)");
     src = writeTable(src, "MUSIC", music, "the song (the playground's music editor writes this table)");
-    if (sounds.size || music.size) src = withApi(src);
+    if (sounds.size || music.size) src = withApi(src, 3);  // sounds and music need API 3
     written = src;
     if (src === code.value) return;
     code.value = src;
@@ -500,11 +445,13 @@ const SoundEditor = (() => {
   let tab = "code";
   function show(which = tab) {
     tab = which;
-    for (const t of ["code", "sounds", "music"]) $("tab-" + t).classList.toggle("on", t === tab);
+    for (const t of ["code", "sprites", "sounds", "music"]) $("tab-" + t).classList.toggle("on", t === tab);
     code.hidden = tab !== "code";
+    $("sprites").hidden = tab !== "sprites";
     $("sounds").hidden = tab !== "sounds";
     $("music").hidden = tab !== "music";
-    if (tab === "code") return;
+    if (tab === "sprites") SpriteEditor.show();  // web/sprite-editor.js
+    if (tab === "code" || tab === "sprites") return;
     load();
     $("snd-problem").textContent = $("mus-problem").textContent = problem;
     $("snd-problem").hidden = $("mus-problem").hidden = !problem;
@@ -517,7 +464,7 @@ const SoundEditor = (() => {
     const presets = $("snd-preset");
     presets.append(...Object.keys(PRESETS).map((k) => new Option(k, k)));
     presets.onchange = () => { if (presets.value) newSound(presets.value); presets.value = ""; };
-    for (const t of ["code", "sounds", "music"]) $("tab-" + t).onclick = () => { sound.stop(); playing = songPlay = null; show(t); };
+    for (const t of ["code", "sprites", "sounds", "music"]) $("tab-" + t).onclick = () => { sound.stop(); playing = songPlay = null; show(t); };
     $("snd-slot").onchange = () => { slot = Number($("snd-slot").value); fillSlots(); draw(); };
     $("snd-new").onclick = () => newSound();
     $("snd-play").onclick = playSound;
@@ -593,7 +540,7 @@ const SoundEditor = (() => {
     $("mus-add").onclick = addPattern;
     $("mus-play").onclick = () => { if (music.size) playSong(Math.min(...music.keys())); };
     addEventListener("keydown", (e) => {  // Space plays the sound; Ctrl+Z / Ctrl+Shift+Z (or Ctrl+Y); Ctrl+C / Ctrl+V; Escape
-      if (tab === "code" || typing(e)) return;
+      if ((tab !== "sounds" && tab !== "music") || typing(e)) return;
       const mod = e.ctrlKey || e.metaKey, key = e.key.toLowerCase();
       if (tab === "sounds" && e.code === "Space" && !mod) { e.preventDefault(); playSound(); }
       else if (mod && key === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); }
