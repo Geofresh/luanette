@@ -203,6 +203,7 @@ struct Cart::Impl {
     std::shared_ptr<const Sound> sound;
   };
   OwnSound sounds[kSoundLast + 1];
+  int logs = 0;  // log() lines this frame (kLogLines at most)
   static constexpr size_t kImageCache = 1024 * 1024;
   // An image by name, unpacked on first use and kept (least recently used dropped past kImageCache).
   const HdImage* image(std::string_view name) {
@@ -667,6 +668,28 @@ int f_music(lua_State* L) {
   if (*why) return luaL_error(L, "music(%d): %s", n, why);
   return 0;
 }
+// log(...): the arguments as tostring() gives them, spaces between, as one line of the host's log.
+int f_log(lua_State* L) {
+  if (S->logs > kLogLines) return 0;
+  if (S->logs++ == kLogLines) {
+    host_of(L).log("(more log lines this frame were dropped)");
+    return 0;
+  }
+  const int n = lua_gettop(L);
+  luaL_Buffer b;  // Lua's own buffer: a __tostring that errors unwinds nothing of ours
+  luaL_buffinit(L, &b);
+  for (int i = 1; i <= n; ++i) {
+    if (i > 1) luaL_addchar(&b, ' ');
+    luaL_tolstring(L, i, nullptr);
+    luaL_addvalue(&b);
+  }
+  luaL_pushresult(&b);
+  size_t len = 0;
+  const char* line = lua_tolstring(L, -1, &len);
+  host_of(L).log(std::string_view(line, std::min<size_t>(len, kLogLine)));
+  return 0;
+}
+
 int f_wake(lua_State* L) {
   host_of(L).wake(lua_isnoneornil(L, 1) ? -1.0 : std::max(0.0, static_cast<double>(luaL_checknumber(L, 1))));
   return 0;
@@ -1582,7 +1605,7 @@ bool Cart::start(std::string_view name, std::string_view src) {
       {"cls", f_cls},       {"pset", f_pset},   {"pget", f_pget},     {"line", f_line},   {"rect", f_rect},
       {"rectfill", f_rectfill}, {"circ", f_circ}, {"circfill", f_circfill}, {"print", f_print}, {"spr", f_spr},
       {"pal", f_pal},       {"palette", f_palette}, {"camera", f_camera}, {"clip", f_clip},   {"btn", f_btn},     {"btnp", f_btnp},
-      {"touch", f_touch},   {"tilt", f_tilt},     {"level", f_level},   {"buzz", f_buzz},     {"sfx", f_sfx},     {"music", f_music}, {"wake", f_wake},
+      {"touch", f_touch},   {"tilt", f_tilt},     {"level", f_level},   {"buzz", f_buzz},     {"sfx", f_sfx},     {"music", f_music}, {"log", f_log}, {"wake", f_wake},
       {"time", f_time},     {"fps", f_fps},     {"rnd", f_rnd},     {"srand", f_srand},   {"flr", f_flr},     {"ceil", f_ceil},
       {"sin", f_sin},       {"cos", f_cos},     {"trifill", f_trifill}, {"abs", f_abs},       {"sgn", f_sgn},     {"min", f_min},       {"max", f_max},     {"mid", f_mid},
       {"save", f_save},     {"load", f_load},     {"now", f_now},       {"date", f_date},   {"data", f_data},     {"act", f_act},     {"stat", f_stat},
@@ -1646,7 +1669,7 @@ bool Cart::frame(const Input& in) {
   I.in = in;
   const int64_t t0 = host_.now_us();
   const size_t freed0 = I.heap.freed;
-  I.ops = I.polls = I.count_left = 0;
+  I.ops = I.polls = I.count_left = I.logs = 0;
   I.budget = host_.frame_budget();  // only a frame's calls are held to it (check.py's frame budget)
   bool ok = true;
   for (const char* fn : {update60_ ? "_update60" : "_update", "_draw"}) {

@@ -38,7 +38,7 @@ SCALE = 3
 MAX_SOURCE = 32 * 1024
 BUDGET = 30_000
 MAX_SAVE = 2048
-API_VERSION = 3  # engine/cart.hpp kApiVersion: 1 before the full-color layer, 2 with it, 3 with sound and music
+API_VERSION = 4  # engine/cart.hpp kApiVersion: 1 before the full-color layer, 2 with it, 3 with sound and music, 4 with log() and spaced sprites
 # The board's runtime built for this computer (engine/host/cartrun.cpp): a 3D cart's preview
 # is drawn by it (the stage's own code), and it must agree that the cart runs.
 ROOT = Path(__file__).resolve().parents[1]
@@ -119,6 +119,8 @@ class Cart:
         self.wall0 = int(time.time())
         self.rgb = list(PICO)
         self.calls = {"buzz": 0, "sfx": 0, "music": 0, "wake": 0, "act": [], "save": 0, "data": set()}
+        self.logs: list[str] = []      # log() lines (the first 200), as the runtime gives them
+        self.log_frame, self.log_count = -1, 0
         self.scene = None  # a 3D cart's, once it makes anything 3D
         self.hd = None  # the full-color layer's calls, once the cart draws on it
         self.hd_w, self.hd_h = HD_W, HD_H  # the canvas: the window, or the glass ("-- canvas: full")
@@ -373,6 +375,16 @@ class Cart:
         if why:
             raise ValueError(f"sfx({n}): SOUNDS[{n}] {why}")
         self.calls["sfx"] += 1
+
+    def log_line(self, line):  # log(...): the harness joins the tostring()s (engine/cart.cpp f_log)
+        if self.frame != self.log_frame:
+            self.log_frame, self.log_count = self.frame, 0
+        if self.log_count > 20:
+            return
+        self.log_count += 1
+        line = "(more log lines this frame were dropped)" if self.log_count == 21 else str(line)[:200]
+        if len(self.logs) < 200:
+            self.logs.append(line)
 
     def music(self, n):
         n = int(n)
@@ -924,6 +936,7 @@ class Cart:
                  "res", "texture", "skin", "caps"]
         t = {n: getattr(self, n) for n in names}
         t["print"] = self.print_
+        t["log_line"] = self.log_line  # for the harness's log(); not a cart's
         t["fps"] = self.fps_
         t["hd"] = self.lua.table_from({n[3:]: getattr(self, n) for n in dir(self) if n.startswith("hd_")})
         return t
@@ -977,6 +990,11 @@ for _, k in ipairs({"math", "string", "table", "coroutine", "pairs", "ipairs", "
                     "select", "pcall", "error", "assert", "setmetatable", "getmetatable", "next", "rawget",
                     "rawset", "rawequal", "rawlen"}) do env[k] = _G[k] end
 env.unpack = table.unpack
+env.log = function(...)  -- as the runtime builds the line: tostring() of each, spaces between
+  local t = {}
+  for i = 1, select("#", ...) do t[i] = tostring((select(i, ...))) end
+  api.log_line(table.concat(t, " "))
+end
 local flr = math.floor
 env.flr = flr
 env.ceil = math.ceil
@@ -986,6 +1004,7 @@ env.max = math.max
 env.sgn = function(x) return x < 0 and -1 or 1 end
 env.mid = function(a, b, c) if a > b then a, b = b, a end return math.max(a, math.min(b, c)) end
 for k, v in pairs(api) do env[k] = v end
+env.log_line = nil
 -- touch() has to return TWO values to the cart: the host hands back a table, so unpack it
 do
   local raw_touch = env.touch
@@ -1353,6 +1372,12 @@ def check(path: Path, frames: int, preview: Path | None, theme: str, dump_input:
         res.setdefault("warnings", []).append(
             "it uses the full-color layer (API 2): add '-- api: 2' to its header, so a board with older firmware "
             "says it needs an update instead of failing at its first hd call")
+    if cart.logs:
+        res["log"] = cart.logs
+    if api < 4 and cart.logs:
+        res.setdefault("warnings", []).append(
+            "it calls log() (API 4): add '-- api: 4' to its header, so a board with older firmware says it needs "
+            "an update instead of failing at its first log call")
     if api < 3 and (cart.calls.get("music") or re.search(r"^\s*(SOUNDS|MUSIC)\s*=", src, re.M)):
         res.setdefault("warnings", []).append(
             "it has its own sounds or music (API 3): add '-- api: 3' to its header, so a board with older firmware "

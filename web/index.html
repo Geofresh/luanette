@@ -98,6 +98,11 @@
   .api-tip p:last-child { margin-bottom: 0; }
   #status a { color: var(--danger); font-weight: 600; }
   @media (max-width: 860px) { .CodeMirror { height: 360px; } }
+  .console summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+  .console-head { display: flex; justify-content: space-between; align-items: center; margin: 6px 0; }
+  #console-lines { max-height: 200px; overflow-y: auto; background: var(--panel); border: 1px solid var(--line);
+                   border-radius: 8px; padding: 6px 10px; font: 12px/1.5 var(--mono); white-space: pre-wrap; }
+  #console-lines .at { color: #6e7681; }
   #status { font: 13px/1.5 var(--mono); color: var(--muted); white-space: pre-wrap; min-height: 1.5em; }
   #status.error { color: var(--danger); }
   @media (pointer: coarse) { .desk { display: none; } }
@@ -223,6 +228,12 @@
       </div>
     </section>
     <div id="status"></div>
+    <details id="console" class="console">
+      <summary>Console <span id="console-count"></span></summary>
+      <div class="console-head"><span class="note">What the cart log()s, with the frame number first.</span>
+        <button id="console-clear">Clear</button></div>
+      <div id="console-lines"></div>
+    </details>
   </section>
 </main>
 <footer>

@@ -39,7 +39,8 @@ Everything else is up to the cart. Globals persist between frames.
 
 The API has a version. Version 1 is everything before the full-color layer; version 2 adds the
 layer (`hd`), its images, the `ui` helpers, `caps()` and `touch(true)`; version 3 adds the cart's own
-sounds and music (`SOUNDS`, `MUSIC`, `sfx(8-63)`, `music()`). A runtime older than a
+sounds and music (`SOUNDS`, `MUSIC`, `sfx(8-63)`, `music()`); version 4 adds `log()` and spaces in
+sprite strings. A runtime older than a
 cart's `-- api: N` refuses it with a message saying so ("it needs API 2; this runtime has 1
 (update the firmware)") instead of failing at the first call it doesn't know. `check.py` refuses
 a version the board doesn't have, and asks for `-- api: 2` when a cart uses the layer.
@@ -56,7 +57,7 @@ a version the board doesn't have, and asks for `-- api: 2` when a cart uses the 
 | `touch`, `tilt`, `buzz`, `sound` | true, true, false (no vibration motor is fitted), true (the speaker plays `sfx`) |
 | `hd`, `stage` | the full-color layer and the 3D scene: true, true |
 | `host` | `data()` and `act()` reach the console: true |
-| `version` | the API version the runtime has: 3 |
+| `version` | the API version the runtime has: 4 |
 | `board` | `"waveshare-amoled-206"` (`"browser"` in the playground) |
 
 ## Limits
@@ -299,6 +300,7 @@ one finger. `btn()` with no argument gives all six as bits.
 | `buzz(ms)` | the vibration motor, 10-500 ms (this board has none: `caps().buzz` is false) |
 | `sfx(n)` | a built-in sound: 0 blip, 1 coin, 2 hit, 3 jump, 4 explosion, 5 select, 6 error, 7 success; 8-63 your own (below); `sfx(-1)` stops yours |
 | `music(n)` / `music(-1)` | your song from pattern `n` on / stop it (below) |
+| `log(...)` | a line in the log: each value as `tostring` gives it, spaces between. The playground shows it in its Console, the board in its serial log, `check.py` in its result's `log`. At most 20 lines a frame and 200 characters a line |
 | `wake(secs)` / `wake()` | light the screen in `secs` seconds even if it went dark (a timer that's up) / cancel. The cart's frames resume then |
 
 `sfx` plays short 8-bit-style effects on the board's speaker, built from square, triangle and

@@ -174,6 +174,9 @@ class CartHost final : public carts::Host {
     buzz_noted_ = true;
   }
   void sfx(int n) override { carts::sound::play(n); }  // (esp32/sound.hpp; silent without a speaker)
+  void log(std::string_view line) override {  // the serial log: idf.py monitor, pio device monitor, the USB port
+    ESP_LOGI(kTag, "cart %s: %.*s", carts::player::name().c_str(), static_cast<int>(line.size()), line.data());
+  }
   void sound(std::shared_ptr<const carts::Sound> s) override { carts::sound::play(std::move(s)); }
   void music(std::shared_ptr<const carts::Song> song) override { carts::sound::music(std::move(song)); }
   bool level_due = false;  // the cart asked for level(): the next reading sets the table

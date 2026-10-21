@@ -663,12 +663,43 @@ function say(text, error) {
 }
 
 let runSrc = "", overBudget = null;  // the code running, and code that went over the frame budget here
+
+// ---- the console: what the cart log()s, with the frame it came in -------------------------------
+const CONSOLE_KEEP = 500;
+let frameNo = 0, logged = 0;
+function drainLog() {
+  const n = lw.log_count();
+  if (!n) return;
+  const box = $("console-lines"), frag = document.createDocumentFragment();
+  for (let i = 0; i < n; i++) {
+    const row = document.createElement("div");
+    const at = document.createElement("span");
+    at.className = "at";
+    at.textContent = frameNo + " ";
+    row.append(at, lw.log());
+    frag.appendChild(row);
+  }
+  box.appendChild(frag);
+  while (box.childElementCount > CONSOLE_KEEP) box.firstChild.remove();
+  logged += n;
+  $("console-count").textContent = `(${logged})`;
+  if (!$("console").open && !$("console").dataset.closed) $("console").open = true;  // the first lines open it, once
+  box.scrollTop = box.scrollHeight;
+}
+function clearLog() {
+  $("console-lines").replaceChildren();
+  logged = 0;
+  $("console-count").textContent = "";
+}
 function run(src) {
   runSrc = src;
+  frameNo = 0;
+  clearLog();
   const name = current || "playground";
   sound.stop();
   const ok = lw.ccall("lw_start", "number", ["string", "string"], [name, src]);
   show();
+  drainLog();  // what the top of the cart and _init logged: frame 0
   if (!ok) { running = false; say(lw.error(), true); return; }
   say("");
   running = true;
@@ -689,7 +720,9 @@ function tick(now) {
   while (spare >= period && frames < 2) {
     spare -= period;
     frames++;
+    frameNo++;
     const alive = lw.lw_frame(...input());
+    drainLog();
     for (let n = lw.lw_sound(); n >= 0; n = lw.lw_sound()) sound.play(n);
     if (!alive) {
       running = false;
@@ -749,6 +782,8 @@ async function main() {
   showLevel();
   $("volume").oninput = () => { sound.unlock(); sound.setLevel($("volume").value / 100); showLevel(); };
   $("share").onclick = shareLink;
+  $("console-clear").onclick = clearLog;
+  $("console").addEventListener("toggle", () => { if (!$("console").open) $("console").dataset.closed = "1"; });
   $("submit").onclick = submitToGallery;
   $("sharelink").onfocus = () => $("sharelink").select();
   let saving = 0;  // edits are kept as you type, not only when run
@@ -763,6 +798,8 @@ async function main() {
     lw_frame: mod.cwrap("lw_frame", "number", ["number", "number", "number", "number", "number", "number"]),
     lw_fps: mod.cwrap("lw_fps", "number", []),
     lw_ops: mod.cwrap("lw_ops", "number", []),
+    log_count: mod.cwrap("lw_log_count", "number", []),
+    log: mod.cwrap("lw_log", "string", []),
     lw_full_canvas: mod.cwrap("lw_full_canvas", "number", []),
     lw_pixels: mod.cwrap("lw_pixels", "number", []),
     lw_sound: mod.cwrap("lw_sound", "number", []),

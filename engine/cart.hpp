@@ -51,8 +51,10 @@ struct Input {
 // The cart API's version (docs/api.md, "Versions"): a cart may ask for one with `-- api: N`, and
 // a runtime refuses a cart that needs a newer one. 1: everything before the full-color layer;
 // 2: the layer (hd), its images, caps(), touch(true); 3: the cart's own sounds and music (SOUNDS,
-// MUSIC, sfx 8-63, music()).
-constexpr int kApiVersion = 3;
+// MUSIC, sfx 8-63, music()); 4: log(), and spaces in sprite strings.
+constexpr int kApiVersion = 4;
+constexpr int kLogLine = 200;   // a log() line's characters, at most (the rest is cut)
+constexpr int kLogLines = 20;   // log() lines a frame, at most (then one saying more were dropped)
 
 struct Sound;  // synth.hpp
 struct Song;
@@ -90,6 +92,9 @@ class Host {
   // sound leave these.
   virtual void sound(std::shared_ptr<const Sound> s) { (void)s; }
   virtual void music(std::shared_ptr<const Song> song) { (void)song; }
+  // A line the cart logged with log(): to the board's serial log, the playground's console, a tool's
+  // output. Hosts that show no log leave it.
+  virtual void log(std::string_view line) { (void)line; }
   virtual void wake(double secs) = 0;  // light the screen in `secs` (< 0: cancel)
   virtual void level() {}              // tilt() is measured from the pose the board is in now
   virtual void act(std::string_view name, std::string_view arg) = 0;

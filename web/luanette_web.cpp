@@ -52,6 +52,10 @@ struct WebHost final : carts::Host {
   void sound(std::shared_ptr<const carts::Sound> s) override;
   void music(std::shared_ptr<const carts::Song> song) override;
   void wake(double) override {}
+  std::deque<std::string> logs;  // log() lines the page hasn't shown yet
+  void log(std::string_view line) override {
+    if (logs.size() < 500) logs.emplace_back(line);
+  }
   void act(std::string_view, std::string_view) override {}
   bool accepts_act(std::string_view name) const override {  // the board's (the launcher's), so carts fail the same way
     return name == "open" || name == "volume" || name == "brightness";
@@ -168,6 +172,7 @@ extern "C" {
 EMSCRIPTEN_KEEPALIVE int lw_start(const char* name, const char* src) {
   g_cart.reset();
   g_host.sounds.clear();
+  g_host.logs.clear();
   g_pal_ver = UINT32_MAX;
   g_cart = std::make_unique<carts::Cart>(g_host);
   const bool ok = g_cart->start(name, src);
@@ -201,6 +206,16 @@ EMSCRIPTEN_KEEPALIVE int lw_frame(int held, int touching, float tx, float ty, fl
 }
 
 EMSCRIPTEN_KEEPALIVE const char* lw_error() { return g_error.c_str(); }
+// log() lines the page hasn't shown yet, and the next of them.
+EMSCRIPTEN_KEEPALIVE int lw_log_count() { return static_cast<int>(g_host.logs.size()); }
+EMSCRIPTEN_KEEPALIVE const char* lw_log() {
+  static std::string line;
+  if (g_host.logs.empty()) return "";
+  line = std::move(g_host.logs.front());
+  g_host.logs.pop_front();
+  return line.c_str();
+}
+
 // The last frame's Lua instructions (by 100s, as check.py counts them).
 EMSCRIPTEN_KEEPALIVE int lw_ops() { return g_cart ? g_cart->last().ops : 0; }
 EMSCRIPTEN_KEEPALIVE int lw_fps() { return g_cart ? g_cart->fps() : 30; }

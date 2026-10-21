@@ -57,6 +57,8 @@ struct TestHost final : carts::Host {
   void sfx(int) override { ++sfx_n; }
   void sound(std::shared_ptr<const carts::Sound> s) override { sfx_n += s ? 1 : 0; }
   void wake(double) override {}
+  std::vector<std::string> logs;  // log() lines, for the result's "log"
+  void log(std::string_view line) override { if (logs.size() < 200) logs.emplace_back(line); }
   bool accepts_act(std::string_view) const override { return true; }  // check.py has the list; this replays its runs
   void act(std::string_view name, std::string_view arg) override {
     ++acts;
@@ -284,6 +286,9 @@ int main(int argc, char** argv) {
       .set("max_us", max_us).set("avg_us", n ? total_us / n : 0.0)
       .set("memory", static_cast<double>(cart.memory())).set("buzz", host.buzzes).set("sfx", host.sfx_n).set("stage", any3d).set("hd", anyhd).set("hd_bad", hd_bad)
       .set("triangles", cart.stage() ? cart.stage()->triangles() : 0).set("queued", cart.stage() ? cart.stage()->queued() : 0);
+  hg::json::Value log = hg::json::Value::array();
+  for (const std::string& line : host.logs) log.push(hg::json::Value(line));
+  res.set("log", std::move(log));
   std::printf("%s\n", res.dump().c_str());
   return cart.error().empty() ? 0 : 1;
 }
