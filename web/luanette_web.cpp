@@ -223,6 +223,7 @@ EMSCRIPTEN_KEEPALIVE int16_t* lw_pcm(int n, int rate) {
   return g_pcm.data();
 }
 EMSCRIPTEN_KEEPALIVE int lw_pcm_len() { return static_cast<int>(g_pcm.size()); }
+EMSCRIPTEN_KEEPALIVE int16_t* lw_pcm_data() { return g_pcm.data(); }  // the samples lw_render_audio made
 
 // A cart's source as it ships (comments out, as push.py sends it), and the most the board takes.
 EMSCRIPTEN_KEEPALIVE const char* lw_shipped(const char* src) {
@@ -260,6 +261,53 @@ EMSCRIPTEN_KEEPALIVE const char* lw_play_sound(const char* text) {
   auto s = std::make_shared<carts::Sound>();
   why = carts::parse_sound(text, *s);
   if (why.empty() && g_synth) g_synth->sfx(std::move(s));
+  return why.c_str();
+}
+
+// The editor's WAV export: a sound's text (song 0) or the song (song 1, JSON as lw_play_song, from
+// pattern `start`) rendered offline on a synth of its own, for `seconds` at most or until it's done,
+// at `rate`. The samples are 16-bit (lw_pcm_data, lw_pcm_len); "" when it's fine, else what's wrong.
+EMSCRIPTEN_KEEPALIVE const char* lw_render_audio(const char* text, int song, int start, int rate, double seconds) {
+  static std::string why;
+  g_pcm.clear();
+  carts::Synth synth(rate);
+  if (song) {
+    hg::json::Value v;
+    if (!hg::json::parse(text, v) || !v.is_object()) {
+      why = "not a song";
+      return why.c_str();
+    }
+    auto lookup = [&v](const char* table) {
+      return [&v, table](int i) -> const char* {
+        const hg::json::Value& e = v[table][std::to_string(i)];
+        return e.is_string() ? e.as_string().c_str() : nullptr;
+      };
+    };
+    std::shared_ptr<const carts::Song> s;
+    why = carts::build_song(start, lookup("music"), lookup("sounds"), s);
+    if (!why.empty()) return why.c_str();
+    synth.music(std::move(s));
+  } else {
+    auto s = std::make_shared<carts::Sound>();
+    why = carts::parse_sound(text, *s);
+    if (!why.empty()) return why.c_str();
+    synth.sfx(std::move(s));
+  }
+  const size_t most = static_cast<size_t>(std::max(0.0, seconds) * rate);
+  std::vector<int32_t> acc(1024);
+  while (synth.busy() && g_pcm.size() < most) {
+    const int n = static_cast<int>(std::min<size_t>(acc.size(), most - g_pcm.size()));
+    std::fill(acc.begin(), acc.begin() + n, 0);
+    synth.render(acc.data(), n);
+    for (int k = 0; k < n; ++k) g_pcm.push_back(static_cast<int16_t>(std::clamp(acc[static_cast<size_t>(k)], -32768, 32767)));
+  }
+  {  // the end faded so it doesn't click: 50 ms where a loop was cut off, else 5 ms (a note may end mid-wave)
+    const size_t fade = std::min(g_pcm.size(), static_cast<size_t>(synth.busy() ? rate / 20 : rate / 200));
+    for (size_t k = 0; k < fade; ++k) {
+      int16_t& x = g_pcm[g_pcm.size() - fade + k];
+      x = static_cast<int16_t>(x * static_cast<float>(fade - k) / fade);
+    }
+  }
   return why.c_str();
 }
 

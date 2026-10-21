@@ -132,6 +132,7 @@ function showLine(n) {
 
 let lw = null;            // the engine's exports
 let current = null;       // the example being shown
+const cartName = () => current;  // for the sound editor, where `current` is its own
 let running = false, last = 0, spare = 0;
 const originals = {};     // each example's source as shipped
 
@@ -690,6 +691,8 @@ async function main() {
     audio_stop: mod.cwrap("lw_audio_stop", null, []),
     play_sound: mod.cwrap("lw_play_sound", "string", ["string"]),
     play_song: mod.cwrap("lw_play_song", "string", ["string", "number"]),
+    render_audio: mod.cwrap("lw_render_audio", "string", ["string", "number", "number", "number", "number"]),
+    pcm_data: mod.cwrap("lw_pcm_data", "number", []),
     ccall: mod.ccall,
   };
   requestAnimationFrame(tick);

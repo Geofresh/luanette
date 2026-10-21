@@ -216,7 +216,7 @@ const SoundEditor = (() => {
     $("snd-count").textContent = `${sounds.size} of ${LAST - FIRST + 1} used`;
     $("snd-empty-num").textContent = slot;
     const s = current();
-    for (const id of ["snd-play", "snd-delete", "snd-speed", "snd-len", "snd-ls", "snd-le", "snd-name", "snd-copy", "snd-dup"]) $(id).disabled = !s;
+    for (const id of ["snd-play", "snd-delete", "snd-speed", "snd-len", "snd-ls", "snd-le", "snd-name", "snd-copy", "snd-dup", "snd-wav"]) $(id).disabled = !s;
     $("snd-paste").disabled = !s || !clipboard;
     $("snd-empty").hidden = !!s;
     $("snd-canvas").hidden = !s;
@@ -588,6 +588,8 @@ const SoundEditor = (() => {
     $("snd-copy").onclick = copyNotes;
     $("snd-paste").onclick = pasteNotes;
     $("snd-dup").onclick = duplicateSound;
+    $("snd-wav").onclick = () => exportWav("sound");
+    $("mus-wav").onclick = () => exportWav("song");
     $("mus-add").onclick = addPattern;
     $("mus-play").onclick = () => { if (music.size) playSong(Math.min(...music.keys())); };
     addEventListener("keydown", (e) => {  // Space plays the sound; Ctrl+Z / Ctrl+Shift+Z (or Ctrl+Y); Ctrl+C / Ctrl+V; Escape
@@ -600,6 +602,67 @@ const SoundEditor = (() => {
       else if (tab === "sounds" && mod && key === "v") { e.preventDefault(); pasteNotes(); }
       else if (tab === "sounds" && e.key === "Escape" && selection) { selection = null; draw(); }
     });
+  }
+
+  // ---- WAV export ---------------------------------------------------------------------------------
+  const WAV_RATE = 44100, WAV_MOST_S = 180;
+  // How long to render: a sound through once (a loop: on to its end, then once more round), a song to
+  // its end (a loop: once more round), at most three minutes.
+  function soundSeconds(s) {
+    const notes = s.le > s.ls ? s.le + (s.le - s.ls) : s.notes.length;
+    return (notes * s.speed) / 120;
+  }
+  function songSeconds(from) {
+    let n = from, loopTo = -1, loops = 0, t = 0;
+    for (let guard = 0; guard < 10000 && t < WAV_MOST_S; guard++) {
+      const p = music.has(n) ? decodePattern(music.get(n).text) : null;
+      if (!p) break;
+      if (p.flags & 1) loopTo = n;
+      t += patternSeconds(p);
+      if (p.flags & 4) break;
+      if ((p.flags & 2) && loopTo >= 0) {
+        if (++loops > 1) break;  // the loop once more, then stop
+        n = loopTo;
+      } else n++;
+    }
+    return Math.min(t, WAV_MOST_S);
+  }
+  function download(name, pcm) {
+    const data = new DataView(new ArrayBuffer(44 + pcm.length * 2));
+    const text = (at, s) => { for (let i = 0; i < s.length; i++) data.setUint8(at + i, s.charCodeAt(i)); };
+    text(0, "RIFF"); data.setUint32(4, 36 + pcm.length * 2, true); text(8, "WAVE");
+    text(12, "fmt "); data.setUint32(16, 16, true); data.setUint16(20, 1, true); data.setUint16(22, 1, true);
+    data.setUint32(24, WAV_RATE, true); data.setUint32(28, WAV_RATE * 2, true); data.setUint16(32, 2, true); data.setUint16(34, 16, true);
+    text(36, "data"); data.setUint32(40, pcm.length * 2, true);
+    for (let i = 0; i < pcm.length; i++) data.setInt16(44 + i * 2, pcm[i], true);
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([data], { type: "audio/wav" }));
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+  function exportWav(which) {
+    let why, name, secs;
+    if (which === "song") {
+      if (!music.size) return;
+      const from = Math.min(...music.keys()), json = { music: {}, sounds: {} };
+      for (const [k, v] of music) json.music[k] = v.text;
+      for (const [k, v] of sounds) json.sounds[k] = v.text;
+      secs = songSeconds(from);
+      why = lw.render_audio(JSON.stringify(json), 1, from, WAV_RATE, secs);
+      name = `${cartName() || "cart"}-song.wav`;
+    } else {
+      const s = current();
+      if (!s) return;
+      secs = soundSeconds(s);
+      why = lw.render_audio(sounds.get(slot).text, 0, 0, WAV_RATE, secs);
+      const label = sounds.get(slot).name ? "-" + sounds.get(slot).name.replace(/[^\w-]+/g, "_") : "";
+      name = `${cartName() || "cart"}-sound-${slot}${label}.wav`;
+    }
+    if (why) { say(why, true); return; }
+    const len = lw.lw_pcm_len();
+    download(name, new Int16Array(lw.mod.HEAP16.buffer, lw.pcm_data(), len).slice());
+    say(`Saved ${name} (${(len / WAV_RATE).toFixed(1)} s).`);
   }
 
   function followSongOff() {
