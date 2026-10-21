@@ -92,6 +92,7 @@ class Library {
     bool close = false;    // leave the cart that's open
     bool changed = false;  // the list changed
     std::string open;      // a cart to open
+    std::string deleted;   // a cart taken out of flash (the host closes it if it's the one open)
   };
   bool on_message(const hg::json::Value& msg, Outcome& out);
 

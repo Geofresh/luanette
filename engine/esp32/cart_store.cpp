@@ -433,6 +433,7 @@ bool Library::on_message(const hg::json::Value& msg, Outcome& out) {
       pushed_.erase(std::remove_if(pushed_.begin(), pushed_.end(), [&](const Entry& p) { return p.name == name; }), pushed_.end());
       xSemaphoreGive(m_);
       out.changed = true;
+      out.deleted = name;
       ESP_LOGI(kTag, "cart %s deleted%s", name.c_str(), gone ? " from flash" : " (wasn't in flash)");
       return true;
     }

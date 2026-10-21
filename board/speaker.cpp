@@ -128,6 +128,10 @@ void Speaker::set_sleep(bool sleep) {
   if (sleep) {
     esp_codec_dev_close(dev_);
   } else {
+    // Opening sets the format first, and that disables the I2S channel, which closing already did:
+    // ESP-IDF logs an error for a channel that isn't enabled. Enabled first, as begin() has it, the
+    // channel is running after the open just the same, and nothing is logged.
+    i2s_channel_enable(tx_);
     esp_codec_dev_open(dev_, &fs_);
     esp_codec_dev_set_out_vol(dev_, volume_);
     esp_codec_dev_set_out_mute(dev_, true);

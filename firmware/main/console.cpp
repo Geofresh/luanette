@@ -644,6 +644,7 @@ bool on_message(const hg::json::Value& msg) {
     if (o.changed) publish_carts();
     Lock l;
     if (o.close) g.close_due = true;
+    if (!o.deleted.empty() && carts::player::name() == o.deleted) g.close_due = true;  // removed while open: it stops
     if (!o.open.empty()) {
       g.open_name = o.open;
       g.open_due = true;
