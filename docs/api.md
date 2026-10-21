@@ -119,7 +119,16 @@ brackets; it defaults to the last color used (7 at start).
 | `clip(x, y, w, h)` / `clip()` | draw only inside a rectangle / reset |
 
 Sprites: a global table `SPRITES` of 8x8 images, each a string of 64 hex digits (one color index
-a pixel, row by row). `SPRITES[1] = "0000000000777700..."` and so on; `spr(1, x, y)` draws it.
+a pixel, row by row). Spaces and line breaks between them are ignored (API 4), so a sprite reads as
+its picture, a row at a time. `spr(1, x, y)` draws this one:
+
+```lua
+SPRITES = {
+  [1] = "00777700 07777770 77177177 77777777 77777777 77177177 07711770 00777700",
+}
+```
+
+The playground's Sprites tab draws them and writes this table for you.
 
 Per-pixel `pset` over the whole screen every frame is slow on the board; draw with `rectfill`,
 `circfill`, `line`, `spr` and `print`.

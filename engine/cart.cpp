@@ -460,18 +460,29 @@ int f_spr(lua_State* L) {
   if (lua_getglobal(L, "SPRITES") != LUA_TTABLE) return luaL_error(L, "spr: no SPRITES table");
   lua_rawgeti(L, -1, n);
   size_t len = 0;
-  const char* s = lua_tolstring(L, -1, &len);
-  if (!s || len != 64) return luaL_error(L, "spr: SPRITES[%d] must be a string of 64 hex digits", n);
+  const char* s = lua_type(L, -1) == LUA_TSTRING ? lua_tolstring(L, -1, &len) : nullptr;
+  // Its 64 digits, row by row; spaces and line breaks between them are for reading (API 4).
+  char hex[64];
+  int got = 0;
+  for (size_t i = 0; s && i < len; ++i) {
+    const char h = s[i];
+    if (h == ' ' || h == '\n' || h == '\t' || h == '\r') continue;
+    const bool digit = (h >= '0' && h <= '9') || (h >= 'a' && h <= 'f') || (h >= 'A' && h <= 'F');
+    if (!digit || got == 64) {
+      got = -1;
+      break;
+    }
+    hex[got++] = h;
+  }
+  if (got != 64) return luaL_error(L, "spr: SPRITES[%d] must be 64 hex digits (spaces between rows are fine)", n);
   Cart::Impl::Sprite tmp;
   Cart::Impl::Sprite* sp = n >= 0 && n < 64 ? &S->sprites[n] : &tmp;
-  if (std::memcmp(sp->hex, s, 64) != 0) {  // decoded once, again only when the string changes
+  if (std::memcmp(sp->hex, hex, 64) != 0) {  // decoded once, again only when the digits change
     for (int i = 0; i < 64; ++i) {
-      const char h = s[i];
-      int v = h >= '0' && h <= '9' ? h - '0' : h >= 'a' && h <= 'f' ? h - 'a' + 10 : h >= 'A' && h <= 'F' ? h - 'A' + 10 : -1;
-      if (v < 0) return luaL_error(L, "spr: SPRITES[%d] must be a string of 64 hex digits", n);
-      sp->px[i] = static_cast<uint8_t>(v);
+      const char h = hex[i];
+      sp->px[i] = static_cast<uint8_t>(h <= '9' ? h - '0' : (h | 0x20) - 'a' + 10);
     }
-    std::memcpy(sp->hex, s, 64);
+    std::memcpy(sp->hex, hex, 64);
   }
   for (int i = 0; i < 64; ++i)
     if (const int v = sp->px[i]) {

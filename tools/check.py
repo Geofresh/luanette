@@ -120,6 +120,7 @@ class Cart:
         self.rgb = list(PICO)
         self.calls = {"buzz": 0, "sfx": 0, "music": 0, "wake": 0, "act": [], "save": 0, "data": set()}
         self.logs: list[str] = []      # log() lines (the first 200), as the runtime gives them
+        self.spaced_sprites = False    # a sprite string with spaces in it (API 4)
         self.log_frame, self.log_count = -1, 0
         self.scene = None  # a 3D cart's, once it makes anything 3D
         self.hd = None  # the full-color layer's calls, once the cart draws on it
@@ -281,8 +282,10 @@ class Cart:
         if sprites is None:
             raise ValueError("spr: no SPRITES table")
         s = sprites[int(n)]
-        if not isinstance(s, str) or len(s) != 64 or not re.fullmatch(r"[0-9a-fA-F]{64}", s):
-            raise ValueError(f"spr: SPRITES[{int(n)}] must be a string of 64 hex digits")
+        s = re.sub(r"[ \t\r\n]", "", s) if isinstance(s, str) else None  # spaces between rows are for reading (API 4)
+        if s is None or not re.fullmatch(r"[0-9a-fA-F]{64}", s):
+            raise ValueError(f"spr: SPRITES[{int(n)}] must be 64 hex digits (spaces between rows are fine)")
+        self.spaced_sprites = self.spaced_sprites or len(sprites[int(n)]) != 64
         for i, h in enumerate(s):
             v = int(h, 16)
             if v:
@@ -1374,6 +1377,10 @@ def check(path: Path, frames: int, preview: Path | None, theme: str, dump_input:
             "says it needs an update instead of failing at its first hd call")
     if cart.logs:
         res["log"] = cart.logs
+    if api < 4 and cart.spaced_sprites:
+        res.setdefault("warnings", []).append(
+            "its sprites have spaces between rows (API 4): add '-- api: 4' to its header, so a board with older "
+            "firmware says it needs an update instead of failing to draw them")
     if api < 4 and cart.logs:
         res.setdefault("warnings", []).append(
             "it calls log() (API 4): add '-- api: 4' to its header, so a board with older firmware says it needs "
