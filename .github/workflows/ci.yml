@@ -57,6 +57,12 @@ jobs:
       - run: for c in examples/*.lua gallery/*.lua templates/*.lua tests/tutorial/*.lua; do node cli/luanette.mjs check "$c" > /dev/null || { node cli/luanette.mjs check "$c"; exit 1; }; done
       - run: node cli/luanette.mjs run templates/platformer.lua --frames 60 --gif --out /tmp/run && test -s /tmp/run/run.gif && test -s /tmp/run/shots.png
       - run: node cli/luanette.mjs song examples/overdrive.lua --wav /tmp/song.wav && test -s /tmp/song.wav
+      - run: |  # the MCP server: it answers, lists its tools, and checks a cart
+          printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}' \
+            '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
+            '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"check_cart","arguments":{"path":"templates/puzzle.lua"}}}' \
+            | node cli/luanette.mjs mcp > /tmp/mcp.out
+          grep -q '"name":"run_cart"' /tmp/mcp.out && grep -q '\\"ok\\": true' /tmp/mcp.out
       - run: cd cli && npm pack
       - uses: actions/upload-artifact@v4
         with:
