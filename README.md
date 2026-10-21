@@ -59,6 +59,8 @@ side by side. Edit a cart's code and press Run (or Ctrl+Enter) to see the change
   at once. Both write their results into the cart's code. Open Overdrive to see a finished song.
 - **Share link** copies a link with the whole cart in it, code, sounds and song. Whoever opens it
   gets the cart in their playground. Nothing is uploaded; the link is the only copy.
+- **The gallery** is carts people have made, in a row under the examples. **Submit to gallery**
+  puts yours forward: it opens a GitHub issue with the cart's link in it ([`gallery/`](gallery/)).
 - **On a board** (Chrome or Edge on a computer): Install puts the latest firmware on it, and Send
   to board sends the cart you're editing. Remove from board takes one off again; on an example
   it's Restore the built-in.

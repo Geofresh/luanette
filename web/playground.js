@@ -132,7 +132,7 @@ function showLine(n) {
 
 let lw = null;            // the engine's exports
 let current = null;       // the example being shown
-const cartName = () => current;  // for the sound editor, where `current` is its own
+const cartName = () => plainName(current);  // for the sound editor, where `current` is its own
 let running = false, last = 0, spare = 0;
 const originals = {};     // each example's source as shipped
 
@@ -346,11 +346,18 @@ function _draw()
 end
 `;
 const isExample = (name) => CARTS.some(([n]) => n === name);
+// The gallery's carts (gallery/, gallery.json from tools/gallery_index.py), named "gallery/NAME" here
+// so they can't meet your own carts' names; on a board, in a file, they're NAME.
+let GALLERY = [];
+const isGallery = (name) => typeof name === "string" && name.startsWith("gallery/") && GALLERY.some((g) => "gallery/" + g.name === name);
+const isShipped = (name) => isExample(name) || isGallery(name);  // comes with the page: your edits are a draft over it
+const shippedPath = (name) => (isGallery(name) ? name : "examples/" + name) + ".lua";
+const plainName = (name) => (name || "").replace(/^gallery\//, "");
 const storeGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
 const storeSet = (k, v) => { try { localStorage.setItem(k, v); return true; } catch { return false; } };
 const storeDel = (k) => { try { localStorage.removeItem(k); } catch {} };
-// An example's edits are a draft over the original; your own cart's source is all there is.
-const sourceKey = (name) => (isExample(name) ? "luanette.draft." : "luanette.cart.") + name;
+// An example's (or gallery cart's) edits are a draft over the original; your own cart's source is all there is.
+const sourceKey = (name) => (isShipped(name) ? "luanette.draft." : "luanette.cart.") + name;
 
 let mine = [];  // your carts' names, in the order made
 try { mine = JSON.parse(storeGet("luanette.mine") || "[]").filter((n) => NAME_RE.test(n) && !isExample(n)); } catch {}
@@ -402,7 +409,7 @@ async function openFile(file) {
 function saveFile() {
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([code.value], { type: "text/plain" }));
-  a.download = current + ".lua";
+  a.download = plainName(current) + ".lua";
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
@@ -421,17 +428,21 @@ async function through(bytes, stream) {
   return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer());
 }
 
-async function shareLink() {
+async function makeLink() {
   const raw = new TextEncoder().encode(JSON.stringify({ name: current, src: code.value }));
   const data = typeof CompressionStream === "function"
     ? "d" + b64url(await through(raw, new CompressionStream("deflate-raw")))
     : "u" + b64url(raw);
-  const url = location.href.split("#")[0] + "#cart=" + data;
+  return location.href.split("#")[0] + "#cart=" + data;
+}
+
+async function shareLink() {
+  const url = await makeLink();
   let copied = false;
   try { await navigator.clipboard.writeText(url); copied = true; } catch {}
   $("sharelink").value = url;
   $("sharebox").hidden = copied;
-  say(copied ? `Link copied: ${current} with its code, sounds and song (${url.length} characters). Opening it adds the cart to that browser's carts.`
+  say(copied ? `Link copied: ${plainName(current)} with its code, sounds and song (${url.length} characters). Opening it adds the cart to that browser's carts.`
     : "Copy this link: opening it adds the cart to that browser's carts.");
 }
 
@@ -450,7 +461,14 @@ async function openLink(data) {
     say("This link's cart couldn't be read. It may have been cut short when it was copied.", true);
     return false;
   }
-  const base = slug(cart.name) || "shared";
+  if (isGallery(cart.name)) {  // a gallery cart as it ships opens itself, as an example does
+    const original = await shippedSource(cart.name), draft = storeGet(sourceKey(cart.name));
+    if (original === cart.src && (!draft || draft === cart.src)) {
+      select(cart.name);
+      return true;
+    }
+  }
+  const base = slug(plainName(cart.name)) || "shared";
   if (isExample(base)) {  // an example as it ships: the example itself, unless you've edits of your own to it
     if (!(base in originals)) originals[base] = await (await fetch("examples/" + base + ".lua")).text();
     const draft = storeGet(sourceKey(base));
@@ -465,6 +483,33 @@ async function openLink(data) {
   const title = (/^--\s*title\s*:\s*(.+)$/m.exec(cart.src) || [, name])[1].trim();
   say(`Opened ${title} from a link. It's in your carts as ${name} now.`);
   return true;
+}
+
+// A shipped cart's code as it comes (examples/, gallery/), fetched once.
+async function shippedSource(name) {
+  if (!(name in originals)) originals[name] = await (await fetch(shippedPath(name))).text();
+  return originals[name];
+}
+
+// Submit to gallery: a GitHub issue with the cart's link in it, for a maintainer to add
+// (tools/gallery_add.py). A link too long for a URL asks for the .lua file instead.
+async function submitToGallery() {
+  if (isShipped(current)) {
+    say("That one's in the playground already. Submit a cart of your own: + New cart, or Open .lua.", true);
+    return;
+  }
+  const link = await makeLink();
+  const title = (/^--\s*title\s*:\s*(.+)$/m.exec(code.value) || [, current])[1].trim();
+  const by = (/^--\s*by\s*:\s*(.+)$/m.exec(code.value) || [, ""])[1].trim();
+  const checklist = "- [ ] It's my own work (or I can share it), and it can be in the repository under the MIT license\n" +
+    "- [ ] It runs in the playground, and Send to board takes it\n- [ ] Its header has -- title:, -- by: and -- about:\n";
+  let body = `**${title}**${by ? " by " + by : ""}\n\nThe cart: ${link}\n\n${checklist}\nAnything you'd like to say about it:\n`;
+  const base = "https://github.com/Geofresh/luanette/issues/new?labels=gallery&title=" + encodeURIComponent("Gallery: " + title) + "&body=";
+  if ((base + encodeURIComponent(body)).length > 7500) {
+    body = `**${title}**${by ? " by " + by : ""}\n\nThe cart is too big for a link: it's attached (Save .lua in the playground, then drag the file here).\n\n${checklist}`;
+  }
+  open(base + encodeURIComponent(body), "_blank", "noopener");
+  say("A GitHub issue is open in a new tab, with your cart in it. Submit it there.");
 }
 
 function deleteCart() {
@@ -494,6 +539,17 @@ function renderCarts() {
   b.onclick = newCart;
   row.appendChild(b);
   for (const c of row.children) c.classList.toggle("on", c.dataset.name === current);
+  const gal = $("gallery-row");
+  gal.hidden = !GALLERY.length;
+  gal.replaceChildren(...[Object.assign(document.createElement("span"), { className: "row-label", textContent: "Gallery" })].concat(GALLERY.map((g) => {
+    const b = document.createElement("button");
+    b.textContent = g.title;
+    b.title = `${g.about} (by ${g.by})`;
+    b.dataset.name = "gallery/" + g.name;
+    b.classList.toggle("on", b.dataset.name === current);
+    b.onclick = () => { sound.unlock(); select(b.dataset.name); };
+    return b;
+  })));
 }
 
 // ---- the board: install the firmware, send carts (Web Serial: Chrome and Edge) -------------
@@ -537,7 +593,7 @@ async function send() {
   $("send").disabled = true;
   say(`Sending ${title} to the board…`);
   try {
-    await Board.sendCart(port, { name: current, title, lua: src });
+    await Board.sendCart(port, { name: plainName(current), title, lua: src });
     say(`${title} is on the board and open there. It stays in its flash` +
       (isExample(current) ? ", in place of the built-in one." : " until you remove it."));
   } catch (e) {
@@ -559,8 +615,8 @@ async function removeFromBoard() {
   sending = true;
   $("unsend").disabled = true;
   try {
-    await Board.removeCart(port, current, isExample(current));
-    say(isExample(current) ? `The board has its built-in ${current} again.` : `${current} is off the board.`);
+    await Board.removeCart(port, plainName(current), isExample(current));
+    say(isExample(current) ? `The board has its built-in ${current} again.` : `${plainName(current)} is off the board.`);
   } catch (e) {
     portTrouble(e);
   } finally {
@@ -650,15 +706,12 @@ async function select(name, src) {
   current = name;
   for (const b of $("carts").children) b.classList.toggle("on", b.dataset.name === name);
   if (location.hash !== "#" + name) history.replaceState(null, "", "#" + name);
-  const example = isExample(name);
+  const example = isShipped(name);
   $("reset").textContent = example ? "Reset to original" : "Delete";
-  $("unsend").textContent = example ? "Restore the built-in on the board" : "Remove from board";
+  $("unsend").textContent = isExample(name) ? "Restore the built-in on the board" : "Remove from board";
   $("newcart").hidden = true;
   if (src === undefined) {
-    if (example && !(name in originals)) {
-      const r = await fetch("examples/" + name + ".lua");
-      originals[name] = await r.text();
-    }
+    if (example) await shippedSource(name);
     src = storeGet(sourceKey(name)) || (example ? originals[name] : TEMPLATE(name));
   }
   code.load(src);
@@ -671,7 +724,7 @@ async function main() {
   $("run").onclick = () => { sound.unlock(); run(code.value); };
   $("reset").onclick = () => {
     if (!current) return;
-    if (!isExample(current)) { deleteCart(); return; }
+    if (!isShipped(current)) { deleteCart(); return; }
     storeDel(sourceKey(current));
     code.value = originals[current];
     run(code.value);
@@ -696,6 +749,7 @@ async function main() {
   showLevel();
   $("volume").oninput = () => { sound.unlock(); sound.setLevel($("volume").value / 100); showLevel(); };
   $("share").onclick = shareLink;
+  $("submit").onclick = submitToGallery;
   $("sharelink").onfocus = () => $("sharelink").select();
   let saving = 0;  // edits are kept as you type, not only when run
   code.addEventListener("input", () => {
@@ -729,12 +783,16 @@ async function main() {
   };
   requestAnimationFrame(tick);
   setUpBoard();
-  addEventListener("hashchange", () => {  // a link pasted into this tab's address bar
-    if (location.hash.startsWith("#cart=")) openLink(location.hash.slice(6));
+  addEventListener("hashchange", () => {  // a link pasted into this tab's address bar: a shared cart, or one by name
+    const h = decodeURIComponent(location.hash.slice(1));
+    if (h.startsWith("cart=")) openLink(h.slice(5));
+    else if (h !== current && (isShipped(h) || mine.includes(h))) select(h);
   });
+  try { GALLERY = await (await fetch("gallery.json")).json(); } catch { GALLERY = []; }  // before a link: it may be one of them
+  renderCarts();
   const fromHash = location.hash.slice(1);
   if (fromHash.startsWith("cart=") && await openLink(fromHash.slice(5))) return;
-  select(isExample(fromHash) || mine.includes(fromHash) ? fromHash : CARTS[0][0]);
+  select(isShipped(fromHash) || mine.includes(fromHash) ? fromHash : CARTS[0][0]);
 }
 
 main();

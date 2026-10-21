@@ -31,7 +31,8 @@
   .keys { color: var(--muted); font-size: 13px; text-align: center; max-width: 380px; }
   kbd { font: 12px var(--mono); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; color: var(--text); }
   .side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-  .carts { display: flex; flex-wrap: wrap; gap: 8px; }
+  .carts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .row-label { color: var(--muted); font-size: 13px; margin-right: 4px; }
   button { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
            padding: 6px 12px; cursor: pointer; }
   button:hover { border-color: var(--muted); }
@@ -137,6 +138,7 @@
   </section>
   <section class="side">
     <div class="carts" id="carts"></div>
+    <div class="carts" id="gallery-row" hidden></div>
     <div class="bar" id="newcart" hidden>
       <input type="text" id="newname" placeholder="my_game" maxlength="32" spellcheck="false" autocomplete="off"
              aria-label="The new cart's name: a-z, 0-9, _ and -">
@@ -149,6 +151,7 @@
       <button id="open" title="Opens a .lua file as a cart of your own">Open .lua</button>
       <button id="save" title="Saves the editor's text as a .lua file">Save .lua</button>
       <button id="share" title="Copies a link that opens this cart, with its sounds and song">Share link</button>
+      <button id="submit" title="Opens a GitHub issue that puts this cart forward for the gallery">Submit to gallery</button>
       <button id="send" hidden title="Sends this cart to a board on USB, as tools/push.py does">Send to board</button>
       <button id="unsend" hidden title="Takes this cart out of the board's flash">Remove from board</button>
       <input type="file" id="file" accept=".lua,text/plain" hidden>
