@@ -802,6 +802,36 @@ const meter = {
   },
 };
 
+// ---- Record GIF: 5 s of the screen at 15 fps and half size, for a jam page or a post (web/gif.js) --
+const GIF_FPS = 15, GIF_SECONDS = 5;
+let recording = false;
+async function recordGif() {
+  if (recording || !lw) return;
+  recording = true;
+  const w = Math.round(W / 2), h = Math.round(H / 2), off = document.createElement("canvas");
+  off.width = w;
+  off.height = h;
+  const g = off.getContext("2d", { willReadFrequently: true });
+  const frames = [], btn = $("gif");
+  for (let i = 0; i < GIF_FPS * GIF_SECONDS; i++) {
+    g.drawImage(glass, 0, 0, w, h);
+    frames.push({ rgba: g.getImageData(0, 0, w, h).data });
+    btn.textContent = `Recording ${Math.ceil(GIF_SECONDS - i / GIF_FPS)}…`;
+    await new Promise((r) => setTimeout(r, 1000 / GIF_FPS));
+  }
+  btn.textContent = "Making the GIF…";
+  await new Promise((r) => setTimeout(r, 30));  // let the button say so
+  const bytes = Gif.encode(frames, w, h, Math.round(100 / GIF_FPS), lw.colors());
+  const name = (plainName(current) || "cart") + ".gif", a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([bytes], { type: "image/gif" }));
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  say(`Saved ${name}: ${GIF_SECONDS} s, ${Math.round(bytes.length / 1024)} KB.`);
+  btn.textContent = "Record GIF";
+  recording = false;
+}
+
 // ---- the color strip: the cart's 16 colors and their numbers; a click types the number ----------
 let stripColors = "";
 function colorStrip() {
@@ -869,6 +899,7 @@ async function main() {
   $("volume").oninput = () => { sound.unlock(); sound.setLevel($("volume").value / 100); showLevel(); };
   $("share").onclick = shareLink;
   $("pause").onclick = () => setPaused(!paused);
+  $("gif").onclick = recordGif;
   $("step").onclick = () => { if (paused && running && frameOnce()) show(); meter.shown = 0; meter.show(performance.now()); };
   $("restart").onclick = () => { sound.unlock(); run(code.value); };
   setInterval(() => { if (lw && running) colorStrip(); }, 1000);  // palette() may change them as the cart runs
