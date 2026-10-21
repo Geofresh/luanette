@@ -204,9 +204,41 @@ function input() {
     }
   }
   keyTilt = keyTilt.map((v, i) => v + (want[i] - v) * 0.2);  // eased, as a hand tilts
-  const [ax, ay] = phoneTilt || keyTilt;
+  const pad = gamepad();
+  held |= pad.held;
+  const [ax, ay] = pad.tilt || phoneTilt || keyTilt;
   return [held, touching, tx, ty, ax, ay];
 }
+
+// A gamepad: the d-pad or the left stick is the d-pad, the bottom face button A and the right one B
+// (buttons 0 and 1; on an Xbox pad A and B, on a PlayStation pad cross and circle), and the right
+// stick tilts while it's pushed. Pads without the standard layout still get the left stick and
+// their first two buttons.
+const STICK = 0.5, TILT_DEAD = 0.2;
+function gamepad() {
+  let held = 0, tilt = null;
+  for (const pad of navigator.getGamepads ? navigator.getGamepads() : []) {
+    if (!pad || !pad.connected) continue;
+    const on = (i) => !!pad.buttons[i]?.pressed, std = pad.mapping === "standard";
+    const [lx = 0, ly = 0, rx = 0, ry = 0] = pad.axes;
+    if ((std && on(14)) || lx < -STICK) held |= LEFT;
+    if ((std && on(15)) || lx > STICK) held |= RIGHT;
+    if ((std && on(12)) || ly < -STICK) held |= UP;
+    if ((std && on(13)) || ly > STICK) held |= DOWN;
+    if (on(0)) held |= A;
+    if (on(1)) held |= B;
+    if (std && Math.hypot(rx, ry) > TILT_DEAD) tilt = [rx, ry];
+  }
+  return { held, tilt };
+}
+addEventListener("gamepadconnected", (e) => {
+  $("gamepad").hidden = false;
+  $("gamepad").textContent = `Gamepad: ${e.gamepad.id.replace(/\s*\(.*$/, "") || "connected"}. D-pad or left stick moves, A and B are the bottom and right buttons` +
+    (e.gamepad.mapping === "standard" ? ", the right stick tilts." : ".");
+});
+addEventListener("gamepaddisconnected", () => {
+  $("gamepad").hidden = ![...(navigator.getGamepads?.() || [])].some((p) => p && p.connected);
+});
 
 // A phone's tilt: which way things would roll, as the board's accelerometer gives it.
 function useOrientation() {
