@@ -186,7 +186,8 @@ sound, `music(0)` starts the song, and `-1` stops either. The eight built-in sou
 - [`examples/`](examples/) has six complete carts, from a bubble shooter to a 3D rail shooter and a chiptune.
 
 A cart gets 32 KB of source (comments don't count), 1 MB of memory and 2 KB of saved data.
-`check.py` allows 30,000 Lua instructions a frame; the board stops a frame that runs past 100 ms.
+`check.py` and the playground allow 30,000 Lua instructions a frame; the board stops a frame that runs
+past 100 ms.
 
 ## How it works
 

@@ -75,6 +75,7 @@ struct WebHost final : carts::Host {
     return js_store_save(std::string(cart).c_str(), std::string(json).c_str()) != 0;
   }
   bool deadline_by_polling() const override { return true; }
+  int frame_budget() const override { return carts::kFrameBudget; }  // as check.py: a cart passes here, passes there
 };
 
 std::unique_ptr<carts::Synth> g_synth;  // the cart's own sounds and song, once the page has audio (lw_audio_start)
@@ -200,6 +201,8 @@ EMSCRIPTEN_KEEPALIVE int lw_frame(int held, int touching, float tx, float ty, fl
 }
 
 EMSCRIPTEN_KEEPALIVE const char* lw_error() { return g_error.c_str(); }
+// The last frame's Lua instructions (by 100s, as check.py counts them).
+EMSCRIPTEN_KEEPALIVE int lw_ops() { return g_cart ? g_cart->last().ops : 0; }
 EMSCRIPTEN_KEEPALIVE int lw_fps() { return g_cart ? g_cart->fps() : 30; }
 EMSCRIPTEN_KEEPALIVE int lw_full_canvas() { return g_cart && g_cart->hd() && g_cart->full_canvas() ? 1 : 0; }
 EMSCRIPTEN_KEEPALIVE uint8_t* lw_pixels() { return g_rgba.data(); }

@@ -32,6 +32,7 @@ constexpr size_t kMaxSource = 32 * 1024;  // 16 KB until 2026-10-14: the dice ca
 // that runs too long instead: the host arms a deadline, and Cart::interrupt() hooks the VM then.
 constexpr int64_t kFrameLimitUs = 100000;   // a frame (_update + _draw)
 constexpr int64_t kStartLimitUs = 2000000;  // the top level, and _init
+constexpr int kFrameBudget = 30000;          // Lua instructions a frame, where a host counts them (tools/check.py's BUDGET)
 constexpr int kDeadlineGrace = 200000;       // Lua instructions past a limit before the cart is stopped (Cart::interrupt)
 constexpr size_t kMaxMemory = 1024 * 1024;
 constexpr size_t kMaxSave = 2048;
@@ -113,10 +114,15 @@ class Host {
   // A host with no way to interrupt Lua (a browser: one thread, no signals) says so here, and the
   // runtime checks the clock itself every few thousand instructions instead.
   virtual bool deadline_by_polling() const { return false; }
+  // Lua instructions a frame (_update and _draw together) before the cart is stopped, counted as
+  // tools/check.py counts them (every 100); 0: not counted. The playground counts, so a cart that
+  // passes there passes check.py too; the board relies on its time limit instead.
+  virtual int frame_budget() const { return 0; }
 };
 
 struct Frame {
   int64_t lua_us = 0;   // _update + _draw, wall time
+  int ops = 0;          // their Lua instructions, by 100s, where the host counts them (Host::frame_budget)
   size_t freed = 0;     // bytes the Lua heap gave back meanwhile (tens of KB: a collection ran in it)
 };
 

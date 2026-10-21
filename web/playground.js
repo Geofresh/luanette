@@ -478,6 +478,11 @@ async function boardPort() {
 // has its header, and fits; check.py's instruction budget is the one check it skips.
 async function send() {
   if (sending || !current) return;
+  if (overBudget === code.value) {  // before running it again, which would only stop it again
+    say("This cart went over 30,000 Lua instructions in a frame here, so check.py would refuse it and the board " +
+      "could fall behind. Make the slow frame do less, then send it.", true);
+    return;
+  }
   run(code.value);
   if (!running) return;  // run() says why
   const src = lw.shipped(code.value);
@@ -568,7 +573,9 @@ function say(text, error) {
   status.replaceChildren(text.slice(0, m.index), a, text.slice(m.index + m[0].length));
 }
 
+let runSrc = "", overBudget = null;  // the code running, and code that went over the frame budget here
 function run(src) {
+  runSrc = src;
   const name = current || "playground";
   sound.stop();
   const ok = lw.ccall("lw_start", "number", ["string", "string"], [name, src]);
@@ -598,6 +605,7 @@ function tick(now) {
     if (!alive) {
       running = false;
       const err = lw.error();
+      if (err.includes("over budget")) overBudget = runSrc;  // Send won't take this code
       say(err || "The cart ended.", !!err);
       break;
     }
@@ -667,6 +675,7 @@ async function main() {
     mod,
     lw_frame: mod.cwrap("lw_frame", "number", ["number", "number", "number", "number", "number", "number"]),
     lw_fps: mod.cwrap("lw_fps", "number", []),
+    lw_ops: mod.cwrap("lw_ops", "number", []),
     lw_full_canvas: mod.cwrap("lw_full_canvas", "number", []),
     lw_pixels: mod.cwrap("lw_pixels", "number", []),
     lw_sound: mod.cwrap("lw_sound", "number", []),

@@ -251,6 +251,8 @@ struct Cart::Impl {
   int clip_x0 = 0, clip_y0 = 0, clip_x1 = kW, clip_y1 = kH;  // exclusive
   Input in, was;
   int64_t t0_us = 0, frame_t0 = 0, limit_us = 0;
+  int ops = 0, budget = 0, polls = 0;  // Lua instructions this frame and the most it may have (count_hook)
+  int count_left = 0;  // instructions to the next count when _update ended: _draw goes on from there
   uint32_t rng = 0x9E3779B9u;
   Host* host = nullptr;
   struct Sprite {
@@ -1364,6 +1366,26 @@ void poll_hook(lua_State* L, lua_Debug*) {
     luaL_error(L, "ran over %d ms (an endless loop?)", static_cast<int>((S->limit_us + 999) / 1000));
 }
 
+// A host that counts instructions (Host::frame_budget): every kCountEvery, as check.py does; past
+// the budget, the cart stops in check.py's words. A host that polls the clock gets that here too.
+// check.py runs each frame inside a little Lua function of its own (about 15 instructions more than
+// here), and both count in 100s, so this stops a count earlier: a frame it lets through is under
+// 30,000 instructions, which check.py counts as at most 30,000 too.
+constexpr int kCountEvery = 100;
+void count_hook(lua_State* L, lua_Debug* ar) {
+  S->ops += kCountEvery;
+  if (S->budget && S->ops > S->budget - kCountEvery) {
+    luaL_where(L, 0);  // the cart's line it was on ("cart:4: "): in a hook, luaL_error's level 1 is no one
+    lua_pushfstring(L, "over budget: more than %d Lua instructions in one frame", S->budget);
+    lua_concat(L, 2);
+    lua_error(L);
+  }
+  if (S->host->deadline_by_polling() && ++S->polls >= kPollEvery / kCountEvery) {
+    S->polls = 0;
+    poll_hook(L, ar);
+  }
+}
+
 int traceback(lua_State* L) {
   const char* msg = lua_tostring(L, 1);
   if (!msg) msg = lua_pushfstring(L, "(error object is a %s value)", luaL_typename(L, 1));
@@ -1461,10 +1483,14 @@ bool Cart::run(int nargs, int64_t limit_us, const char* where) {
   const int base = lua_gettop(L_) - nargs - 1;
   in_call_ = true;
   host_.deadline(limit_us);
-  if (host_.deadline_by_polling()) lua_sethook(L_, poll_hook, LUA_MASKCOUNT, kPollEvery);
+  if (host_.frame_budget() > 0) {
+    lua_sethook(L_, count_hook, LUA_MASKCOUNT, kCountEvery);
+    if (I.budget && I.count_left > 0) L_->hookcount = I.count_left;  // one count across the frame, as check.py's
+  } else if (host_.deadline_by_polling()) lua_sethook(L_, poll_hook, LUA_MASKCOUNT, kPollEvery);
   const int rc = lua_pcall(L_, nargs, 0, base);
   in_call_ = false;  // an interrupt from here on is the finished call's: ignored
   host_.deadline(0);
+  if (lua_gethook(L_) == count_hook) I.count_left = L_->hookcount;
   if (lua_gethook(L_)) lua_sethook(L_, nullptr, 0, 0);  // one that came as it finished
   lua_remove(L_, base);
   if (rc == LUA_OK) return true;
@@ -1620,6 +1646,8 @@ bool Cart::frame(const Input& in) {
   I.in = in;
   const int64_t t0 = host_.now_us();
   const size_t freed0 = I.heap.freed;
+  I.ops = I.polls = I.count_left = 0;
+  I.budget = host_.frame_budget();  // only a frame's calls are held to it (check.py's frame budget)
   bool ok = true;
   for (const char* fn : {update60_ ? "_update60" : "_update", "_draw"}) {
     if (lua_getglobal(L_, fn) != LUA_TFUNCTION) {
@@ -1632,6 +1660,8 @@ bool Cart::frame(const Input& in) {
   const int64_t now = host_.now_us();
   last_.lua_us = now - t0;
   last_.freed = I.heap.freed - freed0;
+  last_.ops = I.ops;
+  I.budget = 0;
   if (idle_) {  // the next frame's rate: active while there's input, and a moment after
     if (in.touching || in.held) hot_until_us_ = now + kLazyHoldUs;
     fps_ = now < hot_until_us_ ? active_ : idle_;

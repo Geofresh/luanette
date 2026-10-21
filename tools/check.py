@@ -950,10 +950,27 @@ def hd_fonts() -> dict:
 
 HARNESS = r"""
 local api, src, ui = ...
-local budget, used = 0, 0
+local budget, used, per, armed = 0, 0, 100, false
+-- Counts; and while the cart's code runs (armed), stops it past the budget. The few instructions of
+-- this harness around the call count but never stop anything: an error there would escape the pcall.
 local function hook()
-  used = used + 100
-  if used > budget then error("over budget: more than " .. budget .. " Lua instructions in one frame", 2) end
+  used = used + per
+  if armed and used > budget then
+    armed = false
+    error("over budget: more than " .. budget .. " Lua instructions in one frame", 2)
+  end
+end
+-- Lua's count runs on through the hook's own instructions (luaG_traceexec), so each call every 100
+-- stands for fewer of the cart's: measured here on a loop of known size, 2 instructions a pass, so
+-- the count is the cart's own, as the runtime counts it (engine/cart.cpp count_hook, a C hook).
+do
+  local n = 0
+  budget, used, per, armed = 1e12, 0, 100, true  -- the hook's path in a frame (armed, under budget)
+  debug.sethook(hook, "", 100)
+  for i = 1, 100000 do n = n + i end
+  debug.sethook()
+  armed = false
+  per = math.floor(200000 / (used / 100) + 0.5)
 end
 local env = {}
 for _, k in ipairs({"math", "string", "table", "coroutine", "pairs", "ipairs", "tostring", "tonumber", "type",
@@ -986,9 +1003,10 @@ local fn, err = load(src, "=cart", "t", env)
 if not fn then return nil, err end
 local R = {env = env}
 local function run(f, b)
-  budget, used = b, 0
+  budget, used, armed = b, 0, true
   debug.sethook(hook, "", 100)
-  local ok, e = pcall(f)
+  local ok, e = pcall(function() f() armed = false end)
+  armed = false
   debug.sethook()
   return ok, e, used
 end
@@ -999,12 +1017,14 @@ function R.call(name)
   return run(f, 1e12)
 end
 function R.frame(upd, b)
-  budget, used = b, 0
+  budget, used, armed = b, 0, true
   debug.sethook(hook, "", 100)
   local ok, e = pcall(function()
     if type(env[upd]) == "function" then env[upd]() end
     if type(env._draw) == "function" then env._draw() end
+    armed = false
   end)
+  armed = false
   debug.sethook()
   return ok, e, used
 end
