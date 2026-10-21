@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Scripts only from this site: the Install button can write to a board, so nothing from elsewhere runs here. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>Luanette playground</title>
 <meta name="description" content="Play and edit Luanette carts in your browser: the same engine that runs on ESP32-S3 boards, compiled to WebAssembly.">
 <style>

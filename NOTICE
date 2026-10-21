@@ -56,6 +56,14 @@ https://github.com/waveshareteam/Waveshare-ESP32-components/tree/9daffb7168b3c09
 Apache License 2.0 (LICENSES/Apache-2.0.txt), checked against the
 manufacturer's schematic.
 
+ESP Web Tools
+-------------
+web/vendor/esp-web-tools/ is dist/web/ of the npm package esp-web-tools 10.4.0
+(https://github.com/esphome/esp-web-tools), unmodified, Apache License 2.0
+(LICENSES/Apache-2.0.txt). It bundles esptool-js, @material/web and
+improv-wifi-serial-sdk (Apache License 2.0), lit (BSD-3-Clause), pako (MIT and
+zlib), atob-lite (MIT) and tslib (0BSD): LICENSES/esp-web-tools-bundle.txt.
+
 Fetched at build time
 ---------------------
 ESP-IDF, esp_codec_dev and esp_lcd_touch_ft5x06 (Apache License 2.0, Espressif

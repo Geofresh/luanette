@@ -8,4 +8,5 @@ cmake --build build -j
 rm -rf build/site && mkdir -p build/site/examples
 cp index.html playground.js board.js build/luanette.js build/luanette.wasm build/site/
 cp ../examples/*.lua build/site/examples/
+cp -r vendor build/site/
 echo "built web/build/site (serve it: python3 -m http.server -d web/build/site)"

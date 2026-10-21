@@ -200,7 +200,7 @@ async function setUpBoard() {
     const r = await fetch("firmware/manifest.json");
     if (!r.ok) return;
     const { version } = await r.json();
-    await import("https://unpkg.com/esp-web-tools@10.4.0/dist/web/install-button.js?module");
+    await import("./vendor/esp-web-tools/install-button.js");  // 10.4.0, kept in the repo (its README says why)
     $("install").querySelector("button").textContent = `Install Luanette ${version} on a board`;
     $("board").hidden = false;
   } catch {}
