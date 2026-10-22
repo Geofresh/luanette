@@ -7,7 +7,7 @@
 //   luanette sound "C4 pulse 5, E4 slide, -, G4 saw 7 fadeout" [--speed N] [--loop A-B]
 //   luanette sound CART.lua N --wav OUT.wav                 a cart's sound, as a WAV
 //   luanette song CART.lua [--from N] --wav OUT.wav         its song
-//   luanette link CART.lua [--name NAME]                     a playground share link
+//   luanette link CART.lua [--name NAME] [--play]            a playground share link (--play: opens in play mode)
 //   luanette new NAME [--template blank|platformer|shooter|puzzle]
 //   luanette mcp                                             an MCP server over stdio (for agents)
 //
@@ -375,9 +375,10 @@ export async function renderAudio(src, n, from = null, rate = 44100) {
 }
 
 // ---- links and new carts ---------------------------------------------------------------------------
-export function shareLink(src, name, base = PLAYGROUND) {
+// "&play" after it opens the cart in play mode: the screen alone, with buttons on a phone.
+export function shareLink(src, name, base = PLAYGROUND, play = false) {
   const data = zlib.deflateRawSync(Buffer.from(JSON.stringify({ name, src })), { level: 9 });
-  return base + "#cart=d" + data.toString("base64url");
+  return base + "#cart=d" + data.toString("base64url") + (play ? "&play" : "");
 }
 export function newCart(name, template = "blank") {
   if (!/^[a-z0-9_-]{1,32}$/.test(name)) throw new Error("a cart's name is 1 to 32 of a-z, 0-9, _ and -");
@@ -436,7 +437,7 @@ async function main() {
     print({ ok: true, wav: opt.wav || "song.wav", seconds: Number(r.seconds.toFixed(2)) });
   } else if (cmd === "link") {
     const { src, name } = readCart(pos[0]);
-    process.stdout.write(shareLink(src, opt.name || name, opt.base || PLAYGROUND) + "\n");
+    process.stdout.write(shareLink(src, opt.name || name, opt.base || PLAYGROUND, opt.play === true) + "\n");
   } else if (cmd === "new") {
     const name = pos[0], file = opt.out || `${name}.lua`;
     if (fs.existsSync(file)) throw new Error(`${file} is there already`);

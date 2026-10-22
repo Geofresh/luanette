@@ -36,7 +36,8 @@ claude mcp add luanette -- npx -y luanette mcp
    gives the same numbers every run, so you can `log()` where things appear and aim the input at
    them.
 5. When `check` says `"ok": true` and there are no warnings you can fix, `link` it, and give the
-   person the link: they can play it, change it and send it to a board.
+   person the link: they can play it, change it and send it to a board. `link --play` gives a link
+   that opens straight into play mode (the screen alone, with buttons on a phone).
 
 ## A cart
 

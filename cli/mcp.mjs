@@ -45,8 +45,8 @@ const TOOLS = [
     inputSchema: { type: "object", required: ["notes"], properties: { notes: { type: "string" },
       speed: { type: "integer", description: "Ticks of 1/120 s a note, 1-255 (8)" },
       loop: { type: "array", items: { type: "integer" }, description: "[first, end]: loop those notes for good" } } } },
-  { name: "share_link", description: "A link that opens the cart in the playground (https://geofresh.github.io/luanette/), to play it, edit it or send it to a board.",
-    inputSchema: { type: "object", properties: { ...CART, name: { type: "string" } } } },
+  { name: "share_link", description: "A link that opens the cart in the playground (https://geofresh.github.io/luanette/), to play it, edit it or send it to a board. With play, it opens in play mode: the screen alone, with buttons on a phone.",
+    inputSchema: { type: "object", properties: { ...CART, name: { type: "string" }, play: { type: "boolean", description: "Open in play mode" } } } },
   { name: "api_help", description: "The cart API from docs/api.md: a call's signatures and what it does, or every call whose name or description has a word in it, or (with nothing) the list of names.",
     inputSchema: { type: "object", properties: { name: { type: "string" }, search: { type: "string" } } } },
   { name: "new_cart", description: "A new cart's source from a template (blank, platformer, shooter, puzzle): full-screen, with sprites, sounds and log() to build on.",
@@ -112,7 +112,7 @@ const handlers = {
   },
   async share_link(a) {
     const { src, name } = cartOf(a);
-    return { content: [text(L.shareLink(src, a.name || name))] };
+    return { content: [text(L.shareLink(src, a.name || name, undefined, a.play === true))] };
   },
   async api_help(a) {
     if (a.name) {

@@ -467,8 +467,9 @@ function addCart(name, src) {
   if (!mine.includes(name)) mine.push(name);
   const kept = saveMine() && keep(name, src);
   renderCarts();
-  select(name, src);
+  const opened = select(name, src);
   if (!kept) say("This browser isn't keeping data for this page, so the cart goes when the tab does. Save .lua keeps a copy.", true);
+  return opened;
 }
 
 function newCart() {
@@ -535,13 +536,14 @@ async function makeLink() {
   return location.href.split("#")[0] + "#cart=" + data;
 }
 
-async function shareLink() {
-  const url = await makeLink();
+// "&play" after a link opens the cart in play mode: the screen alone, with buttons on a phone.
+async function shareLink(play) {
+  const url = (await makeLink()) + (play ? "&play" : "");
   let copied = false;
   try { await navigator.clipboard.writeText(url); copied = true; } catch {}
   $("sharelink").value = url;
   $("sharebox").hidden = copied;
-  say(copied ? `Link copied: ${plainName(current)} with its code, sounds and song (${url.length} characters). Opening it adds the cart to that browser's carts.`
+  say(copied ? `Link copied: ${plainName(current)} with its code, sounds and song (${url.length} characters). Opening it adds the cart to that browser's carts${play ? " and plays it" : ""}.`
     : "Copy this link: opening it adds the cart to that browser's carts.");
 }
 
@@ -563,7 +565,7 @@ async function openLink(data) {
   if (isGallery(cart.name)) {  // a gallery cart as it ships opens itself, as an example does
     const original = await shippedSource(cart.name), draft = storeGet(sourceKey(cart.name));
     if (original === cart.src && (!draft || draft === cart.src)) {
-      select(cart.name);
+      await select(cart.name);
       return true;
     }
   }
@@ -572,13 +574,13 @@ async function openLink(data) {
     if (!(base in originals)) originals[base] = await (await fetch("examples/" + base + ".lua")).text();
     const draft = storeGet(sourceKey(base));
     if (originals[base] === cart.src && (!draft || draft === cart.src)) {
-      select(base);
+      await select(base);
       return true;
     }
   }
   let name = nameProblem(base) ? (base + "_shared").slice(0, 32) : base;
   for (let k = 2; mine.includes(name) && storeGet(sourceKey(name)) !== cart.src; k++) name = (base.slice(0, 28) + "_" + k);
-  addCart(name, cart.src);
+  await addCart(name, cart.src);
   const title = (/^--\s*title\s*:\s*(.+)$/m.exec(cart.src) || [, name])[1].trim();
   say(`Opened ${title} from a link. It's in your carts as ${name} now.`);
   return true;
@@ -681,6 +683,13 @@ function renderCarts() {
   add.onclick = () => { closeMenus(); newCart(); };
   rows.push(add);
   list.replaceChildren(...rows);
+}
+
+// The address after "#": "carts", a cart's name, or "cart=" and a shared cart; "&play" after either
+// of the last two opens it in play mode.
+function address() {
+  const raw = decodeURIComponent(location.hash.slice(1));
+  return { h: raw.replace(/&play$/, ""), play: raw.endsWith("&play") };
 }
 
 // ---- the cart browser: where to start, and a card for each cart ------------------------------------
@@ -1249,7 +1258,8 @@ async function main() {
     if (sound.level) { unmuted = sound.level; sound.setLevel(0); } else sound.setLevel(unmuted);
     showLevel();
   };
-  $("share").onclick = shareLink;
+  $("share").onclick = () => shareLink(false);
+  $("share-play").onclick = () => shareLink(true);
   $("pause").onclick = () => setPaused(!paused);
   $("gif").onclick = recordGif;
   $("step").onclick = () => { if (paused && running && frameOnce()) show(); meter.shown = 0; meter.show(performance.now()); };
@@ -1273,7 +1283,7 @@ async function main() {
   try { GALLERY = await (await fetch("gallery.json")).json(); } catch { GALLERY = []; }  // before a link: it may be one of them
   try { for (const e of await (await fetch("examples.json")).json()) EXAMPLES[e.name] = e; } catch {}
   renderCarts();
-  const fromHash = decodeURIComponent(location.hash.slice(1));
+  const { h: fromHash, play } = address();
   const opening = fromHash.startsWith("cart=") || isShipped(fromHash) || mine.includes(fromHash);
   if (!opening) showBrowser();
   say("Loading the engine…");
@@ -1310,16 +1320,17 @@ async function main() {
   // The address: "#carts" is the cart browser, "#NAME" a cart, "#cart=..." a shared one; Back and
   // Forward move between them, and a link pasted into the address bar opens.
   addEventListener("hashchange", () => {
-    const h = decodeURIComponent(location.hash.slice(1));
-    if (h.startsWith("cart=")) openLink(h.slice(5));
+    const { h, play } = address();
+    const then = (opened) => { if (opened && play) enterPlay(); };
+    if (h.startsWith("cart=")) openLink(h.slice(5)).then(then);
     else if (h === "carts" || !h) showBrowser();
-    else if (h === current) showEditor();
-    else if (isShipped(h) || mine.includes(h)) select(h);
+    else if (h === current) { showEditor(); then(true); }
+    else if (isShipped(h) || mine.includes(h)) select(h).then(() => then(true));
   });
   engineReady();
   say("");
-  if (fromHash.startsWith("cart=") && await openLink(fromHash.slice(5))) return;
-  if (isShipped(fromHash) || mine.includes(fromHash)) select(fromHash);
+  if (fromHash.startsWith("cart=") && await openLink(fromHash.slice(5))) { if (play) enterPlay(); return; }
+  if (isShipped(fromHash) || mine.includes(fromHash)) { await select(fromHash); if (play) enterPlay(); }
   else if (!browsing()) showBrowser();  // no cart named (or a link that couldn't be read): the cart browser is the way in
 }
 

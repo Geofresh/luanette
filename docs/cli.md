@@ -79,10 +79,11 @@ Render a cart's sound N, or its song from pattern N (its first), to a 44.1 kHz W
 - A sound plays once through. A looping one goes round its loop once more.
 - A song plays to its end, or round its loop once more, up to three minutes.
 
-### `link CART [--name NAME]`
+### `link CART [--name NAME] [--play]`
 
 A playground share link with the cart in it (its code, sounds and song). Opening it adds the cart
-to that browser's carts.
+to that browser's carts. With `--play` it opens in play mode: the screen alone, full screen, with
+a d-pad and A and B on a phone (`&play` at the end of any playground link does the same).
 
 ### `new NAME [--template blank|platformer|shooter|puzzle] [--out FILE]`
 
@@ -110,7 +111,7 @@ Its tools:
 | `run_cart` | `run`, returning the shots as images (one strip, or each at full size with `full`), the log by frame and each frame's cost |
 | `render_sound` | a sound (`sound`: 8-63) or the song described note by note in `make_sound`'s words, its length and loudness; `wav`: a file to write |
 | `make_sound` | `sound`: `notes`, `speed`, `loop` |
-| `share_link` | `link` |
+| `share_link` | `link`; `play` for play mode |
 | `api_help` | the API from `docs/api.md`: one call by `name`, the calls matching `search`, or the list |
 | `new_cart` | `new`, returning the source |
 

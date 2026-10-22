@@ -146,7 +146,8 @@
   .color-strip { gap: 3px; }
   .color-strip .swatch { width: 28px; height: 22px; }
   .runbar { display: flex; gap: 6px; align-items: center; }
-  .runbar button { height: 36px; }
+  .runbar { flex-wrap: wrap; justify-content: center; }
+  .runbar button { height: 36px; white-space: nowrap; }
   #pause .when-paused, #pause.paused .when-running { display: none; }
   #pause.paused .when-paused { display: inline; }
   .meter { display: flex; flex-direction: column; align-items: center; gap: 4px; width: min(370px, 82vw); }
@@ -176,7 +177,7 @@
   #status.error { color: var(--danger); }
   @media (pointer: coarse) { .desk { display: none; } }
   .volume { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; margin-left: 6px; }
-  .volume input { width: 100px; accent-color: var(--accent); }
+  .volume input { width: 80px; accent-color: var(--accent); }
   #volume-pct { font: 12px var(--mono); min-width: 3.5em; }
   #console-lines { max-height: 180px; }
   dialog#newcart { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 12px;
@@ -371,6 +372,7 @@
       <button aria-haspopup="true" aria-expanded="false">Share<svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
       <div class="menu-list right" hidden>
         <button id="share">Copy a share link <span class="aside">code, sounds, song</span></button>
+        <button id="share-play">Copy a link to play it <span class="aside">opens in play mode</span></button>
         <button id="gif">Record a 5 s GIF <span class="aside">downloads</span></button>
         <hr>
         <button id="submit">Submit to the gallery… <span class="aside">GitHub</span></button>
