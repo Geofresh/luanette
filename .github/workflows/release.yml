@@ -7,6 +7,8 @@ name: release
 # Four files, not one merged image: merging fills the gaps between them, and NVS (0x9000-0x19000:
 # saves, the timezone, anything another firmware keeps there) is one of those gaps, so a merged
 # image erases it. Written separately, each part only erases its own sectors.
+# The npm package (cli/) is packed too and attached to the release; its version must match the tag.
+# Publishing it to npm is a person's step (it needs the account's 2FA): see RELEASING.md.
 on:
   push:
     tags: ["v*"]
@@ -35,5 +37,24 @@ jobs:
           GH_TOKEN: ${{ github.token }}
       # A release made with this workflow's token doesn't start other workflows on its own.
       - run: gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref main
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  npm:
+    runs-on: ubuntu-latest
+    needs: firmware  # it attaches to the release that job makes
+    steps:
+      - uses: actions/checkout@v4
+      - run: |  # cli/package.json has to say the same version as the tag
+          want="${GITHUB_REF_NAME#v}"
+          have=$(node -p 'require("./cli/package.json").version')
+          [ "$want" = "$have" ] || { echo "cli/package.json says $have, the tag says $want"; exit 1; }
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 6.0.13
+      - run: web/build.sh
+      - run: cli/build.sh
+      - run: cd cli && npm pack
+      - run: gh release upload "$GITHUB_REF_NAME" cli/luanette-*.tgz
         env:
           GH_TOKEN: ${{ github.token }}
