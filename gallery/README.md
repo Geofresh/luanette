@@ -6,15 +6,15 @@ it, and send it to their board.
 
 ## Adding yours
 
-In the playground, open your cart and press **Submit to gallery**. That opens a GitHub issue with a
+In the playground, open your cart and press **Share, Submit to the gallery**. That opens a GitHub issue with a
 link to the cart already in it; add anything you'd like to say and submit the issue. If the cart is
-too big for a link, the issue asks you to attach the .lua file (Save .lua) instead.
+too big for a link, the issue asks you to attach the .lua file (File, Save as .lua) instead.
 
 What a gallery cart needs:
 
 - It's your own work, or you have the right to share it, and it can be in this repository under the
   MIT license, like everything else here.
-- It runs in the playground, and Send to board takes it (so `check.py` passes).
+- It runs in the playground, and Send this cart to the board takes it (so `check.py` passes).
 - Its header has `-- title:`, `-- by:` (your name or handle) and `-- about:`.
 - It's fine for all ages.
 - Made with a coding agent? Say so in the header, `-- made with: Claude Code` (or whichever).

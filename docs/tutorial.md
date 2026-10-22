@@ -9,7 +9,7 @@ won't work, its "stuck?" link opens that step finished, in the playground, next 
 
 ## 1. Something on the screen
 
-In the playground, press **+ New cart**, call it `stars`, and press Create. The editor fills with a
+In the playground, open the **File** menu, press **New cart**, call it `stars`, and press Create. The editor fills with a
 small example cart; select all of it and replace it with this:
 
 ```lua
@@ -133,13 +133,14 @@ Stuck? [Open step 5 in the playground](https://geofresh.github.io/luanette/#cart
 ## 6. On a board
 
 If you have a Waveshare ESP32-S3-Touch-AMOLED-2.06, plug it in with a USB cable. In Chrome or Edge,
-press **Install Luanette** under the screen (leave "Erase device" unticked), then **Send to board**.
+open the **Board** menu and press **Install Luanette** (leave "Erase device" unticked), then **Send
+this cart to the board**.
 Stars is on the board, with its sounds and song, and it stays there.
 
 ## 7. Show it to someone
 
-**Share link** copies a link with your whole cart in it. Whoever opens it gets Stars in their own
-playground, to play or change. **Submit to gallery** puts it forward for the
+**Share, Copy a share link** copies a link with your whole cart in it. Whoever opens it gets Stars in their own
+playground, to play or change. **Share, Submit to the gallery** puts it forward for the
 [gallery](../gallery/), where everyone who opens the playground can find it.
 
 ## Where to go next

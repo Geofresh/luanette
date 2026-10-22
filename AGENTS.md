@@ -209,4 +209,4 @@ header (it's optional, and a comment like the others):
 ```
 
 The gallery marks those carts "agent-made". The person submits it from the playground with
-**Submit to gallery**, after playing it.
+**Share, Submit to the gallery**, after playing it.

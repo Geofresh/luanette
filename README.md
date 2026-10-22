@@ -50,20 +50,21 @@ Measured on the AMOLED-2.06:
 ## The playground
 
 [geofresh.github.io/luanette](https://geofresh.github.io/luanette/) is an editor and the console
-side by side. Edit a cart's code and press Run (or Ctrl+Enter) to see the change.
+side by side. Edit a cart's code and press Run (or Ctrl+Enter) to see the change. The cart's name
+at the top picks another cart; the File, Share and Board menus hold the rest.
 
-- **Your own carts.** + New cart starts one from a small template. Open .lua and Save .lua move
-  them in and out as files. They're kept in your browser as you type.
+- **Your own carts.** File, New cart starts one from a small template. Open a .lua file and Save as
+  .lua move them in and out as files. They're kept in your browser as you type.
 - **Sounds and music.** The Sounds tab is a note grid: pick an instrument and an effect, draw
   pitch and volume, and press Play. The Music tab strings sounds into a song, up to four playing
   at once. Both write their results into the cart's code. Open Overdrive to see a finished song.
-- **Share link** copies a link with the whole cart in it, code, sounds and song. Whoever opens it
+- **Share, Copy a share link** copies a link with the whole cart in it, code, sounds and song. Whoever opens it
   gets the cart in their playground. Nothing is uploaded; the link is the only copy.
-- **The gallery** is carts people have made, in a row under the examples. **Submit to gallery**
-  puts yours forward: it opens a GitHub issue with the cart's link in it ([`gallery/`](gallery/)).
-- **On a board** (Chrome or Edge on a computer): Install puts the latest firmware on it, and Send
-  to board sends the cart you're editing. Remove from board takes one off again; on an example
-  it's Restore the built-in.
+- **The gallery** is carts people have made, listed with the examples. **Share, Submit to the
+  gallery** puts yours forward: it opens a GitHub issue with the cart's link in it ([`gallery/`](gallery/)).
+- **On a board** (Chrome or Edge on a computer), from the Board menu: Install puts the latest
+  firmware on it, and Send this cart to the board sends the one you're editing. Remove from board
+  takes one off again; on an example it's Restore the built-in.
 - The volume slider under the screen sets the page's volume only, not the board's.
 
 On Linux, Chrome can only open the board's port if your user is in the `dialout` group.
@@ -92,8 +93,8 @@ full-color carts, doesn't build yet, and `push.py` needs `--port COM3` or simila
 ## Quick start
 
 The quickest way is the [playground](https://geofresh.github.io/luanette/) in Chrome or Edge: plug
-the board in, press **Install Luanette**, and leave "Erase device" unticked. Then pick a cart, change
-something, and press **Send to board**.
+the board in, open the **Board** menu, press **Install Luanette**, and leave "Erase device" unticked.
+Then pick a cart, change something, and press **Board, Send this cart to the board**.
 
 Or flash the four files from the [latest release](https://github.com/Geofresh/luanette/releases/latest)
 yourself:

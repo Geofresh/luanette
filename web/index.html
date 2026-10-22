@@ -20,20 +20,58 @@
   [hidden] { display: none !important; }  /* over .bar and .board's display: flex */
   html, body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, sans-serif; }
   a { color: var(--accent); }
-  header { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; padding: 16px 24px 0; }
-  header h1 { margin: 0; font-size: 20px; font-weight: 600; }
-  header p { margin: 0; color: var(--muted); }
-  main { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 24px; padding: 16px 24px 32px; align-items: start; }
-  @media (max-width: 860px) { main { grid-template-columns: minmax(0, 1fr); padding: 16px; } header { padding: 16px 16px 0; } }
-  .device { justify-self: center; display: flex; flex-direction: column; align-items: center; gap: 12px; }
-  .bezel { background: #000; padding: 14px; border-radius: 34% / 27%; border: 1px solid var(--line); }
-  canvas { display: block; width: min(370px, 82vw); aspect-ratio: 410 / 502; border-radius: 24.4% / 19.9%;
-           touch-action: none; cursor: pointer; image-rendering: auto; }
+  .grow { flex-grow: 1; }
+  /* the top bar: the cart, Run, and the File, Share and Board menus */
+  .top { display: flex; align-items: center; gap: 8px; padding: 0 12px; min-height: 56px; border-bottom: 1px solid var(--line);
+         flex-wrap: wrap; position: relative; z-index: 10; }
+  .top button { height: 36px; display: inline-flex; align-items: center; gap: 6px; }
+  .logo { background: none; border-color: transparent; font-weight: 700; font-size: 17px; color: var(--text); padding: 0 6px; }
+  .logo svg { color: var(--accent); }
+  .cartname { font-weight: 600; max-width: 22em; }
+  #cart-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .edited { font-weight: 400; font-size: 13px; color: var(--muted); display: inline-flex; align-items: center; gap: 5px; }
+  .edited::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  .menus { display: flex; gap: 2px; }
+  .menus > .menu > button { background: none; border-color: transparent; }
+  .menus > .menu > button[aria-expanded="true"], .menus > .menu > button:hover { border-color: var(--line); background: var(--panel); }
+  button.icon { width: 36px; padding: 0; justify-content: center; display: inline-flex; align-items: center; }
+  .top .icon { background: none; border-color: transparent; }
+  .menu { position: relative; }
+  .menu-list { position: absolute; top: calc(100% + 6px); left: 0; min-width: 260px; max-height: 70vh; overflow-y: auto;
+               background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 6px; z-index: 30;
+               box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5); display: flex; flex-direction: column; }
+  .menu-list.right { left: auto; right: 0; }
+  .menu-list[hidden] { display: none; }
+  .menu-list button { background: none; border-color: transparent; text-align: left; height: auto; min-height: 40px;
+                      justify-content: space-between; gap: 16px; width: 100%; }
+  .menu-list button:hover, .menu-list button:focus-visible { background: #1f2630; border-color: transparent; }
+  .menu-list button.on { color: var(--accent); border-color: transparent; }
+  .top .hint { color: var(--muted); font-size: 13px; }
+  .menu-list hr { border: none; border-top: 1px solid var(--line); margin: 4px 6px; width: calc(100% - 12px); }
+  .menu-list .aside { color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .menu-list.right { min-width: 300px; }
+  .menu-list .group { color: var(--muted); font-size: 12px; padding: 8px 12px 2px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .menu-note { color: var(--muted); font-size: 13px; margin: 6px 12px; max-width: 260px; }
+  .menu-list esp-web-install-button button { width: 100%; }
+  /* the screen on the left, the editor on the right, a split between them to drag */
+  html, body { height: 100%; }
+  body { display: flex; flex-direction: column; }
+  main.app { flex: 1; min-height: 0; display: flex; --dev-w: 440px; }
+  .device { width: var(--dev-w); flex-shrink: 0; display: flex; flex-direction: column; align-items: center; gap: 12px;
+            padding: 20px 12px; overflow-y: auto; }
+  .split { width: 9px; flex-shrink: 0; cursor: col-resize; position: relative; touch-action: none; }
+  .split::after { content: ""; position: absolute; left: 4px; top: 0; bottom: 0; width: 1px; background: var(--line); }
+  .split:hover::after, .split:focus-visible::after, .split.dragging::after { background: var(--accent); width: 2px; left: 3px; }
+  .split:focus-visible { outline: none; }
+  .bezel { background: #000; padding: 12px; border-radius: 34% / 27%; border: 1px solid var(--line); }
+  canvas { display: block; width: min(calc(var(--dev-w) - 60px), calc((100vh - 270px) * 0.817)); min-width: 220px;
+           aspect-ratio: 410 / 502; border-radius: 24.4% / 19.9%; touch-action: none; cursor: pointer; image-rendering: auto; }
   .keys { color: var(--muted); font-size: 13px; text-align: center; max-width: 380px; }
   kbd { font: 12px var(--mono); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; color: var(--text); }
-  .side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-  .carts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-  .row-label { color: var(--muted); font-size: 13px; margin-right: 4px; }
+  .side { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding: 12px 16px 12px 8px; }
+  .panes { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+  .panes > .CodeMirror { flex: 1 1 0; height: auto; min-height: 0; }
+  .panes > section.editor { flex: 1 1 0; overflow-y: auto; min-height: 0; }
   .agent-tag { font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
   button { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
            padding: 6px 12px; cursor: pointer; }
@@ -50,7 +88,8 @@
   textarea { width: 100%; min-height: 420px; resize: vertical; background: var(--panel); color: var(--text);
              border: 1px solid var(--line); border-radius: 8px; padding: 12px; font: 13px/1.5 var(--mono); tab-size: 2; }
   textarea:focus { outline: none; border-color: var(--muted); }
-  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); }
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); align-items: flex-end; flex-wrap: wrap; }
+  .tabs .color-strip { padding-bottom: 4px; }
   .tabs button { border-radius: 8px 8px 0 0; border-bottom: none; }
   .editor { display: flex; flex-direction: column; gap: 10px; min-height: 420px; }
   .editor label { color: var(--muted); font-size: 13px; display: inline-flex; align-items: center; gap: 6px; }
@@ -82,7 +121,7 @@
   .pattern select { width: 9em; }
   .problem { color: var(--danger); font-size: 14px; margin: 0; }
   /* the code editor: CodeMirror in the page's colors */
-  .CodeMirror { height: 480px; border: 1px solid var(--line); border-radius: 8px; font: 13px/1.5 var(--mono); }
+  .CodeMirror { border: 1px solid var(--line); border-radius: 8px; font: 13px/1.5 var(--mono); }
   .CodeMirror-focused { border-color: var(--muted); }
   .cm-s-luanette.CodeMirror { background: var(--panel); color: var(--text); }
   .cm-s-luanette .CodeMirror-gutters { background: var(--panel); border-right: 1px solid var(--line); border-radius: 8px 0 0 8px; }
@@ -106,7 +145,10 @@
   .compile-error { text-decoration: underline wavy rgba(255, 123, 114, 0.8); text-underline-offset: 3px; }
   .color-strip { gap: 3px; }
   .color-strip .swatch { width: 28px; height: 22px; }
-  .runbar { display: flex; gap: 6px; }
+  .runbar { display: flex; gap: 6px; align-items: center; }
+  .runbar button { height: 36px; }
+  #pause .when-paused, #pause.paused .when-running { display: none; }
+  #pause.paused .when-paused { display: inline; }
   .meter { display: flex; flex-direction: column; align-items: center; gap: 4px; width: min(370px, 82vw); }
   .meter-track { width: 100%; height: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 3px; overflow: hidden; }
   #meter-bar { height: 100%; width: 0; background: #3fb950; transition: width 0.2s; }
@@ -125,7 +167,6 @@
   .api-tip p { margin: 2px 0 8px; color: var(--muted); }
   .api-tip p:last-child { margin-bottom: 0; }
   #status a { color: var(--danger); font-weight: 600; }
-  @media (max-width: 860px) { .CodeMirror { height: 360px; } }
   .console summary { cursor: pointer; color: var(--muted); font-size: 13px; }
   .console-head { display: flex; justify-content: space-between; align-items: center; margin: 6px 0; }
   #console-lines { max-height: 200px; overflow-y: auto; background: var(--panel); border: 1px solid var(--line);
@@ -134,54 +175,123 @@
   #status { font: 13px/1.5 var(--mono); color: var(--muted); white-space: pre-wrap; min-height: 1.5em; }
   #status.error { color: var(--danger); }
   @media (pointer: coarse) { .desk { display: none; } }
-  .volume { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
-  .volume input { width: 140px; accent-color: var(--accent); }
+  .volume { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; margin-left: 6px; }
+  .volume input { width: 100px; accent-color: var(--accent); }
   #volume-pct { font: 12px var(--mono); min-width: 3.5em; }
-  .board { display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--muted); font-size: 13px;
-           text-align: center; max-width: 380px; }
-  .board button { font-size: 15px; }
-  footer { color: var(--muted); font-size: 13px; padding: 0 24px 24px; }
+  #console-lines { max-height: 180px; }
+  dialog#help { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 12px;
+                max-width: min(620px, calc(100vw - 32px)); padding: 8px 24px 20px; font-size: 14px; }
+  dialog#help::backdrop { background: rgba(0, 0, 0, 0.6); }
+  dialog#help h2 { font-size: 18px; margin: 12px 0 4px; }
+  dialog#help h3 { font-size: 14px; margin: 16px 0 4px; color: var(--muted); }
+  dialog#help ul { margin: 0; padding-left: 20px; }
+  dialog#help p { margin: 6px 0; }
+  .help-close { position: absolute; right: 12px; top: 12px; }
+  .help-close button { background: none; border-color: transparent; height: 36px; }
+  /* phones and narrow windows: one column that scrolls, the editor a fixed height */
+  @media (max-width: 860px) {
+    html, body { height: auto; }
+    body { display: block; }
+    main.app { display: block; }
+    .device { width: auto; padding: 16px; overflow: visible; }
+    canvas { width: min(370px, 82vw); }
+    .split { display: none; }
+    .side { padding: 0 12px 24px; }
+    .panes > .CodeMirror { flex: none; height: 60vh; }
+    .panes > section.editor { flex: none; overflow: visible; }
+    .top { padding: 6px 8px; }
+  }
 </style>
 </head>
 <body>
-<header>
-  <h1>Luanette playground</h1>
-  <p>A tiny Lua game console for ESP32-S3 boards, running here on the same engine compiled to WebAssembly.
-     <a href="https://github.com/Geofresh/luanette">Source and docs</a></p>
+<header class="top">
+  <button class="logo" id="home" title="All carts" aria-label="Luanette: all carts">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="5" y="2" width="14" height="20" rx="5"/><rect x="8" y="6" width="8" height="7" rx="1"/></svg>
+    <span>Luanette</span>
+  </button>
+  <div class="menu">
+    <button class="cartname" id="cart-btn" aria-haspopup="true" aria-expanded="false" title="Pick another cart">
+      <span id="cart-title">Loading…</span><span class="edited" id="edited" hidden title="Edited: File, Reset to original undoes it">edited</span>
+      <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+    </button>
+    <div class="menu-list carts-list" id="carts" hidden></div>
+  </div>
+  <button class="primary" id="run" title="Runs your edits (Ctrl+Enter)">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4l13 8-13 8z"/></svg>Run
+  </button>
+  <span class="hint desk"><kbd>Ctrl</kbd>+<kbd>Enter</kbd></span>
+  <span class="grow"></span>
+  <nav class="menus" id="menus">
+    <div class="menu">
+      <button aria-haspopup="true" aria-expanded="false">File<svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+      <div class="menu-list" hidden>
+        <button id="new">New cart…</button>
+        <button id="open">Open a .lua file…</button>
+        <button id="save">Save as .lua</button>
+        <hr>
+        <button id="reset">Reset to original</button>
+      </div>
+    </div>
+    <div class="menu">
+      <button aria-haspopup="true" aria-expanded="false">Share<svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+      <div class="menu-list right" hidden>
+        <button id="share">Copy a share link <span class="aside">code, sounds, song</span></button>
+        <button id="gif">Record a 5 s GIF <span class="aside">downloads</span></button>
+        <hr>
+        <button id="submit">Submit to the gallery… <span class="aside">GitHub</span></button>
+      </div>
+    </div>
+    <div class="menu">
+      <button aria-haspopup="true" aria-expanded="false">Board<svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+      <div class="menu-list right" hidden>
+        <button id="send" hidden>Send this cart to the board</button>
+        <button id="unsend" hidden>Remove from board</button>
+        <div id="board" hidden>
+          <hr>
+          <esp-web-install-button id="install" manifest="firmware/manifest.json">
+            <button slot="activate">Install the firmware on a board</button>
+          </esp-web-install-button>
+          <p class="menu-note" id="board-note">Plug the board in over USB. Leave “Erase device” unticked to keep its saves and carts.</p>
+        </div>
+        <p class="menu-note" id="no-serial">Chrome or Edge on a computer can install the firmware and send carts to a
+          board from here. Elsewhere, save the cart as a .lua file and send it with <code>tools/push.py</code>.</p>
+      </div>
+    </div>
+  </nav>
+  <button class="icon" id="help-btn" aria-label="Help and keys" title="Help and keys">?</button>
 </header>
-<main>
+<main class="app" id="app">
   <section class="device">
     <div class="bezel"><canvas id="glass" width="410" height="502" aria-label="The console's screen"></canvas></div>
-    <div class="keys">
-      Tap or click is <kbd>A</kbd>, drag is the d-pad.<span class="desk"> Keys: arrows, <kbd>Z</kbd> for A,
-      <kbd>X</kbd> for B, <kbd>Shift</kbd>+arrows to tilt. A gamepad works too.</span>
-    </div>
-    <div class="keys" id="gamepad" hidden></div>
     <div class="runbar">
-      <button id="pause" title="Stop the frames (the cart keeps its state)">Pause</button>
-      <button id="step" disabled title="One frame, while paused">Step</button>
-      <button id="restart" title="Run the code from the start">Restart</button>
-      <button id="gif" title="Records 5 seconds of the screen as a GIF">Record GIF</button>
+      <button class="icon" id="pause" aria-label="Pause" title="Pause: stops the frames, the cart keeps its state">
+        <svg class="when-running" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/></svg>
+        <svg class="when-paused" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4l13 8-13 8z"/></svg>
+      </button>
+      <button class="icon" id="step" disabled aria-label="Step one frame" title="One frame, while paused">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5 5l10 7-10 7zM17 5h3v14h-3z"/></svg>
+      </button>
+      <button class="icon" id="restart" aria-label="Restart" title="Restart: runs the code from the start">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M4 12a8 8 0 1 0 3-6.2M4 4v5h5"/></svg>
+      </button>
+      <label class="volume" title="The page's volume">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4zM16 9a4 4 0 0 1 0 6"/></svg>
+        <input type="range" id="volume" min="0" max="100" step="5" aria-label="The page's volume">
+        <span id="volume-pct"></span>
+      </label>
     </div>
     <div class="meter" title="Lua instructions this frame, against the 30,000 a frame may have">
       <div class="meter-track"><div id="meter-bar"></div></div>
       <span id="meter-text">stopped</span>
     </div>
-    <label class="volume">Volume
-      <input type="range" id="volume" min="0" max="100" step="5" aria-label="The page's volume">
-      <span id="volume-pct"></span>
-    </label>
-    <button id="tilt" hidden>Use this phone's tilt</button>
-    <div class="board" id="board" hidden>
-      <esp-web-install-button id="install" manifest="firmware/manifest.json">
-        <button slot="activate">Install the firmware on a board</button>
-      </esp-web-install-button>
-      <span id="board-note">Plug in the board over USB. Leave “Erase device” unticked to keep its saves and carts.</span>
+    <div class="keys">
+      Tap or click is <kbd>A</kbd>, drag is the d-pad.<span class="desk"> Keys: arrows, <kbd>Z</kbd> <kbd>X</kbd>.</span>
     </div>
+    <div class="keys" id="gamepad" hidden></div>
+    <button id="tilt" hidden>Use this phone's tilt</button>
   </section>
+  <div class="split" id="split" role="separator" aria-orientation="vertical" aria-label="Drag to resize the screen and the editor" tabindex="0"></div>
   <section class="side">
-    <div class="carts" id="carts"></div>
-    <div class="carts" id="gallery-row" hidden></div>
     <div class="bar" id="newcart" hidden>
       <input type="text" id="newname" placeholder="my_game" maxlength="32" spellcheck="false" autocomplete="off"
              aria-label="The new cart's name: a-z, 0-9, _ and -">
@@ -191,18 +301,7 @@
       <button class="primary" id="create">Create</button>
       <button id="newcancel">Cancel</button>
     </div>
-    <div class="bar">
-      <button class="primary" id="run">Run</button>
-      <button id="reset">Reset to original</button>
-      <button id="open" title="Opens a .lua file as a cart of your own">Open .lua</button>
-      <button id="save" title="Saves the editor's text as a .lua file">Save .lua</button>
-      <button id="share" title="Copies a link that opens this cart, with its sounds and song">Share link</button>
-      <button id="submit" title="Opens a GitHub issue that puts this cart forward for the gallery">Submit to gallery</button>
-      <button id="send" hidden title="Sends this cart to a board on USB, as tools/push.py does">Send to board</button>
-      <button id="unsend" hidden title="Takes this cart out of the board's flash">Remove from board</button>
-      <input type="file" id="file" accept=".lua,text/plain" hidden>
-      <span class="hint desk"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> runs your edits</span>
-    </div>
+    <input type="file" id="file" accept=".lua,text/plain" hidden>
     <div class="bar" id="sharebox" hidden>
       <input type="text" id="sharelink" readonly aria-label="A link to this cart" style="width: 100%">
     </div>
@@ -211,8 +310,10 @@
       <button id="tab-sprites">Sprites</button>
       <button id="tab-sounds">Sounds</button>
       <button id="tab-music">Music</button>
+      <span class="grow"></span>
+      <div class="brush color-strip" id="color-strip" aria-label="The cart's colors: click one to type its number"></div>
     </div>
-    <div class="brush color-strip" id="color-strip" aria-label="The cart's colors: click one to type its number"></div>
+    <div class="panes">
     <textarea id="code" spellcheck="false" aria-label="The cart's Lua source"></textarea>
     <div id="compile-msg" class="problem" hidden></div>
     <section class="editor" id="sprites" hidden>
@@ -310,6 +411,7 @@
           Start it in your cart with <code id="mus-call">music(0)</code>; <code>music(-1)</code> stops it.</p>
       </div>
     </section>
+    </div>
     <div id="status"></div>
     <details id="console" class="console">
       <summary>Console <span id="console-count"></span></summary>
@@ -319,18 +421,32 @@
     </details>
   </section>
 </main>
-<footer>
-  New here? <a href="https://github.com/Geofresh/luanette/blob/main/docs/tutorial.md">Your first cart</a> walks
-  through a small game, sounds and a song. The API is in <a href="https://github.com/Geofresh/luanette/blob/main/docs/api.md">docs/api.md</a>. Edits stay in
-  this browser. <span id="no-serial">Chrome or Edge on a computer can install the firmware and send carts to a board
-  from this page; elsewhere, save a cart as a .lua file and send it with <code>tools/push.py</code>.</span>
-  Your own carts (<strong>+ New cart</strong> or <strong>Open .lua</strong>) are kept in this browser; Save .lua
-  keeps a copy anywhere else, and <strong>Share link</strong> copies a link that opens the cart, its sounds and
-  song too, in anyone's browser (the link is the only copy: nothing is uploaded).
-  <span id="has-serial" hidden>Send to board puts the cart in the editor on a board plugged in over USB under its
-  name; an edited example replaces the built-in one until you restore it. <code>tools/push.py</code> does the same
-  from a .lua file.</span>
-</footer>
+<dialog id="help" aria-labelledby="help-title">
+  <form method="dialog" class="help-close"><button class="icon" aria-label="Close">✕</button></form>
+  <h2 id="help-title">Luanette playground</h2>
+  <p>A tiny Lua game console for ESP32-S3 boards, running here on the same engine compiled to WebAssembly.</p>
+  <h3>Playing</h3>
+  <ul>
+    <li>A tap or click is <kbd>A</kbd>, a drag is the d-pad.</li>
+    <li>Keys: arrows, <kbd>Z</kbd> (or <kbd>Space</kbd>) for A, <kbd>X</kbd> for B, <kbd>Shift</kbd>+arrows to tilt.</li>
+    <li>A gamepad works too: the d-pad or left stick, the bottom and right buttons, the right stick tilts.</li>
+  </ul>
+  <h3>Editing</h3>
+  <ul>
+    <li><kbd>Ctrl</kbd>+<kbd>Enter</kbd> runs your edits; <kbd>Ctrl</kbd>+<kbd>Space</kbd> lists the API; hover a name for its help.</li>
+    <li><kbd>Ctrl</kbd>+<kbd>F</kbd> finds, <kbd>Ctrl</kbd>+<kbd>H</kbd> replaces.</li>
+    <li>In Sprites, Sounds and Music: <kbd>Ctrl</kbd>+<kbd>Z</kbd> undoes, <kbd>Ctrl</kbd>+<kbd>C</kbd> / <kbd>V</kbd> copy and paste; <kbd>Space</kbd> plays a sound.</li>
+  </ul>
+  <h3>Your carts</h3>
+  <p>Edits and your own carts are kept in this browser. <strong>Save as .lua</strong> keeps a copy anywhere else.
+    A <strong>share link</strong> holds the whole cart, its sounds and song too: nothing is uploaded, the link is
+    the only copy. <span id="has-serial" hidden><strong>Send to the board</strong> puts the cart on a board plugged
+    in over USB, under its name; an edited example replaces the built-in one until you restore it.</span></p>
+  <p><a href="https://github.com/Geofresh/luanette/blob/main/docs/tutorial.md">Your first cart</a> ·
+    <a href="https://github.com/Geofresh/luanette/blob/main/docs/api.md">The API</a> ·
+    <a href="https://github.com/Geofresh/luanette/blob/main/docs/cli.md">The command-line tool</a> ·
+    <a href="https://github.com/Geofresh/luanette">Source</a></p>
+</dialog>
 <script src="luanette.js"></script>
 <script src="vendor/codemirror/codemirror.js"></script>
 <script src="vendor/codemirror/lua.js"></script>

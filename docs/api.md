@@ -66,7 +66,7 @@ a version the board doesn't have, and asks for `-- api: 2` when a cart uses the 
   run (the header lines stay), so comment freely.
 - Time: 30,000 Lua instructions per frame (`_update` plus `_draw`); the API's own work, drawing
   and input, doesn't count. `check.py` stops a cart that goes over, and so does the playground
-  (its Send to board won't take one that did). The board doesn't count
+  (its Send to the board won't take one that did). The board doesn't count
   instructions, since that would slow every one of them. Instead it stops a frame that's still
   running Lua after 100 ms, which catches endless loops. A cart within the budget holds its frame
   rate: 30,000 instructions is at most about 15 ms of a 16.7 ms frame, and typical carts use a few

@@ -553,41 +553,121 @@ function deleteCart() {
   select(CARTS[0][0]);
 }
 
+// A cart's name as people read it: an example's or gallery cart's title, your own cart's name.
+function titleOf(name) {
+  const ex = CARTS.find(([n]) => n === name);
+  if (ex) return ex[1];
+  const g = GALLERY.find((g) => "gallery/" + g.name === name);
+  return g ? g.title : plainName(name);
+}
+
+// The cart menu under the cart's name: examples, the gallery, your carts, and a new one.
 function renderCarts() {
-  const row = $("carts");
-  row.replaceChildren();
-  const add = (name, title, cls) => {
+  const list = $("carts");
+  const group = (text) => Object.assign(document.createElement("div"), { className: "group", textContent: text });
+  const item = (name, title, aside, tag) => {
     const b = document.createElement("button");
-    b.textContent = title;
-    b.dataset.name = name;
-    if (cls) b.classList.add(cls);
-    b.onclick = () => { sound.unlock(); select(name); };  // a click: the browser allows sound from here
-    row.appendChild(b);
-  };
-  for (const [name, title] of CARTS) add(name, title);
-  for (const name of mine) add(name, name, "mine");
-  const b = document.createElement("button");
-  b.textContent = "+ New cart";
-  b.onclick = newCart;
-  row.appendChild(b);
-  for (const c of row.children) c.classList.toggle("on", c.dataset.name === current);
-  const gal = $("gallery-row");
-  gal.hidden = !GALLERY.length;
-  gal.replaceChildren(...[Object.assign(document.createElement("span"), { className: "row-label", textContent: "Gallery" })].concat(GALLERY.map((g) => {
-    const b = document.createElement("button");
-    b.textContent = g.title;
-    b.title = `${g.about} (by ${g.by}${g.made_with ? ", made with " + g.made_with : ""})`;
-    if (g.made_with) {  // "-- made with:" in its header: made with an agent
-      const tag = document.createElement("span");
-      tag.className = "agent-tag";
-      tag.textContent = "agent-made";
-      b.append(" ", tag);
+    const t = document.createElement("span");
+    t.textContent = title;
+    b.append(t);
+    if (tag) {  // "-- made with:" in its header: made with an agent
+      const s = document.createElement("span");
+      s.className = "agent-tag";
+      s.textContent = tag;
+      t.append(" ", s);
     }
-    b.dataset.name = "gallery/" + g.name;
-    b.classList.toggle("on", b.dataset.name === current);
-    b.onclick = () => { sound.unlock(); select(b.dataset.name); };
+    if (aside) b.append(Object.assign(document.createElement("span"), { className: "aside", textContent: aside }));
+    b.dataset.name = name;
+    b.classList.toggle("on", name === current);
+    b.onclick = () => { closeMenus(); sound.unlock(); select(name); };  // a click: the browser allows sound from here
     return b;
-  })));
+  };
+  const rows = [group("Examples"), ...CARTS.map(([name, title]) => item(name, title))];
+  if (GALLERY.length) {
+    rows.push(group("Gallery"), ...GALLERY.map((g) => {
+      const b = item("gallery/" + g.name, g.title, "by " + g.by, g.made_with ? "agent-made" : "");
+      b.title = g.about;
+      return b;
+    }));
+  }
+  rows.push(group("Your carts"), ...mine.map((name) => item(name, name)));
+  const add = document.createElement("button");
+  add.textContent = "+ New cart…";
+  add.onclick = () => { closeMenus(); newCart(); };
+  rows.push(add);
+  list.replaceChildren(...rows);
+}
+
+// ---- the menus: the cart's, File, Share, Board ----------------------------------------------------
+function closeMenus(except) {
+  for (const m of document.querySelectorAll(".menu")) {
+    if (m === except) continue;
+    m.querySelector(".menu-list").hidden = true;
+    m.querySelector("button").setAttribute("aria-expanded", "false");
+  }
+}
+function setUpMenus() {
+  for (const m of document.querySelectorAll(".menu")) {
+    const btn = m.querySelector("button"), list = m.querySelector(".menu-list");
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const open = list.hidden;
+      closeMenus(m);
+      list.hidden = !open;
+      btn.setAttribute("aria-expanded", String(open));
+      if (open) (list.querySelector("button.on") || list.querySelector("button:not([hidden])"))?.focus();
+    });
+    // a menu's own items close it; what's inside the installer's button is the installer's
+    list.addEventListener("click", (e) => { if (e.target.closest("button") && !e.target.closest("esp-web-install-button")) closeMenus(); });
+    list.addEventListener("keydown", (e) => {  // arrows move between the items
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+      e.preventDefault();
+      const items = [...list.querySelectorAll("button")].filter((b) => !b.hidden && b.offsetParent);
+      const i = items.indexOf(document.activeElement);
+      items[(i + (e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length]?.focus();
+    });
+  }
+  document.addEventListener("click", (e) => { if (!e.target.closest(".menu-list")) closeMenus(); });
+  addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || !document.querySelector(".menu-list:not([hidden])")) return;
+    const open = document.querySelector(".menu-list:not([hidden])").parentElement.querySelector("button");
+    closeMenus();
+    open.focus();
+  });
+}
+
+// ---- the split between the screen and the editor: drag it, or arrows on it; kept in this browser --
+function setUpSplit() {
+  const app = $("app"), split = $("split");
+  const set = (w) => {
+    w = Math.max(300, Math.min(w, innerWidth - 460));
+    app.style.setProperty("--dev-w", w + "px");
+    cm.refresh();
+    return w;
+  };
+  const kept = Number(storeGet("luanette.split"));
+  if (kept) set(kept);
+  let from = null;
+  split.addEventListener("pointerdown", (e) => {
+    split.setPointerCapture(e.pointerId);
+    split.classList.add("dragging");
+    from = { x: e.clientX, w: app.querySelector(".device").offsetWidth };
+  });
+  split.addEventListener("pointermove", (e) => { if (from) set(from.w + e.clientX - from.x); });
+  const done = () => {
+    if (!from) return;
+    from = null;
+    split.classList.remove("dragging");
+    storeSet("luanette.split", String(app.querySelector(".device").offsetWidth));
+  };
+  split.addEventListener("pointerup", done);
+  split.addEventListener("pointercancel", done);
+  split.addEventListener("keydown", (e) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    e.preventDefault();
+    storeSet("luanette.split", String(set(app.querySelector(".device").offsetWidth + (e.key === "ArrowLeft" ? -20 : 20))));
+  });
+  addEventListener("resize", () => cm.refresh());
 }
 
 // ---- the board: install the firmware, send carts (Web Serial: Chrome and Edge) -------------
@@ -787,7 +867,9 @@ function tick(now) {
 let paused = false;
 function setPaused(p) {
   paused = p;
-  $("pause").textContent = p ? "Resume" : "Pause";
+  $("pause").classList.toggle("paused", p);
+  $("pause").setAttribute("aria-label", p ? "Resume" : "Pause");
+  $("pause").title = p ? "Resume" : "Pause: stops the frames, the cart keeps its state";
   $("step").disabled = !p;
   if (!p) sound.next = 0;  // the synth picks up where it stopped
 }
@@ -818,14 +900,15 @@ async function recordGif() {
   off.width = w;
   off.height = h;
   const g = off.getContext("2d", { willReadFrequently: true });
-  const frames = [], btn = $("gif");
+  const frames = [];
+  $("gif").disabled = true;
   for (let i = 0; i < GIF_FPS * GIF_SECONDS; i++) {
     g.drawImage(glass, 0, 0, w, h);
     frames.push({ rgba: g.getImageData(0, 0, w, h).data });
-    btn.textContent = `Recording ${Math.ceil(GIF_SECONDS - i / GIF_FPS)}…`;
+    if (i % GIF_FPS === 0) say(`Recording a GIF: ${GIF_SECONDS - i / GIF_FPS} s to go…`);
     await new Promise((r) => setTimeout(r, 1000 / GIF_FPS));
   }
-  btn.textContent = "Making the GIF…";
+  say("Making the GIF…");
   await new Promise((r) => setTimeout(r, 30));  // let the button say so
   const bytes = Gif.encode(frames, w, h, Math.round(100 / GIF_FPS), lw.colors());
   const name = (plainName(current) || "cart") + ".gif", a = document.createElement("a");
@@ -834,7 +917,7 @@ async function recordGif() {
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   say(`Saved ${name}: ${GIF_SECONDS} s, ${Math.round(bytes.length / 1024)} KB.`);
-  btn.textContent = "Record GIF";
+  $("gif").disabled = false;
   recording = false;
 }
 
@@ -859,10 +942,12 @@ function colorStrip() {
 
 async function select(name, src) {
   current = name;
-  for (const b of $("carts").children) b.classList.toggle("on", b.dataset.name === name);
+  for (const b of $("carts").querySelectorAll("button")) b.classList.toggle("on", b.dataset.name === name);
+  $("cart-title").textContent = titleOf(name);
+  document.title = titleOf(name) + " · Luanette";
   if (location.hash !== "#" + name) history.replaceState(null, "", "#" + name);
   const example = isShipped(name);
-  $("reset").textContent = example ? "Reset to original" : "Delete";
+  $("reset").textContent = example ? "Reset to original" : "Delete this cart…";
   $("unsend").textContent = isExample(name) ? "Restore the built-in on the board" : "Remove from board";
   $("newcart").hidden = true;
   if (src === undefined) {
@@ -876,6 +961,11 @@ async function select(name, src) {
 
 async function main() {
   renderCarts();
+  setUpMenus();
+  setUpSplit();
+  $("new").onclick = newCart;
+  $("home").onclick = (e) => { e.stopPropagation(); $("cart-btn").click(); };
+  $("help-btn").onclick = () => $("help").showModal();
   $("run").onclick = () => { sound.unlock(); run(code.value); };
   $("reset").onclick = () => {
     if (!current) return;
