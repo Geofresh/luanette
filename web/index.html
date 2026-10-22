@@ -282,6 +282,7 @@
     body.playing .playbar { background: none; width: auto; right: auto; flex-direction: column; height: auto; padding: 12px; }
     body.playing .playbar strong { display: none; }
   }
+  #more { display: none; }
   /* phones and narrow windows: one column that scrolls, the editor a fixed height */
   @media (max-width: 860px) {
     html, body { height: auto; }
@@ -294,6 +295,42 @@
     .panes > .CodeMirror { flex: none; height: 60vh; }
     .panes > section.editor { flex: none; overflow: visible; }
     .top { padding: 6px 8px; }
+  }
+  /* phones: File, Share and Board in one menu behind "⋯"; the screen small beside its controls */
+  @media (max-width: 600px) {
+    .top { flex-wrap: nowrap; gap: 4px; }
+    .top button { height: 44px; }
+    .logo span, .top .hint { display: none; }
+    .cartname { min-width: 0; flex-shrink: 1; }
+    .top > .menu.when-editing { min-width: 0; flex-shrink: 1; }
+    #more { display: inline-flex; }
+    .menus { display: none; position: absolute; top: calc(100% + 4px); right: 8px; flex-direction: column; min-width: 280px;
+             max-height: 75vh; overflow-y: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+             padding: 6px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5); }
+    body.menus-open .menus { display: flex; }
+    .menus > .menu > button { pointer-events: none; color: var(--muted); font-size: 12px; text-transform: uppercase;
+                              letter-spacing: 0.05em; height: 28px; padding: 0 12px; }
+    .menus > .menu > button .chev { display: none; }
+    .menus .menu-list, .menus .menu-list[hidden] { display: flex !important; position: static; border: none; box-shadow: none;
+                                                   padding: 0; min-width: 0; max-height: none; }
+    .menus .menu-list button { min-height: 44px; }
+    .device { display: grid; grid-template-columns: 168px minmax(0, 1fr); gap: 10px 12px; align-items: center; padding: 12px; }
+    .bezel { grid-row: span 5; padding: 6px; }
+    canvas { width: 154px; min-width: 0; }
+    .device > .keys, .device > #tilt { grid-column: 2; font-size: 12px; text-align: left; }
+    .runbar { flex-wrap: wrap; }
+    .runbar button { height: 44px; flex: 1; }
+    #play { order: -1; flex-basis: 100%; justify-content: center; }
+    .volume { margin-left: 0; flex-basis: 100%; min-width: 0; }
+    .volume input { flex: 1; width: auto; min-width: 0; }
+    #volume-pct { min-width: 0; }
+    .meter { width: 100%; }
+    .tabs button { height: 44px; flex: 1; }
+    .tabs .grow { display: none; }
+    .tabs .color-strip { flex-basis: 100%; order: 2; padding: 6px 0; }
+    .color-strip .swatch { height: 32px; flex: 1 1 0; width: auto; min-width: 0; font-size: 10px; }
+    .color-strip { display: flex; }
+    #tilt { height: 44px; }
   }
 </style>
 </head>
@@ -356,6 +393,9 @@
       </div>
     </div>
   </nav>
+  <button class="icon" id="more" aria-label="More: File, Share, Board" aria-expanded="false" title="File, Share, Board">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+  </button>
   <button class="icon" id="help-btn" aria-label="Help and keys" title="Help and keys">?</button>
 </header>
 <div class="playbar" id="playbar">

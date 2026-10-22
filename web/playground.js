@@ -808,6 +808,10 @@ function keepThumb() {
 
 // ---- the menus: the cart's, File, Share, Board ----------------------------------------------------
 function closeMenus(except) {
+  if (!except) {
+    document.body.classList.remove("menus-open");
+    $("more").setAttribute("aria-expanded", "false");
+  }
   for (const m of document.querySelectorAll(".menu")) {
     if (m === except) continue;
     m.querySelector(".menu-list").hidden = true;
@@ -835,8 +839,17 @@ function setUpMenus() {
       items[(i + (e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length]?.focus();
     });
   }
+  $("more").addEventListener("click", (e) => {  // a phone: File, Share and Board in one list
+    e.stopPropagation();
+    const open = !document.body.classList.contains("menus-open");
+    closeMenus();
+    document.body.classList.toggle("menus-open", open);
+    $("more").setAttribute("aria-expanded", String(open));
+    if (open) $("menus").querySelector(".menu-list button:not([hidden])")?.focus();
+  });
   document.addEventListener("click", (e) => { if (!e.target.closest(".menu-list")) closeMenus(); });
   addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && document.body.classList.contains("menus-open")) { closeMenus(); $("more").focus(); return; }
     if (e.key !== "Escape" || !document.querySelector(".menu-list:not([hidden])")) return;
     const open = document.querySelector(".menu-list:not([hidden])").parentElement.querySelector("button");
     closeMenus();
@@ -1187,7 +1200,7 @@ async function main() {
   $("start-board").onclick = () => {
     if (!current) select(CARTS[0][0]);
     else showEditor();
-    setTimeout(() => $("menus").querySelector(".menu:last-child > button").click(), 0);
+    setTimeout(() => (($("more").offsetParent ? $("more") : $("menus").querySelector(".menu:last-child > button"))).click(), 0);
   };
   // a .lua file dropped anywhere opens it as a cart of your own
   let drag = 0;
