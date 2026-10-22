@@ -400,7 +400,7 @@ const slug = (file) => file.toLowerCase().replace(/\.lua$/, "").replace(/[^a-z0-
 
 function addCart(name, src) {
   if (!mine.includes(name)) mine.push(name);
-  const kept = saveMine() && storeSet(sourceKey(name), src);
+  const kept = saveMine() && keep(name, src);
   renderCarts();
   select(name, src);
   if (!kept) say("This browser isn't keeping data for this page, so the cart goes when the tab does. Save .lua keeps a copy.", true);
@@ -547,6 +547,7 @@ async function submitToGallery() {
 function deleteCart() {
   if (!confirm(`Delete ${current} from this browser? Save .lua first if you want to keep a copy.`)) return;
   storeDel(sourceKey(current));
+  storeDel("luanette.when." + current);
   mine = mine.filter((n) => n !== current);
   saveMine();
   renderCarts();
@@ -559,6 +560,19 @@ function titleOf(name) {
   if (ex) return ex[1];
   const g = GALLERY.find((g) => "gallery/" + g.name === name);
   return g ? g.title : plainName(name);
+}
+
+// Whether the cart in the editor differs from how it ships: the "edited" mark by its name.
+function showEdited() {
+  const shipped = current && isShipped(current) && current in originals;
+  const was = $("edited").hidden;
+  $("edited").hidden = !shipped || code.value === originals[current];
+  if (was !== $("edited").hidden) renderCarts();  // the cart menu marks it too
+}
+// Keeps the editor's text as this cart's, and when; the cart browser shows the time.
+function keep(name, src) {
+  storeSet("luanette.when." + name, String(Date.now()));
+  return storeSet(sourceKey(name), src);
 }
 
 // The cart menu under the cart's name: examples, the gallery, your carts, and a new one.
@@ -582,10 +596,14 @@ function renderCarts() {
     b.onclick = () => { closeMenus(); sound.unlock(); select(name); };  // a click: the browser allows sound from here
     return b;
   };
-  const rows = [group("Examples"), ...CARTS.map(([name, title]) => item(name, title))];
+  const draft = (name) => {  // a draft the same as the original (kept by older pages) isn't an edit
+    const d = storeGet(sourceKey(name));
+    return d && (!(name in originals) || d !== originals[name]) ? "edited" : "";
+  };
+  const rows = [group("Examples"), ...CARTS.map(([name, title]) => item(name, title, draft(name)))];
   if (GALLERY.length) {
     rows.push(group("Gallery"), ...GALLERY.map((g) => {
-      const b = item("gallery/" + g.name, g.title, "by " + g.by, g.made_with ? "agent-made" : "");
+      const b = item("gallery/" + g.name, g.title, draft("gallery/" + g.name) || "by " + g.by, g.made_with ? "agent-made" : "");
       b.title = g.about;
       return b;
     }));
@@ -826,7 +844,7 @@ function run(src) {
   running = true;
   last = performance.now();
   spare = 0;
-  storeSet(sourceKey(name), src);
+  if (!isShipped(name) || src !== originals[name]) keep(name, src);
 }
 
 // One frame of the cart: its input, its log, its sounds; false once it has stopped.
@@ -953,9 +971,11 @@ async function select(name, src) {
   if (src === undefined) {
     if (example) await shippedSource(name);
     src = storeGet(sourceKey(name)) || (example ? originals[name] : TEMPLATE(name));
+    if (example && src === originals[name]) storeDel(sourceKey(name));
   }
   code.load(src);
   run(code.value);
+  showEdited();
   if (typeof SoundEditor !== "undefined" && SoundEditor.tab !== "code") SoundEditor.show();
 }
 
@@ -973,6 +993,8 @@ async function main() {
     storeDel(sourceKey(current));
     code.value = originals[current];
     run(code.value);
+    showEdited();
+    renderCarts();
   };
   $("create").onclick = createCart;
   $("newcancel").onclick = () => { $("newcart").hidden = true; };
@@ -1006,7 +1028,12 @@ async function main() {
   let saving = 0;  // edits are kept as you type, not only when run
   code.addEventListener("input", () => {
     clearTimeout(saving);
-    saving = setTimeout(() => current && storeSet(sourceKey(current), code.value), 400);
+    saving = setTimeout(() => {
+      if (!current) return;
+      if (isShipped(current) && code.value === originals[current]) storeDel(sourceKey(current));  // back as it ships
+      else keep(current, code.value);
+      showEdited();
+    }, 400);
   });
   say("Loading the engine…");
   const mod = await Luanette();
