@@ -50,8 +50,10 @@ Measured on the AMOLED-2.06:
 ## The playground
 
 [geofresh.github.io/luanette](https://geofresh.github.io/luanette/) is an editor and the console
-side by side. Edit a cart's code and press Run (or Ctrl+Enter) to see the change. The cart's name
-at the top picks another cart; the File, Share and Board menus hold the rest.
+side by side. It opens on every cart there is, with a picture of each: the examples, the gallery and
+your own. Pick one, edit its code and press Run (or Ctrl+Enter) to see the change. The cart's name at
+the top switches to another, the Luanette logo goes back to all of them, and the File, Share and
+Board menus hold the rest.
 
 - **Your own carts.** File, New cart starts one from a small template. Open a .lua file and Save as
   .lua move them in and out as files. They're kept in your browser as you type.

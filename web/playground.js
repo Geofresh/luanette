@@ -294,7 +294,7 @@ const sound = {
   ctx: null, out: null, buffers: [], next: 0, queued: [],
   level: 0.7,  // the page's volume, 0-1 (the slider); everything plays through `out`
   unlock() {
-    if (this.ctx || !window.AudioContext) return;
+    if (this.ctx || !window.AudioContext || !lw) return;
     this.ctx = new AudioContext();
     this.out = this.ctx.createGain();
     this.out.gain.value = this.gainFor(this.level);
@@ -407,18 +407,20 @@ function addCart(name, src) {
 }
 
 function newCart() {
-  $("newcart").hidden = false;
   $("newname").value = "";
+  $("newproblem").hidden = true;
+  $("newcart").showModal();
   $("newname").focus();
-  say("");
 }
 // A new cart from a template (templates/: blank, platformer, shooter, puzzle), its title its name.
 async function createCart() {
   const name = $("newname").value.trim().toLowerCase();
-  if (mine.includes(name)) { say(`You already have ${name}.`, true); return; }
-  const problem = nameProblem(name);
-  if (problem) { say(problem, true); return; }
-  $("newcart").hidden = true;
+  const problem = mine.includes(name) ? `You already have ${name}.` : nameProblem(name);
+  $("newproblem").textContent = problem;
+  $("newproblem").hidden = !problem;
+  if (problem) { $("newname").focus(); return; }
+  $("newcart").close();
+  history.pushState(null, "", "#" + name);  // Back returns to where it was made from
   let src = TEMPLATE(name);
   try {
     const r = await fetch("templates/" + $("newtemplate").value + ".lua");
@@ -614,6 +616,123 @@ function renderCarts() {
   add.onclick = () => { closeMenus(); newCart(); };
   rows.push(add);
   list.replaceChildren(...rows);
+}
+
+// ---- the cart browser: where to start, and a card for each cart ------------------------------------
+let EXAMPLES = {};  // name -> {title, by, about}, from examples.json (web/build.sh)
+let resumeOnBack = false;
+const browsing = () => document.body.classList.contains("browsing");
+
+function ago(ms) {
+  const m = Math.round((Date.now() - ms) / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return m + " min ago";
+  const h = Math.round(m / 60);
+  if (h < 24) return h + (h === 1 ? " hour ago" : " hours ago");
+  const d = Math.round(h / 24);
+  return d === 1 ? "yesterday" : d + " days ago";
+}
+
+function card(name, title, about, pic, extra = {}) {
+  const b = document.createElement("button");
+  b.className = "card";
+  b.dataset.name = name;
+  b.dataset.find = (title + " " + about + " " + (extra.by || "")).toLowerCase();
+  if (pic) {
+    const img = Object.assign(document.createElement("img"), { className: "pic", src: pic, alt: "", loading: "lazy" });
+    img.onerror = () => img.replaceWith(Object.assign(document.createElement("div"), { className: "pic none", textContent: "no picture yet" }));
+    b.append(img);
+  } else {
+    b.append(Object.assign(document.createElement("div"), { className: "pic none", textContent: "run it for a picture" }));
+  }
+  const words = Object.assign(document.createElement("span"), { className: "words" });
+  const t = document.createElement("strong");
+  t.textContent = title;
+  if (extra.tag) t.append(Object.assign(document.createElement("span"), { className: "agent-tag", textContent: extra.tag }));
+  words.append(t);
+  if (about) words.append(Object.assign(document.createElement("span"), { className: "about", textContent: about }));
+  if (extra.byLine) words.append(Object.assign(document.createElement("span"), { className: "about", textContent: "by " + extra.by }));
+  if (extra.when) words.append(Object.assign(document.createElement("span"), { className: "when", textContent: extra.when }));
+  b.append(words);
+  b.onclick = () => { sound.unlock(); history.pushState(null, "", "#" + name); select(name); };
+  return b;
+}
+function addCard(cls, svg, title, note, onclick) {
+  const b = document.createElement("button");
+  b.className = "card add " + cls;
+  b.innerHTML = svg;
+  b.append(Object.assign(document.createElement("strong"), { textContent: title }),
+    Object.assign(document.createElement("span"), { textContent: note }));
+  b.onclick = onclick;
+  return b;
+}
+
+function renderBrowser() {
+  const edited = (name) => {
+    const d = storeGet(sourceKey(name)), when = Number(storeGet("luanette.when." + name));
+    return d && (!(name in originals) || d !== originals[name]) ? "edited" + (when ? " " + ago(when) : "") : "";
+  };
+  const byWhen = [...mine].sort((a, b) => Number(storeGet("luanette.when." + b) || 0) - Number(storeGet("luanette.when." + a) || 0));
+  $("cards-mine").replaceChildren(
+    addCard("new", '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
+      "New cart", "blank, platformer, shooter or puzzle", newCart),
+    ...byWhen.map((name) => {
+      const src = storeGet(sourceKey(name)) || "", when = Number(storeGet("luanette.when." + name));
+      const title = (/^--\s*title\s*:\s*(.+)$/m.exec(src) || [, name])[1].trim();
+      const about = (/^--\s*about\s*:\s*(.+)$/m.exec(src) || [, ""])[1].trim();
+      return card(name, title, about, storeGet("luanette.thumb." + name), { when: when ? "edited " + ago(when) : "" });
+    }),
+    addCard("open", '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 4h10l6 6v10H4zM14 4v6h6"/></svg>',
+      "Open a .lua file", "or drop one on the page", () => $("file").click()));
+  $("cards-examples").replaceChildren(...CARTS.map(([name, title]) =>
+    card(name, title, EXAMPLES[name]?.about || "", "thumbs/" + name + ".png", { when: edited(name), by: EXAMPLES[name]?.by })));
+  $("gallery-head").hidden = !GALLERY.length;
+  $("cards-gallery").replaceChildren(...GALLERY.map((g) =>
+    card("gallery/" + g.name, g.title, g.about, "thumbs/gallery-" + g.name + ".png",
+      { tag: g.made_with ? "agent-made" : "", by: g.by, byLine: true, when: edited("gallery/" + g.name) })));
+  findCarts();
+}
+
+function findCarts() {
+  const q = $("find").value.trim().toLowerCase();
+  let shown = 0;
+  for (const c of document.querySelectorAll(".browser .card")) {
+    const hit = !q || (c.dataset.find || "").includes(q);
+    c.hidden = !hit;
+    if (hit && c.dataset.find) shown++;
+  }
+  $("find-none").hidden = !q || shown > 0;
+}
+
+function showBrowser() {
+  closeMenus();
+  if (!browsing() && running && !paused) { setPaused(true); resumeOnBack = true; }
+  sound.stop();
+  document.body.classList.add("browsing");
+  $("browser").hidden = false;
+  $("back").hidden = !current;
+  $("back-title").textContent = current ? titleOf(current) : "";
+  document.title = "Luanette playground";
+  renderBrowser();
+}
+function showEditor() {
+  if (!browsing()) return;
+  document.body.classList.remove("browsing");
+  $("browser").hidden = true;
+  if (resumeOnBack) setPaused(false);
+  resumeOnBack = false;
+  if (current) document.title = titleOf(current) + " · Luanette";
+  cm.refresh();
+}
+
+// A picture of your own cart for its card: the screen a couple of seconds in, small.
+function keepThumb() {
+  if (!current || isShipped(current)) return;
+  const c = document.createElement("canvas");
+  c.width = 205;
+  c.height = 251;
+  c.getContext("2d").drawImage(glass, 0, 0, c.width, c.height);
+  storeSet("luanette.thumb." + current, c.toDataURL("image/jpeg", 0.8));
 }
 
 // ---- the menus: the cart's, File, Share, Board ----------------------------------------------------
@@ -850,6 +969,7 @@ function run(src) {
 // One frame of the cart: its input, its log, its sounds; false once it has stopped.
 function frameOnce() {
   frameNo++;
+  if (frameNo === 60) keepThumb();
   const alive = lw.lw_frame(...input());
   drainLog();
   for (let n = lw.lw_sound(); n >= 0; n = lw.lw_sound()) sound.play(n);
@@ -958,8 +1078,13 @@ function colorStrip() {
   }));
 }
 
+let engineReady;
+const engine = new Promise((r) => { engineReady = r; });
 async function select(name, src) {
+  await engine;  // a card picked while the engine is still loading waits for it
   current = name;
+  resumeOnBack = false;
+  showEditor();
   for (const b of $("carts").querySelectorAll("button")) b.classList.toggle("on", b.dataset.name === name);
   $("cart-title").textContent = titleOf(name);
   document.title = titleOf(name) + " · Luanette";
@@ -967,7 +1092,6 @@ async function select(name, src) {
   const example = isShipped(name);
   $("reset").textContent = example ? "Reset to original" : "Delete this cart…";
   $("unsend").textContent = isExample(name) ? "Restore the built-in on the board" : "Remove from board";
-  $("newcart").hidden = true;
   if (src === undefined) {
     if (example) await shippedSource(name);
     src = storeGet(sourceKey(name)) || (example ? originals[name] : TEMPLATE(name));
@@ -984,7 +1108,27 @@ async function main() {
   setUpMenus();
   setUpSplit();
   $("new").onclick = newCart;
-  $("home").onclick = (e) => { e.stopPropagation(); $("cart-btn").click(); };
+  $("home").onclick = () => { if (!browsing()) location.hash = "carts"; };
+  $("back").onclick = () => { location.hash = current; };
+  $("find").oninput = findCarts;
+  $("start-play").onclick = () => { sound.unlock(); $("cards-examples").firstElementChild?.click(); };
+  $("start-board").onclick = () => {
+    if (!current) select(CARTS[0][0]);
+    else showEditor();
+    setTimeout(() => $("menus").querySelector(".menu:last-child > button").click(), 0);
+  };
+  // a .lua file dropped anywhere opens it as a cart of your own
+  let drag = 0;
+  addEventListener("dragenter", (e) => { if (e.dataTransfer?.types.includes("Files")) { drag++; document.body.classList.add("dropping"); } });
+  addEventListener("dragleave", () => { if (--drag <= 0) { drag = 0; document.body.classList.remove("dropping"); } });
+  addEventListener("dragover", (e) => { if (e.dataTransfer?.types.includes("Files")) e.preventDefault(); });
+  addEventListener("drop", (e) => {
+    if (!e.dataTransfer?.files.length) return;
+    e.preventDefault();
+    drag = 0;
+    document.body.classList.remove("dropping");
+    openFile(e.dataTransfer.files[0]);
+  });
   $("help-btn").onclick = () => $("help").showModal();
   $("run").onclick = () => { sound.unlock(); run(code.value); };
   $("reset").onclick = () => {
@@ -997,11 +1141,8 @@ async function main() {
     renderCarts();
   };
   $("create").onclick = createCart;
-  $("newcancel").onclick = () => { $("newcart").hidden = true; };
-  $("newname").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") createCart();
-    if (e.key === "Escape") $("newcart").hidden = true;
-  });
+  $("newcancel").onclick = () => $("newcart").close();
+  $("newname").addEventListener("keydown", (e) => { if (e.key === "Enter") createCart(); });
   $("open").onclick = () => $("file").click();
   $("file").onchange = () => { openFile($("file").files[0]); $("file").value = ""; };
   $("save").onclick = saveFile;
@@ -1035,6 +1176,13 @@ async function main() {
       showEdited();
     }, 400);
   });
+  // The browser's lists before the engine: with no cart in the address, they're the first thing shown.
+  try { GALLERY = await (await fetch("gallery.json")).json(); } catch { GALLERY = []; }  // before a link: it may be one of them
+  try { for (const e of await (await fetch("examples.json")).json()) EXAMPLES[e.name] = e; } catch {}
+  renderCarts();
+  const fromHash = decodeURIComponent(location.hash.slice(1));
+  const opening = fromHash.startsWith("cart=") || isShipped(fromHash) || mine.includes(fromHash);
+  if (!opening) showBrowser();
   say("Loading the engine…");
   const mod = await Luanette();
   lw = {
@@ -1066,16 +1214,20 @@ async function main() {
   };
   requestAnimationFrame(tick);
   setUpBoard();
-  addEventListener("hashchange", () => {  // a link pasted into this tab's address bar: a shared cart, or one by name
+  // The address: "#carts" is the cart browser, "#NAME" a cart, "#cart=..." a shared one; Back and
+  // Forward move between them, and a link pasted into the address bar opens.
+  addEventListener("hashchange", () => {
     const h = decodeURIComponent(location.hash.slice(1));
     if (h.startsWith("cart=")) openLink(h.slice(5));
-    else if (h !== current && (isShipped(h) || mine.includes(h))) select(h);
+    else if (h === "carts" || !h) showBrowser();
+    else if (h === current) showEditor();
+    else if (isShipped(h) || mine.includes(h)) select(h);
   });
-  try { GALLERY = await (await fetch("gallery.json")).json(); } catch { GALLERY = []; }  // before a link: it may be one of them
-  renderCarts();
-  const fromHash = location.hash.slice(1);
+  engineReady();
+  say("");
   if (fromHash.startsWith("cart=") && await openLink(fromHash.slice(5))) return;
-  select(isShipped(fromHash) || mine.includes(fromHash) ? fromHash : CARTS[0][0]);
+  if (isShipped(fromHash) || mine.includes(fromHash)) select(fromHash);
+  else if (!browsing()) showBrowser();  // no cart named (or a link that couldn't be read): the cart browser is the way in
 }
 
 main();

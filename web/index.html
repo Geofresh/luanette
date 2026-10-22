@@ -179,6 +179,14 @@
   .volume input { width: 100px; accent-color: var(--accent); }
   #volume-pct { font: 12px var(--mono); min-width: 3.5em; }
   #console-lines { max-height: 180px; }
+  dialog#newcart { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 12px;
+                   width: min(460px, calc(100vw - 32px)); padding: 8px 24px 20px; }
+  dialog#newcart::backdrop { background: rgba(0, 0, 0, 0.6); }
+  dialog#newcart h2 { font-size: 18px; margin: 12px 0; }
+  .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; font-size: 14px; }
+  .field .note { color: var(--muted); font-size: 12px; }
+  .field input[type=text], .field select { width: 100%; font: 14px var(--mono); color: var(--text); background: var(--bg);
+                                            border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
   dialog#help { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 12px;
                 max-width: min(620px, calc(100vw - 32px)); padding: 8px 24px 20px; font-size: 14px; }
   dialog#help::backdrop { background: rgba(0, 0, 0, 0.6); }
@@ -188,6 +196,52 @@
   dialog#help p { margin: 6px 0; }
   .help-close { position: absolute; right: 12px; top: 12px; }
   .help-close button { background: none; border-color: transparent; height: 36px; }
+  /* the cart browser: where to start, then a card for each cart */
+  body.browsing .top .when-editing { display: none; }
+  .top .when-browsing { display: none; }
+  body.browsing .top .when-browsing { display: inline-flex; }
+  body.browsing main.app { display: none; }
+  .browser { flex: 1; overflow-y: auto; }
+  .browser-in { max-width: 1240px; margin: 0 auto; padding: 24px 24px 48px; display: flex; flex-direction: column; gap: 14px; }
+  .browser h2 { font-size: 18px; margin: 18px 0 0; display: flex; align-items: baseline; gap: 12px; }
+  .browser h2 .note { font-size: 13px; font-weight: 400; color: var(--muted); }
+  .starts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  .start { display: flex; gap: 12px; align-items: flex-start; text-align: left; padding: 18px; border-radius: 12px;
+           background: var(--panel); border: 1px solid var(--line); color: var(--text); text-decoration: none; font: inherit; }
+  .start svg { color: var(--accent); flex-shrink: 0; }
+  .start > span { display: flex; flex-direction: column; gap: 2px; }
+  .start strong { font-size: 16px; }
+  .start span span { color: var(--muted); font-size: 14px; }
+  .start:hover { border-color: var(--muted); }
+  .find { display: flex; align-items: center; gap: 8px; max-width: 420px; height: 40px; padding: 0 12px; margin-top: 10px;
+          background: var(--panel); border: 1px solid var(--line); border-radius: 8px; color: var(--muted); }
+  .find input { flex: 1; background: none; border: none; outline: none; color: var(--text); font: inherit; }
+  .find:focus-within { border-color: var(--muted); }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 16px; }
+  .card { display: flex; flex-direction: column; padding: 0; text-align: left; border-radius: 12px; overflow: hidden;
+          background: var(--panel); border: 1px solid var(--line); color: var(--text); font: inherit; cursor: pointer; }
+  .card:hover, .card:focus-visible { border-color: var(--muted); }
+  .card .pic { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; background: #000; }
+  .card .pic.none { display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 13px; }
+  .card .words { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 3px; }
+  .card strong { font-size: 15px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .card .about { color: var(--muted); font-size: 13px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2;
+                 -webkit-box-orient: vertical; overflow: hidden; }
+  .card .when { color: var(--accent); font-size: 13px; }
+  .card.add { border-style: dashed; background: none; align-items: center; justify-content: center; gap: 6px;
+              min-height: 220px; text-align: center; padding: 16px; }
+  .card.add svg { color: var(--accent); }
+  .card.add span { color: var(--muted); font-size: 13px; }
+  body.dropping::after { content: "Drop a .lua file to open it"; position: fixed; inset: 12px; border: 2px dashed var(--accent);
+                         border-radius: 16px; background: rgba(13, 17, 23, 0.85); display: flex; align-items: center;
+                         justify-content: center; font-size: 20px; color: var(--accent); z-index: 50; pointer-events: none; }
+  @media (max-width: 860px) {
+    .starts { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+    .start { padding: 12px 14px; }
+    .browser-in { padding: 16px; }
+    .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .card.add { min-height: 160px; }
+  }
   /* phones and narrow windows: one column that scrolls, the editor a fixed height */
   @media (max-width: 860px) {
     html, body { height: auto; }
@@ -209,20 +263,24 @@
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="5" y="2" width="14" height="20" rx="5"/><rect x="8" y="6" width="8" height="7" rx="1"/></svg>
     <span>Luanette</span>
   </button>
-  <div class="menu">
+  <div class="menu when-editing">
     <button class="cartname" id="cart-btn" aria-haspopup="true" aria-expanded="false" title="Pick another cart">
       <span id="cart-title">Loading…</span><span class="edited" id="edited" hidden title="Edited: File, Reset to original undoes it">edited</span>
       <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
     </button>
     <div class="menu-list carts-list" id="carts" hidden></div>
   </div>
-  <button class="primary" id="run" title="Runs your edits (Ctrl+Enter)">
+  <button class="primary when-editing" id="run" title="Runs your edits (Ctrl+Enter)">
     <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4l13 8-13 8z"/></svg>Run
   </button>
-  <span class="hint desk"><kbd>Ctrl</kbd>+<kbd>Enter</kbd></span>
+  <span class="hint desk when-editing"><kbd>Ctrl</kbd>+<kbd>Enter</kbd></span>
+  <button class="when-browsing" id="back" title="Back to the cart you had open">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+    <span id="back-title">Back</span>
+  </button>
   <span class="grow"></span>
   <nav class="menus" id="menus">
-    <div class="menu">
+    <div class="menu when-editing">
       <button aria-haspopup="true" aria-expanded="false">File<svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
       <div class="menu-list" hidden>
         <button id="new">New cart…</button>
@@ -232,7 +290,7 @@
         <button id="reset">Reset to original</button>
       </div>
     </div>
-    <div class="menu">
+    <div class="menu when-editing">
       <button aria-haspopup="true" aria-expanded="false">Share<svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
       <div class="menu-list right" hidden>
         <button id="share">Copy a share link <span class="aside">code, sounds, song</span></button>
@@ -260,6 +318,35 @@
   </nav>
   <button class="icon" id="help-btn" aria-label="Help and keys" title="Help and keys">?</button>
 </header>
+<section class="browser" id="browser" hidden aria-label="All carts">
+  <div class="browser-in">
+    <div class="starts">
+      <button class="start" id="start-play">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M7 4l13 8-13 8z"/></svg>
+        <span><strong>Play something</strong><span>Pick any cart below. A tap is A, a drag is the d-pad.</span></span>
+      </button>
+      <a class="start" href="https://github.com/Geofresh/luanette/blob/main/docs/tutorial.md" target="_blank" rel="noopener">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16zM13 7l4 4"/></svg>
+        <span><strong>Make your first cart</strong><span>A short walk through code, a sprite, a sound and a song.</span></span>
+      </a>
+      <button class="start" id="start-board">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 2v4M15 2v4M6 6h12v5a6 6 0 0 1-12 0zM12 17v5"/></svg>
+        <span><strong>Put it on a board</strong><span>Install Luanette on an ESP32-S3 board over USB, then send carts to it.</span></span>
+      </button>
+    </div>
+    <label class="find">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+      <input type="search" id="find" placeholder="Find a cart" aria-label="Find a cart" autocomplete="off" spellcheck="false">
+    </label>
+    <h2>Your carts <span class="note">kept in this browser</span></h2>
+    <div class="cards" id="cards-mine"></div>
+    <h2>Examples</h2>
+    <div class="cards" id="cards-examples"></div>
+    <h2 id="gallery-head">Gallery <a class="note" href="https://github.com/Geofresh/luanette/tree/main/gallery#adding-yours" target="_blank" rel="noopener">How to put yours in</a></h2>
+    <div class="cards" id="cards-gallery"></div>
+    <p class="note" id="find-none" hidden>No cart matches that.</p>
+  </div>
+</section>
 <main class="app" id="app">
   <section class="device">
     <div class="bezel"><canvas id="glass" width="410" height="502" aria-label="The console's screen"></canvas></div>
@@ -292,15 +379,6 @@
   </section>
   <div class="split" id="split" role="separator" aria-orientation="vertical" aria-label="Drag to resize the screen and the editor" tabindex="0"></div>
   <section class="side">
-    <div class="bar" id="newcart" hidden>
-      <input type="text" id="newname" placeholder="my_game" maxlength="32" spellcheck="false" autocomplete="off"
-             aria-label="The new cart's name: a-z, 0-9, _ and -">
-      <label class="note">Start from <select id="newtemplate" aria-label="The template the cart starts from">
-        <option value="blank">blank</option><option value="platformer">platformer</option>
-        <option value="shooter">shooter</option><option value="puzzle">puzzle</option></select></label>
-      <button class="primary" id="create">Create</button>
-      <button id="newcancel">Cancel</button>
-    </div>
     <input type="file" id="file" accept=".lua,text/plain" hidden>
     <div class="bar" id="sharebox" hidden>
       <input type="text" id="sharelink" readonly aria-label="A link to this cart" style="width: 100%">
@@ -421,6 +499,20 @@
     </details>
   </section>
 </main>
+<dialog id="newcart" aria-labelledby="newcart-title">
+  <h2 id="newcart-title">A new cart</h2>
+  <label class="field">Its name <span class="note">a-z, 0-9, _ and -; it's the file's name too</span>
+    <input type="text" id="newname" placeholder="my_game" maxlength="32" spellcheck="false" autocomplete="off"></label>
+  <label class="field">Start from
+    <select id="newtemplate">
+      <option value="blank">blank: a dot to move, with a sprite, a sound and log()</option>
+      <option value="platformer">platformer: run and jump</option>
+      <option value="shooter">shooter: fly and fire</option>
+      <option value="puzzle">puzzle: tap to flip tiles</option>
+    </select></label>
+  <p class="problem" id="newproblem" hidden></p>
+  <div class="bar"><span class="grow"></span><button id="newcancel">Cancel</button><button class="primary" id="create">Create</button></div>
+</dialog>
 <dialog id="help" aria-labelledby="help-title">
   <form method="dialog" class="help-close"><button class="icon" aria-label="Close">✕</button></form>
   <h2 id="help-title">Luanette playground</h2>
