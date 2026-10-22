@@ -55,6 +55,8 @@ your own. Pick one, edit its code and press Run (or Ctrl+Enter) to see the chang
 the top switches to another, the Luanette logo goes back to all of them, and the File, Share and
 Board menus hold the rest.
 
+- **Play mode**, under the screen, shows the screen alone, full screen. On a phone it adds a d-pad
+  and A and B buttons, and a cart picked from the list opens in it.
 - **Your own carts.** File, New cart starts one from a small template. Open a .lua file and Save as
   .lua move them in and out as files. They're kept in your browser as you type.
 - **Sounds and music.** The Sounds tab is a note grid: pick an instrument and an effect, draw

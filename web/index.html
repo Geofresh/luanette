@@ -242,6 +242,46 @@
     .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
     .card.add { min-height: 160px; }
   }
+  /* play mode: the screen alone, black around it; on a touch screen, a d-pad and A and B below it */
+  .playbar, .pad { display: none; }
+  body.playing { overflow: hidden; }
+  body.playing .top, body.playing .side, body.playing .split, body.playing .browser, body.playing .device > :not(.bezel) { display: none !important; }
+  body.playing main.app { display: flex; position: fixed; inset: 0; z-index: 40; background: #000; align-items: center;
+                          justify-content: center; padding: 64px 12px var(--pad-h, 16px); --pad-h: 16px; }
+  body.playing.touchpad main.app { --pad-h: 230px; }
+  body.playing .device { width: auto; padding: 0; overflow: visible; }
+  body.playing .bezel { border: none; padding: 0; background: none; }
+  body.playing canvas { width: min(calc(100vw - 24px), calc((100dvh - 64px - var(--pad-h)) * 0.817)); }
+  body.playing .playbar { display: flex; position: fixed; top: 0; left: 0; right: 0; z-index: 41; height: 60px;
+                          align-items: center; gap: 8px; padding: 0 12px; }
+  .playbar strong { flex: 1; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .round { width: 44px; height: 44px; border-radius: 22px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+  #play-mute .off, #play-mute.muted .on { display: none; }
+  #play-mute.muted .off { display: inline; }
+  body.playing.touchpad .pad { display: flex; position: fixed; left: 0; right: 0; bottom: 0; height: 230px; z-index: 41;
+                               align-items: center; justify-content: space-between; padding: 0 22px 24px;
+                               touch-action: none; user-select: none; -webkit-user-select: none; }
+  .dpad { width: 156px; height: 156px; position: relative; touch-action: none; }
+  .dpad span { position: absolute; width: 52px; height: 52px; background: var(--panel); border: 1px solid var(--line); }
+  .dpad .u { left: 52px; top: 0; border-radius: 10px 10px 4px 4px; }
+  .dpad .d { left: 52px; bottom: 0; border-radius: 4px 4px 10px 10px; }
+  .dpad .l { left: 0; top: 52px; border-radius: 10px 4px 4px 10px; }
+  .dpad .r { right: 0; top: 52px; border-radius: 4px 10px 10px 4px; }
+  .dpad::before { content: ""; position: absolute; left: 52px; top: 52px; width: 52px; height: 52px; background: var(--panel); }
+  .dpad span.held { background: #30363d; }
+  .ab { display: flex; gap: 14px; align-items: flex-end; transform: rotate(-18deg); }
+  .ab button { width: 64px; height: 64px; border-radius: 32px; font-size: 20px; font-weight: 700; padding: 0; touch-action: none; }
+  #pad-b { margin-bottom: -16px; }
+  #pad-a { width: 72px; height: 72px; border-radius: 36px; font-size: 22px; background: var(--accent); border-color: var(--accent); color: #1a1300; }
+  .ab button.held { filter: brightness(0.8); transform: scale(0.95); }
+  @media (orientation: landscape) and (max-height: 600px) {  /* a phone on its side: the buttons either side of the screen */
+    body.playing.touchpad main.app { --pad-h: 12px; align-items: center; padding-top: 12px; }
+    body.playing.touchpad canvas { width: calc((100dvh - 24px) * 0.817); }
+    body.playing.touchpad .pad { top: 0; height: auto; padding: 0 28px; background: none; pointer-events: none; }
+    body.playing.touchpad .pad > * { pointer-events: auto; }
+    body.playing .playbar { background: none; width: auto; right: auto; flex-direction: column; height: auto; padding: 12px; }
+    body.playing .playbar strong { display: none; }
+  }
   /* phones and narrow windows: one column that scrolls, the editor a fixed height */
   @media (max-width: 860px) {
     html, body { height: auto; }
@@ -318,6 +358,20 @@
   </nav>
   <button class="icon" id="help-btn" aria-label="Help and keys" title="Help and keys">?</button>
 </header>
+<div class="playbar" id="playbar">
+  <button class="round" id="play-exit" aria-label="Leave play mode" title="Leave play mode (Esc)">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+  </button>
+  <strong id="play-title"></strong>
+  <button class="round" id="play-mute" aria-label="Sound off" title="Sound on or off">
+    <svg class="on" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4zM16 9a4 4 0 0 1 0 6"/></svg>
+    <svg class="off" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4zM16 9l5 6M21 9l-5 6"/></svg>
+  </button>
+</div>
+<div class="pad" id="pad" aria-hidden="true">
+  <div class="dpad" id="dpad"><span class="u"></span><span class="l"></span><span class="r"></span><span class="d"></span></div>
+  <div class="ab"><button id="pad-b" tabindex="-1">B</button><button id="pad-a" tabindex="-1">A</button></div>
+</div>
 <section class="browser" id="browser" hidden aria-label="All carts">
   <div class="browser-in">
     <div class="starts">
@@ -360,6 +414,10 @@
       </button>
       <button class="icon" id="restart" aria-label="Restart" title="Restart: runs the code from the start">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M4 12a8 8 0 1 0 3-6.2M4 4v5h5"/></svg>
+      </button>
+      <button id="play" title="Play mode: the screen alone, with buttons on a phone (Esc leaves)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+        Play mode
       </button>
       <label class="volume" title="The page's volume">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4zM16 9a4 4 0 0 1 0 6"/></svg>
@@ -522,6 +580,8 @@
     <li>A tap or click is <kbd>A</kbd>, a drag is the d-pad.</li>
     <li>Keys: arrows, <kbd>Z</kbd> (or <kbd>Space</kbd>) for A, <kbd>X</kbd> for B, <kbd>Shift</kbd>+arrows to tilt.</li>
     <li>A gamepad works too: the d-pad or left stick, the bottom and right buttons, the right stick tilts.</li>
+    <li><strong>Play mode</strong>, under the screen, shows the screen alone. On a phone it adds a d-pad and A and B
+      buttons. <kbd>Esc</kbd> or ✕ leaves it.</li>
   </ul>
   <h3>Editing</h3>
   <ul>

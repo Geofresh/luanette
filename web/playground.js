@@ -231,7 +231,7 @@ function input() {
   }
   keyTilt = keyTilt.map((v, i) => v + (want[i] - v) * 0.2);  // eased, as a hand tilts
   const pad = gamepad();
-  held |= pad.held;
+  held |= pad.held | padHeld;
   const [ax, ay] = pad.tilt || phoneTilt || keyTilt;
   return [held, touching, tx, ty, ax, ay];
 }
@@ -265,6 +265,71 @@ addEventListener("gamepadconnected", (e) => {
 addEventListener("gamepaddisconnected", () => {
   $("gamepad").hidden = ![...(navigator.getGamepads?.() || [])].some((p) => p && p.connected);
 });
+
+// ---- play mode: the screen alone; on a touch screen, a d-pad and A and B below it ------------------
+let padHeld = 0, wentFullscreen = false;
+const playing = () => document.body.classList.contains("playing");
+
+function enterPlay() {
+  if (!current) return;
+  closeMenus();
+  document.body.classList.add("playing");
+  document.body.classList.toggle("touchpad", matchMedia("(pointer: coarse)").matches);
+  $("play-title").textContent = titleOf(current);
+  if (paused) setPaused(false);
+  wentFullscreen = false;
+  const el = document.documentElement;
+  if (el.requestFullscreen && !document.fullscreenElement) {
+    el.requestFullscreen({ navigationUI: "hide" }).then(() => { wentFullscreen = true; }).catch(() => {});
+  }
+}
+function exitPlay() {
+  if (!playing()) return;
+  document.body.classList.remove("playing");
+  padHeld = 0;
+  for (const el of document.querySelectorAll(".pad .held")) el.classList.remove("held");
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  cm.refresh();
+}
+
+// The d-pad: a finger on it holds the direction from its middle, diagonals too, and can slide round.
+function setUpPad() {
+  const dpad = $("dpad"), part = { [LEFT]: ".l", [RIGHT]: ".r", [UP]: ".u", [DOWN]: ".d" };
+  const aim = (e) => {
+    const r = dpad.getBoundingClientRect(), dx = e.clientX - r.left - r.width / 2, dy = e.clientY - r.top - r.height / 2;
+    let d = 0;
+    if (dx * dx + dy * dy > 14 * 14) {
+      const ax = Math.abs(dx), ay = Math.abs(dy);
+      if (ax * 5 > ay * 2) d |= dx < 0 ? LEFT : RIGHT;
+      if (ay * 5 > ax * 2) d |= dy < 0 ? UP : DOWN;
+    }
+    padHeld = (padHeld & ~(LEFT | RIGHT | UP | DOWN)) | d;
+    for (const [bit, sel] of Object.entries(part)) dpad.querySelector(sel).classList.toggle("held", !!(d & bit));
+  };
+  dpad.addEventListener("pointerdown", (e) => { e.preventDefault(); dpad.setPointerCapture(e.pointerId); sound.unlock(); aim(e); });
+  dpad.addEventListener("pointermove", (e) => { if (dpad.hasPointerCapture(e.pointerId)) aim(e); });
+  const off = () => {
+    padHeld &= ~(LEFT | RIGHT | UP | DOWN);
+    for (const el of dpad.querySelectorAll(".held")) el.classList.remove("held");
+  };
+  dpad.addEventListener("pointerup", off);
+  dpad.addEventListener("pointercancel", off);
+  for (const [id, bit] of [["pad-a", A], ["pad-b", B]]) {
+    const b = $(id);
+    b.addEventListener("pointerdown", (e) => { e.preventDefault(); b.setPointerCapture(e.pointerId); sound.unlock(); padHeld |= bit; b.classList.add("held"); });
+    const up = () => { padHeld &= ~bit; b.classList.remove("held"); };
+    b.addEventListener("pointerup", up);
+    b.addEventListener("pointercancel", up);
+    b.addEventListener("contextmenu", (e) => e.preventDefault());
+  }
+  $("pad").addEventListener("contextmenu", (e) => e.preventDefault());
+  $("play").onclick = () => { sound.unlock(); enterPlay(); };
+  $("play-exit").onclick = exitPlay;
+  addEventListener("keydown", (e) => { if (e.key === "Escape" && playing()) exitPlay(); });
+  document.addEventListener("fullscreenchange", () => {
+    if (!document.fullscreenElement && wentFullscreen && playing()) exitPlay();  // Esc in fullscreen leaves both
+  });
+}
 
 // A phone's tilt: which way things would roll, as the board's accelerometer gives it.
 function useOrientation() {
@@ -654,7 +719,12 @@ function card(name, title, about, pic, extra = {}) {
   if (extra.byLine) words.append(Object.assign(document.createElement("span"), { className: "about", textContent: "by " + extra.by }));
   if (extra.when) words.append(Object.assign(document.createElement("span"), { className: "when", textContent: extra.when }));
   b.append(words);
-  b.onclick = () => { sound.unlock(); history.pushState(null, "", "#" + name); select(name); };
+  b.onclick = async () => {
+    sound.unlock();
+    history.pushState(null, "", "#" + name);
+    await select(name);
+    if (matchMedia("(pointer: coarse)").matches) enterPlay();  // on a phone, a card is for playing first
+  };
   return b;
 }
 function addCard(cls, svg, title, note, onclick) {
@@ -706,6 +776,7 @@ function findCarts() {
 
 function showBrowser() {
   closeMenus();
+  exitPlay();
   if (!browsing() && running && !paused) { setPaused(true); resumeOnBack = true; }
   sound.stop();
   document.body.classList.add("browsing");
@@ -1111,7 +1182,8 @@ async function main() {
   $("home").onclick = () => { if (!browsing()) location.hash = "carts"; };
   $("back").onclick = () => { location.hash = current; };
   $("find").oninput = findCarts;
-  $("start-play").onclick = () => { sound.unlock(); $("cards-examples").firstElementChild?.click(); };
+  $("start-play").onclick = () => $("cards-examples").scrollIntoView({ behavior: "smooth", block: "start" });
+  setUpPad();
   $("start-board").onclick = () => {
     if (!current) select(CARTS[0][0]);
     else showEditor();
@@ -1153,9 +1225,17 @@ async function main() {
   const showLevel = () => {
     $("volume").value = Math.round(sound.level * 100);
     $("volume-pct").textContent = sound.level ? Math.round(sound.level * 100) + "%" : "off";
+    $("play-mute").classList.toggle("muted", !sound.level);
+    $("play-mute").setAttribute("aria-label", sound.level ? "Sound off" : "Sound on");
   };
   showLevel();
   $("volume").oninput = () => { sound.unlock(); sound.setLevel($("volume").value / 100); showLevel(); };
+  let unmuted = sound.level || 0.7;
+  $("play-mute").onclick = () => {
+    sound.unlock();
+    if (sound.level) { unmuted = sound.level; sound.setLevel(0); } else sound.setLevel(unmuted);
+    showLevel();
+  };
   $("share").onclick = shareLink;
   $("pause").onclick = () => setPaused(!paused);
   $("gif").onclick = recordGif;
