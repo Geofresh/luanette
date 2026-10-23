@@ -251,7 +251,7 @@
   body.playing main.app { display: flex; position: fixed; inset: 0; z-index: 40; background: #000; align-items: center;
                           justify-content: center; padding: 64px 12px var(--pad-h, 16px); --pad-h: 16px; }
   body.playing.touchpad main.app { --pad-h: 230px; }
-  body.playing .device { width: auto; padding: 0; overflow: visible; }
+  body.playing .device { width: auto; padding: 0; overflow: visible; display: block !important; }
   body.playing .bezel { border: none; padding: 0; background: none; }
   body.playing canvas { width: min(calc(100vw - 24px), calc((100dvh - 64px - var(--pad-h)) * 0.817)); }
   body.playing .playbar { display: flex; position: fixed; top: 0; left: 0; right: 0; z-index: 41; height: 60px;
