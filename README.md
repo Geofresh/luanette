@@ -9,10 +9,10 @@ on your computer, and send it to the board over USB.
 
 The name is Lua plus *lunette*, French for a little moon or a small window.
 
-**[Try it in your browser](https://geofresh.github.io/luanette/).** The six example carts run
-there on the same engine, compiled to WebAssembly, next to an editor. The same page can put the
-firmware on a board and send it your cart, so a board, a cable and Chrome or Edge are all you need
-to start.
+**[Try it in your browser](https://geofresh.github.io/luanette/).** The example and gallery carts
+run there on the same engine, compiled to WebAssembly, next to an editor with code, sprite, sound
+and music tabs. It works on a phone too. The same page can put the firmware on a board and send it
+your cart, so a board, a cable and Chrome or Edge are all you need to start.
 
 <img src="docs/images/board.jpg" width="320" alt="Luanette's launcher on the Waveshare ESP32-S3-Touch-AMOLED-2.06">
 
@@ -49,27 +49,36 @@ Measured on the AMOLED-2.06:
 
 ## The playground
 
-[geofresh.github.io/luanette](https://geofresh.github.io/luanette/) is an editor and the console
-side by side. It opens on every cart there is, with a picture of each: the examples, the gallery and
-your own. Pick one, edit its code and press Run (or Ctrl+Enter) to see the change. The cart's name at
-the top switches to another, the Luanette logo goes back to all of them, and the File, Share and
-Board menus hold the rest.
+[geofresh.github.io/luanette](https://geofresh.github.io/luanette/) opens on every cart there is,
+with a picture of each: the examples, the gallery and your own. Pick one and it opens next to its
+code. Edit it and press Run (or Ctrl+Enter) to see the change. The cart's name at the top switches
+to another, the Luanette logo goes back to all of them, and the File, Share and Board menus hold
+the rest. `?` lists the keys.
 
-- **Play mode**, under the screen, shows the screen alone, full screen. On a phone it adds a d-pad
-  and A and B buttons, and a cart picked from the list opens in it.
-- **Your own carts.** File, New cart starts one from a small template. Open a .lua file and Save as
-  .lua move them in and out as files. They're kept in your browser as you type.
-- **Sounds and music.** The Sounds tab is a note grid: pick an instrument and an effect, draw
-  pitch and volume, and press Play. The Music tab strings sounds into a song, up to four playing
-  at once. Both write their results into the cart's code. Open Overdrive to see a finished song.
-- **Share, Copy a share link** copies a link with the whole cart in it, code, sounds and song. Whoever opens it
-  gets the cart in their playground. Nothing is uploaded; the link is the only copy.
-- **The gallery** is carts people have made, listed with the examples. **Share, Submit to the
-  gallery** puts yours forward: it opens a GitHub issue with the cart's link in it ([`gallery/`](gallery/)).
+- **Code.** Mistakes are marked as you type, with the line. Hover a name for its help, or press
+  Ctrl+Space for the list. Ctrl+F finds, Ctrl+H replaces. A strip of the cart's 16 colors types a
+  color's number when you click it.
+- **Sprites, Sounds and Music.** The Sprites tab draws the cart's 8x8 sprites. The Sounds tab is a
+  note grid: pick an instrument and an effect, draw pitch and volume, and press Play. The Music tab
+  strings sounds into a song, up to four playing at once. All three write into the cart's code.
+  Open Overdrive to see a finished song.
+- **Running it.** Under the screen are Pause, Step (one frame at a time), Restart, the page's volume,
+  and a meter of how much of the frame's 30,000 Lua instructions the cart used. What the cart
+  `log()`s shows in the Console, with the frame it came in.
+- **Play mode** shows the screen alone, full screen. On a phone it adds a d-pad and A and B buttons,
+  and a cart picked from the list opens in it. Keys and a gamepad work too.
+- **Your own carts.** File, New cart starts one from a template: blank, platformer, shooter or
+  puzzle. Open a .lua file (or drop one on the page) and Save as .lua move them in and out as files.
+  They're kept in your browser as you type.
+- **Sharing.** Share, Copy a share link puts the whole cart in a link, code, sounds and song.
+  Whoever opens it gets the cart in their playground. Nothing is uploaded; the link is the only
+  copy. Copy a link to play it does the same, but opens in play mode. Record a 5 s GIF saves what
+  the screen shows.
+- **The gallery** is carts people have made. **Share, Submit to the gallery** puts yours forward:
+  it opens a GitHub issue with the cart's link in it ([`gallery/`](gallery/)).
 - **On a board** (Chrome or Edge on a computer), from the Board menu: Install puts the latest
   firmware on it, and Send this cart to the board sends the one you're editing. Remove from board
   takes one off again; on an example it's Restore the built-in.
-- The volume slider under the screen sets the page's volume only, not the board's.
 
 On Linux, Chrome can only open the board's port if your user is in the `dialout` group.
 
@@ -80,12 +89,19 @@ On Linux, Chrome can only open the board's port if your user is in the `dialout`
 - `firmware/`: the firmware, with a launcher and the examples built in
 - `tools/`: check a cart, preview it, send it, take a screenshot
 - `web/`: the playground
+- `cli/`: the command-line tool and MCP server (npm `luanette`)
 - `examples/`: six complete carts
+- `gallery/`: carts people have put forward, shown in the playground
+- `templates/`: the carts New cart starts from
+- `docs/`: the API, a tutorial, how to make a cart run well, and how it all works
 
 ## What you need
 
 - A Waveshare ESP32-S3-Touch-AMOLED-2.06 and a USB-C cable.
-- Chrome or Edge, for the playground's Install and Send to board. That's enough to get going.
+- Chrome or Edge, for the playground's Install and Send this cart to the board. That's enough to
+  get going.
+- To check and run carts on your computer without building anything: Node 18 or newer, for
+  `npx luanette` (below).
 - To work from the command line instead: `esptool` to flash the prebuilt firmware, or
   [PlatformIO](https://platformio.org/) to build it (it fetches ESP-IDF on its own); and for the
   tools, Python 3.10 or newer with its development headers (`python3-dev` or `python3-devel`, or a
@@ -162,6 +178,7 @@ playground, with its own sounds and a song, in about half an hour.
 -- title: Hello
 -- by: you
 -- about: a dot you move with your finger
+-- api: 4
 
 x, y = 64, 64
 
@@ -180,9 +197,14 @@ end
 ```
 
 ```bash
-python tools/check.py hello.lua --preview hello.png   # runs it here and enforces the limits
+npx luanette check hello.lua                          # runs it here and enforces the limits
+python tools/check.py hello.lua --preview hello.png   # the same, from the Python tools
 python tools/push.py hello.lua
 ```
+
+Sprites are 8x8, in a `SPRITES` table, a string of 64 hex digits each (a color per pixel, row by
+row); `spr(1, x, y)` draws one. The playground's Sprites tab draws them for you. `log(...)` writes a
+line to the playground's Console, the command-line tool's output, and the board's serial log.
 
 A cart's own sounds and song live in its code, in two tables, `SOUNDS` and `MUSIC`. They're
 text, but the easy way to make them is the playground's Sounds and Music tabs. `sfx(8)` plays a
@@ -194,6 +216,7 @@ sound, `music(0)` starts the song, and `-1` stops either. The eight built-in sou
 - [`docs/DESIGN.md`](docs/DESIGN.md) covers making a cart run well. Read it before writing
   anything big.
 - [`examples/`](examples/) has six complete carts, from a bubble shooter to a 3D rail shooter and a chiptune.
+- [`templates/`](templates/) has four small ones to start from.
 
 A cart gets 32 KB of source (comments don't count), 1 MB of memory and 2 KB of saved data.
 `check.py` and the playground allow 30,000 Lua instructions a frame; the board stops a frame that runs
@@ -208,7 +231,7 @@ own engine in Node, with nothing to build:
 npx luanette new game --template platformer
 npx luanette check game.lua             # JSON: ok, the error and its line, warnings, the log
 npx luanette run game.lua --input play.json --shots 1,30,90   # play it, then look at the PNGs
-npx luanette link game.lua              # a link that opens it in the playground
+npx luanette link game.lua              # a link that opens it in the playground (--play: in play mode)
 ```
 
 `npx luanette mcp` is the same as an MCP server (`claude mcp add luanette -- npx -y luanette mcp`
@@ -229,7 +252,7 @@ It works, but so far it's had one user (me) and one board. Expect rough edges.
 - One board. The engine doesn't depend on it, but the screen layout is set for this panel.
   `docs/ARCHITECTURE.md` lists what a port needs.
 - Carts arrive over USB only.
-- There's no sprite or map editor yet.
+- There's no map editor yet.
 
 ## Credits
 
