@@ -28,6 +28,7 @@ idf_component_register(
     EMBED_TXTFILES "${ROOT}/engine/builtin/launcher.lua"
                    "${ROOT}/examples/lockload.lua" "${ROOT}/examples/bubbles.lua" "${ROOT}/examples/night_swarm.lua"
                    "${ROOT}/examples/dice.lua" "${ROOT}/examples/mochi.lua" "${ROOT}/examples/overdrive.lua"
+                   "${ROOT}/examples/overworld.lua"
     PRIV_REQUIRES
         driver esp_driver_gpio esp_driver_i2c esp_driver_i2s esp_driver_spi esp_driver_gptimer
         esp_driver_usb_serial_jtag esp_lcd esp_partition esp_timer esp_pm esp_app_format nvs_flash

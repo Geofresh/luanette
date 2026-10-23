@@ -7,7 +7,7 @@
 
 const CARTS = [
   ["lockload", "Lock & Load"], ["bubbles", "Bubbles"], ["night_swarm", "Night Swarm"],
-  ["dice", "Dice"], ["mochi", "Mochi"], ["overdrive", "Overdrive"],
+  ["dice", "Dice"], ["mochi", "Mochi"], ["overdrive", "Overdrive"], ["overworld", "Overworld"],
 ];
 const W = 410, H = 502;                  // the glass
 const WIN_X = 12, WIN_Y = 60, SCALE = 3;  // where the 128x128 picture sits on it, and its scale

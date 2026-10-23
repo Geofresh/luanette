@@ -47,7 +47,7 @@ web/                      the browser playground: the engine as WebAssembly (web
 tools/                    check.py, push.py, shot.py, pack_images.py, cartsrc.py, build_lupa32.py,
                           hd_fonts.py
 tests/                    parity.py and its carts, the host tests
-examples/                 six complete carts, also built into the firmware (examples/README.md)
+examples/                 seven complete carts, also built into the firmware (examples/README.md)
 docs/                     api.md, DESIGN.md, 3d-stage.md, this file
 ```
 

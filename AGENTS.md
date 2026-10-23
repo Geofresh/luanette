@@ -148,7 +148,9 @@ end
 (`mset(cx, cy)` empties it: picking up a coin), `msize()` is the width and height in cells.
 `MAP = LEVEL2` switches maps; `MAP = {table.unpack(LEVEL)}` starts a level over after `mset`. A map
 is a byte a cell of the 32 KB. Never draw tiles with `spr` in a loop: `map()` is one call. The
-platformer template uses all of it. Maps need `-- api: 5`.
+platformer template uses all of it. For a world bigger than 128 x 64 cells, keep it as a grid of blocks
+and make `MAP` only the blocks around the player, rebuilt as they walk: `examples/overworld.lua`
+does a 4096 x 4096 px world that way. Maps need `-- api: 5`.
 
 ## Sounds and music
 

@@ -8,6 +8,7 @@ extern "C" const char night_swarm_lua[] asm("_binary_night_swarm_lua_start");
 extern "C" const char dice_lua[] asm("_binary_dice_lua_start");
 extern "C" const char mochi_lua[] asm("_binary_mochi_lua_start");
 extern "C" const char overdrive_lua[] asm("_binary_overdrive_lua_start");
+extern "C" const char overworld_lua[] asm("_binary_overworld_lua_start");
 
 namespace carts::store::builtin {
 const Builtin kAll[] = {{"lockload", lockload_lua},
@@ -15,6 +16,7 @@ const Builtin kAll[] = {{"lockload", lockload_lua},
                         {"night_swarm", night_swarm_lua},
                         {"dice", dice_lua},
                         {"mochi", mochi_lua},
-                        {"overdrive", overdrive_lua}};
+                        {"overdrive", overdrive_lua},
+                        {"overworld", overworld_lua}};
 const size_t kCount = sizeof(kAll) / sizeof(kAll[0]);
 }  // namespace carts::store::builtin

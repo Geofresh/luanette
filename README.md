@@ -91,7 +91,7 @@ On Linux, Chrome can only open the board's port if your user is in the `dialout`
 - `tools/`: check a cart, preview it, send it, take a screenshot
 - `web/`: the playground
 - `cli/`: the command-line tool and MCP server (npm `luanette`)
-- `examples/`: six complete carts
+- `examples/`: seven complete carts
 - `gallery/`: carts people have put forward, shown in the playground
 - `templates/`: the carts New cart starts from
 - `docs/`: the API, a tutorial, how to make a cart run well, and how it all works
@@ -133,7 +133,7 @@ cd firmware
 pio run -t upload
 ```
 
-The board boots into the launcher with the six examples. Then set up the tools:
+The board boots into the launcher with the seven examples. Then set up the tools:
 
 ```bash
 python -m venv .venv && . .venv/bin/activate
@@ -218,7 +218,7 @@ sound, `music(0)` starts the song, and `-1` stops either. The eight built-in sou
   sound and music, and saves.
 - [`docs/DESIGN.md`](docs/DESIGN.md) covers making a cart run well. Read it before writing
   anything big.
-- [`examples/`](examples/) has six complete carts, from a bubble shooter to a 3D rail shooter and a chiptune.
+- [`examples/`](examples/) has seven complete carts, from a bubble shooter to a 3D rail shooter, a chiptune and a world of 1,024 screens.
 - [`templates/`](templates/) has four small ones to start from.
 
 A cart gets 32 KB of source (comments don't count), 1 MB of memory and 2 KB of saved data.
