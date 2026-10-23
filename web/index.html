@@ -101,7 +101,8 @@
   .editor .brush button { font-size: 13px; padding: 3px 8px; }
   .editor code { font: 13px var(--mono); color: var(--accent); }
   .editor .note { color: var(--muted); font-size: 13px; margin: 0; }
-  #snd-canvas { width: 100%; height: auto; aspect-ratio: auto; border: 1px solid var(--line); border-radius: 8px;
+  #snd-canvas { width: 100%; max-width: min(1100px, calc((100vh - 420px) * 1.86)); min-width: min(100%, 480px);
+                height: auto; aspect-ratio: auto; border: 1px solid var(--line); border-radius: 8px;
                 touch-action: none; cursor: crosshair; }
   #snd-info { font: 13px var(--mono); color: var(--muted); min-height: 1.5em; }
   .spr-row { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-start; }
