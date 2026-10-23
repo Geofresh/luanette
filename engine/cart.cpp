@@ -260,6 +260,13 @@ struct Cart::Impl {
     char hex[64] = {};  // the string it was decoded from
     uint8_t px[64];
   } sprites[64];
+  // The map (API 5): MAP's rows, a character a cell, read once and again when MAP is another table;
+  // mset() changes cells here, not in MAP's strings. kNoTile is an empty cell.
+  static constexpr int kMapW = 128, kMapH = 64;
+  static constexpr uint8_t kNoTile = 0xFF;
+  uint8_t map_cells[kMapW * kMapH];
+  int map_w = 0, map_h = 0;
+  bool map_read = false;
 
   void reset_draw() {
     color = 7;
@@ -454,14 +461,13 @@ int f_print(lua_State* L) {
   lua_pushinteger(L, S->print(s, n, x, y, c));
   return 1;
 }
-int f_spr(lua_State* L) {
-  const int n = coord(L, 1), x = coord(L, 2), y = coord(L, 3);
-  const bool fx = lua_toboolean(L, 4), fy = lua_toboolean(L, 5);
-  if (lua_getglobal(L, "SPRITES") != LUA_TTABLE) return luaL_error(L, "spr: no SPRITES table");
-  lua_rawgeti(L, -1, n);
+// Sprite n's 64 pixels, from the SPRITES table at stack index `sprites`: its digits row by row;
+// spaces and line breaks between them are for reading (API 4). Decoded once, again only when the
+// digits change (a number outside 0-63 goes through `tmp`). nullptr when it isn't 64 hex digits.
+const uint8_t* sprite_pixels(lua_State* L, int sprites, int n, Cart::Impl::Sprite& tmp) {
+  lua_rawgeti(L, sprites, n);
   size_t len = 0;
   const char* s = lua_type(L, -1) == LUA_TSTRING ? lua_tolstring(L, -1, &len) : nullptr;
-  // Its 64 digits, row by row; spaces and line breaks between them are for reading (API 4).
   char hex[64];
   int got = 0;
   for (size_t i = 0; s && i < len; ++i) {
@@ -474,23 +480,149 @@ int f_spr(lua_State* L) {
     }
     hex[got++] = h;
   }
-  if (got != 64) return luaL_error(L, "spr: SPRITES[%d] must be 64 hex digits (spaces between rows are fine)", n);
-  Cart::Impl::Sprite tmp;
+  lua_pop(L, 1);
+  if (got != 64) return nullptr;
   Cart::Impl::Sprite* sp = n >= 0 && n < 64 ? &S->sprites[n] : &tmp;
-  if (std::memcmp(sp->hex, hex, 64) != 0) {  // decoded once, again only when the digits change
+  if (std::memcmp(sp->hex, hex, 64) != 0) {
     for (int i = 0; i < 64; ++i) {
       const char h = hex[i];
       sp->px[i] = static_cast<uint8_t>(h <= '9' ? h - '0' : (h | 0x20) - 'a' + 10);
     }
     std::memcpy(sp->hex, hex, 64);
   }
+  return sp->px;
+}
+int f_spr(lua_State* L) {
+  const int n = coord(L, 1), x = coord(L, 2), y = coord(L, 3);
+  const bool fx = lua_toboolean(L, 4), fy = lua_toboolean(L, 5);
+  if (lua_getglobal(L, "SPRITES") != LUA_TTABLE) return luaL_error(L, "spr: no SPRITES table");
+  Cart::Impl::Sprite tmp;
+  const uint8_t* p = sprite_pixels(L, lua_gettop(L), n, tmp);
+  if (!p) return luaL_error(L, "spr: SPRITES[%d] must be 64 hex digits (spaces between rows are fine)", n);
   for (int i = 0; i < 64; ++i)
-    if (const int v = sp->px[i]) {
+    if (const int v = p[i]) {
       const int px = fx ? 7 - i % 8 : i % 8, py = fy ? 7 - i / 8 : i / 8;
       S->px(x + px, y + py, v);
     }
-  lua_pop(L, 2);
+  lua_pop(L, 1);
   return 0;
+}
+
+// ---- the map (API 5) ----------------------------------------------------------------------------
+// MAP is a list of strings, a row each from the top, a character a cell: "." empty, else a sprite,
+// 0-9 a-z A-Z + / for 0 to 63. Up to 128 cells wide and 64 tall; shorter rows end in empty cells.
+int tile_of(char c) {
+  if (c >= '0' && c <= '9') return c - '0';
+  if (c >= 'a' && c <= 'z') return c - 'a' + 10;
+  if (c >= 'A' && c <= 'Z') return c - 'A' + 36;
+  return c == '+' ? 62 : c == '/' ? 63 : -1;
+}
+// The map, read from MAP the first time and whenever MAP is another table (a cart's next level):
+// the table read is kept in the registry, so it can't be collected and its address reused.
+void read_map(lua_State* L, const char* who) {
+  static const char kKey = 0;  // its registry key: this byte's address
+  if (lua_getglobal(L, "MAP") != LUA_TTABLE) luaL_error(L, "%s: no MAP table", who);
+  lua_rawgetp(L, LUA_REGISTRYINDEX, &kKey);
+  const bool same = S->map_read && lua_rawequal(L, -1, -2);
+  lua_pop(L, 1);
+  if (same) {
+    lua_pop(L, 1);
+    return;
+  }
+  const lua_Unsigned rows = lua_rawlen(L, -1);
+  if (rows > static_cast<lua_Unsigned>(Cart::Impl::kMapH))
+    luaL_error(L, "%s: MAP has %d rows; a map has at most %d", who, static_cast<int>(rows), Cart::Impl::kMapH);
+  std::memset(S->map_cells, Cart::Impl::kNoTile, sizeof S->map_cells);
+  int w = 0;
+  for (int r = 0; r < static_cast<int>(rows); ++r) {
+    lua_rawgeti(L, -1, r + 1);
+    size_t len = 0;
+    const char* row = lua_type(L, -1) == LUA_TSTRING ? lua_tolstring(L, -1, &len) : nullptr;
+    if (!row) luaL_error(L, "%s: MAP[%d] isn't a string of cells", who, r + 1);
+    if (len > static_cast<size_t>(Cart::Impl::kMapW))
+      luaL_error(L, "%s: MAP[%d] is %d cells wide; a map has at most %d", who, r + 1, static_cast<int>(len), Cart::Impl::kMapW);
+    for (size_t c = 0; c < len; ++c) {
+      if (row[c] == '.') continue;
+      const int t = tile_of(row[c]);
+      if (t < 0)
+        luaL_error(L, "%s: MAP[%d] has '%c' at cell %d; a cell is '.' or a sprite, 0-9 a-z A-Z + / for 0 to 63",
+                   who, r + 1, row[c], static_cast<int>(c));
+      S->map_cells[r * Cart::Impl::kMapW + static_cast<int>(c)] = static_cast<uint8_t>(t);
+    }
+    w = std::max(w, static_cast<int>(len));
+    lua_pop(L, 1);
+  }
+  S->map_w = w;
+  S->map_h = static_cast<int>(rows);
+  S->map_read = true;
+  lua_rawsetp(L, LUA_REGISTRYINDEX, &kKey);  // pops MAP
+}
+// map([cx, cy, sx, sy, cw, ch]): cw x ch cells from cell (cx, cy) drawn as sprites with cell
+// (cx, cy)'s top left at (sx, sy); color 0 is see-through, as spr() draws. With nothing, the whole
+// map at (0, 0). Only the cells the camera and clip can show are drawn.
+int f_map(lua_State* L) {
+  read_map(L, "map");
+  const int cx = opt_coord(L, 1, 0), cy = opt_coord(L, 2, 0), sx = opt_coord(L, 3, 0), sy = opt_coord(L, 4, 0);
+  const int cw = opt_coord(L, 5, S->map_w), ch = opt_coord(L, 6, S->map_h);
+  // The cells on screen: in the map, in the asked-for block, and with some of their 8 x 8 inside the
+  // clip once the camera has moved them (cell c's left edge is at sx + (c - cx) * 8 - cam_x).
+  const auto floor8 = [](int v) { return v >= 0 ? v / 8 : -((-v + 7) / 8); };
+  const int c0 = std::max({cx, 0, cx + floor8(S->clip_x0 + S->cam_x - sx - 8) + 1});
+  const int c1 = std::min({cx + cw, S->map_w, cx + floor8(S->clip_x1 + S->cam_x - sx + 7)});
+  const int r0 = std::max({cy, 0, cy + floor8(S->clip_y0 + S->cam_y - sy - 8) + 1});
+  const int r1 = std::min({cy + ch, S->map_h, cy + floor8(S->clip_y1 + S->cam_y - sy + 7)});
+  if (c0 >= c1 || r0 >= r1) return 0;
+  if (lua_getglobal(L, "SPRITES") != LUA_TTABLE) return luaL_error(L, "map: no SPRITES table");
+  const int sprites = lua_gettop(L);
+  const uint8_t* got[64] = {};  // each sprite looked up once a call
+  Cart::Impl::Sprite tmp;
+  for (int r = r0; r < r1; ++r) {
+    const uint8_t* row = S->map_cells + r * Cart::Impl::kMapW;
+    const int y = sy + (r - cy) * 8;
+    for (int c = c0; c < c1; ++c) {
+      const int t = row[c];
+      if (t == Cart::Impl::kNoTile) continue;
+      if (!got[t] && !(got[t] = sprite_pixels(L, sprites, t, tmp)))
+        return luaL_error(L, "map: cell (%d, %d) is sprite %d, and SPRITES[%d] isn't 64 hex digits", c, r, t, t);
+      const uint8_t* p = got[t];
+      const int x = sx + (c - cx) * 8;
+      for (int i = 0; i < 64; ++i)
+        if (const int v = p[i]) S->px(x + (i & 7), y + (i >> 3), v);
+    }
+  }
+  lua_pop(L, 1);
+  return 0;
+}
+// mget(cx, cy): the sprite in that cell, or nil for an empty cell or one off the map.
+int f_mget(lua_State* L) {
+  read_map(L, "mget");
+  const int c = coord(L, 1), r = coord(L, 2);
+  if (c < 0 || r < 0 || c >= S->map_w || r >= S->map_h) return 0;
+  const int t = S->map_cells[r * Cart::Impl::kMapW + c];
+  if (t == Cart::Impl::kNoTile) return 0;
+  lua_pushinteger(L, t);
+  return 1;
+}
+// mset(cx, cy, n): that cell becomes sprite n (0-63), or empty with nil. The map's size doesn't change.
+int f_mset(lua_State* L) {
+  read_map(L, "mset");
+  const int c = coord(L, 1), r = coord(L, 2);
+  if (c < 0 || r < 0 || c >= S->map_w || r >= S->map_h)
+    return luaL_error(L, "mset: (%d, %d) is off the map, which is %d x %d cells", c, r, S->map_w, S->map_h);
+  int t = Cart::Impl::kNoTile;
+  if (!absent(L, 3)) {
+    t = coord(L, 3);
+    if (t < 0 || t > 63) return luaL_error(L, "mset: %d isn't a sprite of the map's, 0-63", t);
+  }
+  S->map_cells[r * Cart::Impl::kMapW + c] = static_cast<uint8_t>(t);
+  return 0;
+}
+// msize(): the map's width and height in cells.
+int f_msize(lua_State* L) {
+  read_map(L, "msize");
+  lua_pushinteger(L, S->map_w);
+  lua_pushinteger(L, S->map_h);
+  return 2;
 }
 // palette(i, 0xRRGGBB): what color index i shows, from now on (the whole picture, this frame
 // included); palette(i): its color now; palette(): the starting 16 again.
@@ -1614,7 +1746,7 @@ bool Cart::start(std::string_view name, std::string_view src) {
   lua_pop(L_, 1);
   static const luaL_Reg kApi[] = {
       {"cls", f_cls},       {"pset", f_pset},   {"pget", f_pget},     {"line", f_line},   {"rect", f_rect},
-      {"rectfill", f_rectfill}, {"circ", f_circ}, {"circfill", f_circfill}, {"print", f_print}, {"spr", f_spr},
+      {"rectfill", f_rectfill}, {"circ", f_circ}, {"circfill", f_circfill}, {"print", f_print}, {"spr", f_spr}, {"map", f_map}, {"mget", f_mget}, {"mset", f_mset}, {"msize", f_msize},
       {"pal", f_pal},       {"palette", f_palette}, {"camera", f_camera}, {"clip", f_clip},   {"btn", f_btn},     {"btnp", f_btnp},
       {"touch", f_touch},   {"tilt", f_tilt},     {"level", f_level},   {"buzz", f_buzz},     {"sfx", f_sfx},     {"music", f_music}, {"log", f_log}, {"wake", f_wake},
       {"time", f_time},     {"fps", f_fps},     {"rnd", f_rnd},     {"srand", f_srand},   {"flr", f_flr},     {"ceil", f_ceil},

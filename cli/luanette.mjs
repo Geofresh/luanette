@@ -30,7 +30,7 @@ export const PLAYGROUND = "https://geofresh.github.io/luanette/";
 const Gif = require(path.join(LIB, "gif.js"));
 const Tables = require(path.join(LIB, "tables.js"));
 
-export const BUDGET = 30000, MAX_SOURCE = 32 * 1024, API_VERSION = 4;
+export const BUDGET = 30000, MAX_SOURCE = 32 * 1024, API_VERSION = 5;
 const W = 410, H = 502;  // the glass
 const BUTTONS = { left: 1, right: 2, up: 4, down: 8, a: 16, b: 32 };
 
@@ -219,6 +219,7 @@ export async function check(src, name, opts = {}) {
   if (api < 2 && /\bui\s*\./.test(code)) warn("it uses the runtime's ui helpers (API 2): add '-- api: 2' to its header, so a board with older firmware says it needs an update instead of failing at its first ui call");
   else if (api < 2 && /\bhd\s*\./.test(code)) warn("it uses the full-color layer (API 2): add '-- api: 2' to its header, so a board with older firmware says it needs an update instead of failing at its first hd call");
   if (api < 4 && /^\s*\[?\d*\]?\s*=?\s*"[0-9a-fA-F]+\s+[0-9a-fA-F]/m.test(code.split(/^SPRITES\s*=/m)[1] || "")) warn("its sprites have spaces between rows (API 4): add '-- api: 4' to its header, so a board with older firmware says it needs an update instead of failing to draw them");
+  if (api < 5 && /^\s*MAP\s*=/m.test(code)) warn("it has a map (API 5): add '-- api: 5' to its header, so a board with older firmware says it needs an update instead of failing at its first map call");
   if (api < 4 && run.log.length) warn("it calls log() (API 4): add '-- api: 4' to its header, so a board with older firmware says it needs an update instead of failing at its first log call");
   if (api < 3 && /\bmusic\s*\(|^\s*(SOUNDS|MUSIC)\s*=/m.test(code)) warn("it has its own sounds or music (API 3): add '-- api: 3' to its header, so a board with older firmware says it needs an update instead of failing at its first sfx or music call");
   if (!full) warn("it shows in the 384 x 384 window, about 30% of the glass left dark: add '-- canvas: full' (and '-- api: 2') and use the whole glass, laid out from caps(): the picture keeps its window, and the layer has the bands above and below it for a title, the score, what to do (docs/DESIGN.md, 1)");

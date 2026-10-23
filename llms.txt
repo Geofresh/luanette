@@ -1,6 +1,6 @@
 # Luanette
 
-> A Lua game console for ESP32-S3 boards, and a browser playground running the same engine. A game (a cart) is one Lua 5.4 file: a 128x128 picture in 16 colors, 8x8 sprites, its own sounds and music, a full-color layer and a lit 3D scene. Make carts with `npx luanette` (check, run with input and screenshots, sounds, share links) or its MCP server (`npx luanette mcp`).
+> A Lua game console for ESP32-S3 boards, and a browser playground running the same engine. A game (a cart) is one Lua 5.4 file: a 128x128 picture in 16 colors, 8x8 sprites, tile maps, its own sounds and music, a full-color layer and a lit 3D scene. Make carts with `npx luanette` (check, run with input and screenshots, sounds, share links) or its MCP server (`npx luanette mcp`).
 
 Start with AGENTS.md: it has the cart format, the check-run-look-fix loop, the limits and the pitfalls (it isn't PICO-8: no `+=`, no `all()`, `log()` instead of `printh`).
 
@@ -20,5 +20,5 @@ Start with AGENTS.md: it has the cart format, the check-run-look-fix loop, the l
 
 ## Optional
 
-- [The playground](https://geofresh.github.io/luanette/): edit, run, draw sprites, make sounds and music, send to a board
+- [The playground](https://geofresh.github.io/luanette/): edit, run, draw sprites and maps, make sounds and music, send to a board
 - [README.md](https://github.com/Geofresh/luanette/blob/main/README.md)

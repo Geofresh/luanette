@@ -105,6 +105,14 @@
                 height: auto; aspect-ratio: auto; border: 1px solid var(--line); border-radius: 8px;
                 touch-action: none; cursor: crosshair; }
   #snd-info { font: 13px var(--mono); color: var(--muted); min-height: 1.5em; }
+  .map-scroll { overflow: auto; max-height: 60vh; border: 1px solid var(--line); border-radius: 8px; background: #0b0e13; }
+  #map-canvas { display: block; width: auto; aspect-ratio: auto; border-radius: 0; touch-action: none; cursor: crosshair;
+                image-rendering: pixelated; min-width: 0; }
+  #map-canvas.moving { touch-action: pan-x pan-y; cursor: grab; }
+  #map-zoom { accent-color: var(--accent); }
+  .tiles .tile { padding: 3px; height: auto; line-height: 0; }
+  .tiles .tile canvas { width: 24px; height: 24px; aspect-ratio: auto; border-radius: 2px; image-rendering: pixelated; min-width: 0; }
+  .tiles .tile.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
   .spr-row { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-start; }
   .spr-main { display: flex; flex-direction: column; gap: 10px; width: min(320px, 100%); }
   .spr-side { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
@@ -487,6 +495,7 @@
     <div class="tabs" role="tablist">
       <button id="tab-code" class="on">Code</button>
       <button id="tab-sprites">Sprites</button>
+      <button id="tab-map">Map</button>
       <button id="tab-sounds">Sounds</button>
       <button id="tab-music">Music</button>
       <span class="grow"></span>
@@ -532,6 +541,34 @@
         <p class="note">Color 0 is see-through when <code>spr()</code> draws. Keys 0-9 and a-f pick a color; Alt-click or
           right-click on the sprite picks one up. The editor writes a <code>SPRITES</code> table into the code, each
           sprite a row at a time.</p>
+      </div>
+    </section>
+    <section class="editor" id="map" hidden>
+      <div class="editor" id="map-empty">
+        <p class="note">No map yet. A map is a grid of your sprites, up to 128 x 64 cells: levels bigger than
+          the screen, drawn with one call, <code>map()</code>, and read with <code>mget(x, y)</code>.</p>
+        <div class="bar"><button class="primary" id="map-new">+ New map (32 x 16)</button></div>
+      </div>
+      <div class="editor" id="map-body" hidden>
+        <div class="bar">
+          <label id="map-which-label">Map <select id="map-which" aria-label="The map table being edited"></select></label>
+          <label>Size <input type="number" id="map-w" min="1" max="128" aria-label="Width in cells"> x
+            <input type="number" id="map-h" min="1" max="64" aria-label="Height in cells"></label>
+          <span class="note" id="map-size"></span>
+        </div>
+        <div class="bar">
+          <button id="map-paint" class="on" title="P">Paint</button><button id="map-fill" title="F">Fill</button>
+          <button id="map-erase" title="E, or right-click">Erase</button><button id="map-move" title="Scroll the map by dragging (for a phone)">Move</button>
+          <button id="map-undo" title="Ctrl+Z">Undo</button><button id="map-redo" title="Ctrl+Shift+Z">Redo</button>
+          <label class="note">Zoom <input type="range" id="map-zoom" min="8" max="40" step="4" value="24" aria-label="Zoom"></label>
+        </div>
+        <div class="brush tiles" id="map-tiles" aria-label="The sprite to paint with"></div>
+        <p class="note" id="map-nosprites" hidden>Draw some sprites in the Sprites tab first: a map is made of them.</p>
+        <div class="map-scroll"><canvas id="map-canvas" aria-label="The map: paint cells with the picked sprite; right-click erases, Alt-click picks one up"></canvas></div>
+        <div id="map-info" class="note">&nbsp;</div>
+        <p class="note">The dashed lines mark screens: 16 x 16 cells is the 128 x 128 picture. Draw it in your cart
+          with <code id="map-call">map()</code> (with <code>camera(x, y)</code> to scroll); <code>mget(x, y)</code>
+          says what's in a cell, so <code>mget(flr(px / 8), flr(py / 8))</code> is the cell under a pixel.</p>
       </div>
     </section>
     <section class="editor" id="sounds" hidden>
@@ -656,5 +693,6 @@
 <script src="tables.js"></script>
 <script src="sound-editor.js"></script>
 <script src="sprite-editor.js"></script>
+<script src="map-editor.js"></script>
 </body>
 </html>

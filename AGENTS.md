@@ -47,7 +47,7 @@ One Lua 5.4 file:
 -- title: Hello
 -- by: you
 -- about: a dot you move with your finger
--- api: 4
+-- api: 5
 -- canvas: full
 
 x, y = 64, 64
@@ -70,8 +70,8 @@ function _draw()          -- every frame: draw it all again
 end
 ```
 
-- `-- title:`, `-- by:` and `-- about:` are required, in the first 12 lines. `-- api: 4` says which
-  API the cart needs (4 is the newest: use it). `-- canvas: full` gives the cart the whole screen.
+- `-- title:`, `-- by:` and `-- about:` are required, in the first 12 lines. `-- api: 5` says which
+  API the cart needs (5 is the newest: use it). `-- canvas: full` gives the cart the whole screen.
 - The picture is 128 x 128 pixels, (0, 0) at the top left, 16 colors by number: 0 black, 1 dark
   blue, 2 dark purple, 3 dark green, 4 brown, 5 dark gray, 6 light gray, 7 white, 8 red,
   9 orange, 10 yellow, 11 green, 12 blue, 13 lavender, 14 pink, 15 peach.
@@ -116,6 +116,39 @@ SPRITES = {
 ```
 
 Use numbers 0 to 63. The playground's Sprites tab reads and writes this exact layout.
+
+## Maps
+
+For levels bigger than the screen, or any grid of tiles: a `MAP` table of rows, top to bottom, a
+string each with a character a cell. `.` is empty; `0`-`9`, `a`-`z`, `A`-`Z`, `+`, `/` are sprites 0
+to 63 (`3` is sprite 3, `a` is 10). Up to 128 x 64 cells; a cell is 8 x 8 pixels.
+
+```lua
+MAP = {
+  "................",
+  "....2.....2.....",
+  "...333...333....",
+  "3333333333333333",
+}
+
+function _draw()
+  cls(12)
+  camera(cam_x, 0)   -- scroll: the camera moves the map and the sprites with it
+  map()              -- the whole map in one call, only what's on screen costs anything
+  spr(1, px, py)
+  camera()           -- the score and such, fixed on screen
+end
+
+local function solid(x, y)  -- is the pixel at x, y in a wall?
+  return mget(flr(x / 8), flr(y / 8)) == 3
+end
+```
+
+`mget(cx, cy)` is the sprite in a cell (nil if empty or off the map), `mset(cx, cy, n)` changes it
+(`mset(cx, cy)` empties it: picking up a coin), `msize()` is the width and height in cells.
+`MAP = LEVEL2` switches maps; `MAP = {table.unpack(LEVEL)}` starts a level over after `mset`. A map
+is a byte a cell of the 32 KB. Never draw tiles with `spr` in a loop: `map()` is one call. The
+platformer template uses all of it. Maps need `-- api: 5`.
 
 ## Sounds and music
 

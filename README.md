@@ -58,9 +58,10 @@ the rest. `?` lists the keys.
 - **Code.** Mistakes are marked as you type, with the line. Hover a name for its help, or press
   Ctrl+Space for the list. Ctrl+F finds, Ctrl+H replaces. A strip of the cart's 16 colors types a
   color's number when you click it.
-- **Sprites, Sounds and Music.** The Sprites tab draws the cart's 8x8 sprites. The Sounds tab is a
+- **Sprites, Map, Sounds and Music.** The Sprites tab draws the cart's 8x8 sprites, and the Map tab
+  paints levels with them, up to 128 x 64 cells, for `map()` to draw. The Sounds tab is a
   note grid: pick an instrument and an effect, draw pitch and volume, and press Play. The Music tab
-  strings sounds into a song, up to four playing at once. All three write into the cart's code.
+  strings sounds into a song, up to four playing at once. All four write into the cart's code.
   Open Overdrive to see a finished song.
 - **Running it.** Under the screen are Pause, Step (one frame at a time), Restart, the page's volume,
   and a meter of how much of the frame's 30,000 Lua instructions the cart used. What the cart
@@ -178,7 +179,7 @@ playground, with its own sounds and a song, in about half an hour.
 -- title: Hello
 -- by: you
 -- about: a dot you move with your finger
--- api: 4
+-- api: 5
 
 x, y = 64, 64
 
@@ -203,7 +204,9 @@ python tools/push.py hello.lua
 ```
 
 Sprites are 8x8, in a `SPRITES` table, a string of 64 hex digits each (a color per pixel, row by
-row); `spr(1, x, y)` draws one. The playground's Sprites tab draws them for you. `log(...)` writes a
+row); `spr(1, x, y)` draws one. The playground's Sprites tab draws them for you. A `MAP` table is a
+grid of them, a character a cell, drawn with `map()` and read with `mget()`: levels bigger than the
+screen, in one call. The platformer template shows how. `log(...)` writes a
 line to the playground's Console, the command-line tool's output, and the board's serial log.
 
 A cart's own sounds and song live in its code, in two tables, `SOUNDS` and `MUSIC`. They're
@@ -252,7 +255,6 @@ It works, but so far it's had one user (me) and one board. Expect rough edges.
 - One board. The engine doesn't depend on it, but the screen layout is set for this panel.
   `docs/ARCHITECTURE.md` lists what a port needs.
 - Carts arrive over USB only.
-- There's no map editor yet.
 
 ## Credits
 

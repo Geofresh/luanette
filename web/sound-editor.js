@@ -445,15 +445,17 @@ const SoundEditor = (() => {
   let tab = "code";
   function show(which = tab) {
     tab = which;
-    for (const t of ["code", "sprites", "sounds", "music"]) $("tab-" + t).classList.toggle("on", t === tab);
+    for (const t of ["code", "sprites", "map", "sounds", "music"]) $("tab-" + t).classList.toggle("on", t === tab);
     code.hidden = tab !== "code";
     $("color-strip").hidden = tab !== "code";
     if (tab !== "code") $("compile-msg").hidden = true;
     $("sprites").hidden = tab !== "sprites";
+    $("map").hidden = tab !== "map";
     $("sounds").hidden = tab !== "sounds";
     $("music").hidden = tab !== "music";
     if (tab === "sprites") SpriteEditor.show();  // web/sprite-editor.js
-    if (tab === "code" || tab === "sprites") return;
+    if (tab === "map") MapEditor.show();  // web/map-editor.js
+    if (tab === "code" || tab === "sprites" || tab === "map") return;
     load();
     $("snd-problem").textContent = $("mus-problem").textContent = problem;
     $("snd-problem").hidden = $("mus-problem").hidden = !problem;
@@ -466,7 +468,7 @@ const SoundEditor = (() => {
     const presets = $("snd-preset");
     presets.append(...Object.keys(PRESETS).map((k) => new Option(k, k)));
     presets.onchange = () => { if (presets.value) newSound(presets.value); presets.value = ""; };
-    for (const t of ["code", "sprites", "sounds", "music"]) $("tab-" + t).onclick = () => { sound.stop(); playing = songPlay = null; show(t); };
+    for (const t of ["code", "sprites", "map", "sounds", "music"]) $("tab-" + t).onclick = () => { sound.stop(); playing = songPlay = null; show(t); };
     $("snd-slot").onchange = () => { slot = Number($("snd-slot").value); fillSlots(); draw(); };
     $("snd-new").onclick = () => newSound();
     $("snd-play").onclick = playSound;

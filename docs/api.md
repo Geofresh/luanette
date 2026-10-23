@@ -40,7 +40,7 @@ Everything else is up to the cart. Globals persist between frames.
 The API has a version. Version 1 is everything before the full-color layer; version 2 adds the
 layer (`hd`), its images, the `ui` helpers, `caps()` and `touch(true)`; version 3 adds the cart's own
 sounds and music (`SOUNDS`, `MUSIC`, `sfx(8-63)`, `music()`); version 4 adds `log()` and spaces in
-sprite strings. A runtime older than a
+sprite strings; version 5 adds maps (`MAP`, `map()`, `mget()`, `mset()`, `msize()`). A runtime older than a
 cart's `-- api: N` refuses it with a message saying so ("it needs API 2; this runtime has 1
 (update the firmware)") instead of failing at the first call it doesn't know. `check.py` refuses
 a version the board doesn't have, and asks for `-- api: 2` when a cart uses the layer.
@@ -57,7 +57,7 @@ a version the board doesn't have, and asks for `-- api: 2` when a cart uses the 
 | `touch`, `tilt`, `buzz`, `sound` | true, true, false (no vibration motor is fitted), true (the speaker plays `sfx`) |
 | `hd`, `stage` | the full-color layer and the 3D scene: true, true |
 | `host` | `data()` and `act()` reach the console: true |
-| `version` | the API version the runtime has: 4 |
+| `version` | the API version the runtime has: 5 |
 | `board` | `"waveshare-amoled-206"` (`"browser"` in the playground) |
 
 ## Limits
@@ -113,6 +113,10 @@ brackets; it defaults to the last color used (7 at start).
 | `trifill(x0, y0, x1, y1, x2, y2, [c])` | a filled triangle. Fractions count (to 1/16 px): triangles sharing an edge meet with no gap and no overlap, so meshes tile cleanly. For solid 3D: drop faces turned away, draw far to near |
 | `print(text, x, y, [c])` | text in the 4x6 font (3x5 glyphs, 4 px a character, so 32 a line); returns the x after the text. Letters show as capitals; `\n` starts a new line at `x`; whole numbers print without `.0` |
 | `spr(n, x, y, [flip_x], [flip_y])` | sprite `n` from `SPRITES` (below), color 0 transparent |
+| `map([cx, cy, sx, sy, cw, ch])` | the map (`MAP`, below): `cw` x `ch` cells from cell (`cx`, `cy`), drawn as sprites with that cell's top left at (`sx`, `sy`). With nothing, the whole map at (0, 0). Color 0 is transparent; the camera moves it, and only the cells on screen cost anything |
+| `mget(cx, cy)` | the sprite in a map cell, or nil for an empty cell or one off the map |
+| `mset(cx, cy, n)` / `mset(cx, cy)` | put sprite `n` (0-63) in a cell / empty it. It changes the map for this run, not `MAP`'s text |
+| `msize()` | the map's width and height in cells |
 | `pal(c0, c1)` / `pal()` | draw color `c0` as `c1` from now on / reset |
 | `palette(i, 0xRRGGBB)` / `palette(i)` / `palette()` | change what color index `i` (0-15) looks like, for the whole picture (this frame included) / its color now / the starting 16 again. A cart still has 16 colors at a time; this picks which 16 (an exact red, softer pastels). `pal` remaps indices, `palette` the colors behind them |
 | `camera(x, y)` / `camera()` | offset everything drawn by (-x, -y) / reset |
@@ -129,6 +133,35 @@ SPRITES = {
 ```
 
 The playground's Sprites tab draws them and writes this table for you.
+
+The map (API 5): a global table `MAP` of rows, top to bottom, each a string with a character a
+cell. `.` is an empty cell; `0`-`9`, `a`-`z`, `A`-`Z`, `+` and `/` are sprites 0 to 63 (`1` is
+sprite 1, `a` is sprite 10, `A` is 36). A map is up to 128 cells wide and 64 tall (1024 x 512
+pixels); a short row ends in empty cells. Cell (`cx`, `cy`) is at pixel (`cx * 8`, `cy * 8`) when
+the map is drawn at (0, 0), so a sprite's cell is `flr(x / 8)`, `flr(y / 8)`.
+
+```lua
+MAP = {
+  "................",
+  "......2.........",
+  "....11111.......",
+  "1111111111111111",
+}
+
+function _draw()
+  cls(12)
+  camera(px - 60, 0)  -- follow the player
+  map()
+  camera()
+end
+
+local function solid(x, y) return mget(flr(x / 8), flr(y / 8)) == 1 end
+```
+
+A map costs source like any text, a byte a cell: a 128 x 32 level is about 4 KB of the 32 KB.
+`map()` is one call however many cells it draws, so it's far cheaper than drawing tiles with `spr`
+in a loop. Assigning another table to `MAP` (`MAP = LEVEL2`) switches maps; the next call reads it.
+The playground's Map tab paints with the cart's sprites and writes this table for you.
 
 Per-pixel `pset` over the whole screen every frame is slow on the board; draw with `rectfill`,
 `circfill`, `line`, `spr` and `print`.

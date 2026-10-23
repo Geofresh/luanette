@@ -38,7 +38,9 @@ SCALE = 3
 MAX_SOURCE = 32 * 1024
 BUDGET = 30_000
 MAX_SAVE = 2048
-API_VERSION = 4  # engine/cart.hpp kApiVersion: 1 before the full-color layer, 2 with it, 3 with sound and music, 4 with log() and spaced sprites
+API_VERSION = 5  # engine/cart.hpp kApiVersion: 1 before the full-color layer, 2 with it, 3 with sound and music, 4 with log() and spaced sprites, 5 with maps
+MAP_W, MAP_H = 128, 64  # the most a map has, in cells (engine/cart.cpp)
+TILES = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ+/"  # a map cell's character: sprites 0-63
 # The board's runtime built for this computer (engine/host/cartrun.cpp): a 3D cart's preview
 # is drawn by it (the stage's own code), and it must agree that the cart runs.
 ROOT = Path(__file__).resolve().parents[1]
@@ -121,6 +123,10 @@ class Cart:
         self.calls = {"buzz": 0, "sfx": 0, "music": 0, "wake": 0, "act": [], "save": 0, "data": set()}
         self.logs: list[str] = []      # log() lines (the first 200), as the runtime gives them
         self.spaced_sprites = False    # a sprite string with spaces in it (API 4)
+        self.used_map = False          # map(), mget(), mset() or msize() (API 5)
+        self.map_cells: list[list[int | None]] = []  # MAP read: rows of sprite numbers, None empty
+        self.map_w = 0
+        self.map_table = None          # the MAP table read (another one is read again)
         self.log_frame, self.log_count = -1, 0
         self.scene = None  # a 3D cart's, once it makes anything 3D
         self.hd = None  # the full-color layer's calls, once the cart draws on it
@@ -293,6 +299,87 @@ class Cart:
                 if flip_x: px = 7 - px
                 if flip_y: py = 7 - py
                 self._px(x + px, y + py, v)
+
+    # -- the map (API 5), as engine/cart.cpp's read_map, map, mget, mset, msize --
+    def _read_map(self, who):
+        self.used_map = True
+        m = self.env["MAP"] if self.env is not None else None
+        if m is None or self.lua.globals().type(m) != "table":
+            raise ValueError(f"{who}: no MAP table")
+        if self.map_table is not None and self.lua.globals().rawequal(m, self.map_table):
+            return
+        rows = self.lua.globals().rawlen(m)
+        if rows > MAP_H:
+            raise ValueError(f"{who}: MAP has {rows} rows; a map has at most {MAP_H}")
+        cells, w = [], 0
+        for r in range(rows):
+            row = self.lua.globals().rawget(m, r + 1)
+            if not isinstance(row, str):
+                raise ValueError(f"{who}: MAP[{r + 1}] isn't a string of cells")
+            if len(row) > MAP_W:
+                raise ValueError(f"{who}: MAP[{r + 1}] is {len(row)} cells wide; a map has at most {MAP_W}")
+            out = []
+            for c, ch in enumerate(row):
+                if ch == ".":
+                    out.append(None)
+                elif ch in TILES:
+                    out.append(TILES.index(ch))
+                else:
+                    raise ValueError(f"{who}: MAP[{r + 1}] has '{ch}' at cell {c}; a cell is '.' or a sprite, "
+                                     "0-9 a-z A-Z + / for 0 to 63")
+            cells.append(out)
+            w = max(w, len(row))
+        self.map_cells = [row + [None] * (w - len(row)) for row in cells]
+        self.map_w = w
+        self.map_table = m
+
+    def map(self, cx=0, cy=0, sx=0, sy=0, cw=None, ch=None):
+        self._read_map("map")
+        f = lambda v: int(math.floor(v or 0))
+        cx, cy, sx, sy = f(cx), f(cy), f(sx), f(sy)
+        cw = self.map_w if cw is None else f(cw)
+        ch = len(self.map_cells) if ch is None else f(ch)
+        sprites = None
+        for r in range(max(cy, 0), min(cy + ch, len(self.map_cells))):
+            for c in range(max(cx, 0), min(cx + cw, self.map_w)):
+                t = self.map_cells[r][c]
+                if t is None:
+                    continue
+                if sprites is None:
+                    sprites = self.env["SPRITES"]
+                    if sprites is None:
+                        raise ValueError("map: no SPRITES table")
+                s = sprites[t]
+                s = re.sub(r"[ \t\r\n]", "", s) if isinstance(s, str) else None
+                if s is None or not re.fullmatch(r"[0-9a-fA-F]{64}", s):
+                    raise ValueError(f"map: cell ({c}, {r}) is sprite {t}, and SPRITES[{t}] isn't 64 hex digits")
+                x, y = sx + (c - cx) * 8, sy + (r - cy) * 8
+                for i, h in enumerate(s):
+                    v = int(h, 16)
+                    if v:
+                        self._px(x + i % 8, y + i // 8, v)
+
+    def mget(self, cx, cy):
+        self._read_map("mget")
+        c, r = int(math.floor(cx)), int(math.floor(cy))
+        if 0 <= r < len(self.map_cells) and 0 <= c < self.map_w:
+            return self.map_cells[r][c]
+        return None
+
+    def mset(self, cx, cy, n=None):
+        self._read_map("mset")
+        c, r = int(math.floor(cx)), int(math.floor(cy))
+        if not (0 <= r < len(self.map_cells) and 0 <= c < self.map_w):
+            raise ValueError(f"mset: ({c}, {r}) is off the map, which is {self.map_w} x {len(self.map_cells)} cells")
+        if n is not None:
+            n = int(math.floor(n))
+            if not 0 <= n <= 63:
+                raise ValueError(f"mset: {n} isn't a sprite of the map's, 0-63")
+        self.map_cells[r][c] = n
+
+    def msize(self):
+        self._read_map("msize")
+        return self.map_w, len(self.map_cells)
 
     # palette(i, 0xRRGGBB) / palette(i) / palette(): what each index shows (the preview uses it).
     def palette(self, i=None, rgb=None):
@@ -932,7 +1019,7 @@ class Cart:
         return self.lua.table_from(list(self.images))
 
     def api(self):
-        names = ["cls", "pset", "pget", "line", "rect", "rectfill", "circ", "circfill", "spr", "pal", "palette", "camera",
+        names = ["cls", "pset", "pget", "line", "rect", "rectfill", "circ", "circfill", "spr", "map", "mget", "mset", "msize", "pal", "palette", "camera",
                  "clip", "btn", "btnp", "touch", "tilt", "buzz", "sfx", "music", "time", "now", "date", "rnd", "srand", "save", "load",
                  "data", "ask", "say", "act", "wake", "stat", "level", "trifill", "sin", "cos",
                  "shape", "obj", "place", "orient", "hide", "paint", "view", "light", "sky", "project", "ground", "shadow",
@@ -1377,6 +1464,10 @@ def check(path: Path, frames: int, preview: Path | None, theme: str, dump_input:
             "says it needs an update instead of failing at its first hd call")
     if cart.logs:
         res["log"] = cart.logs
+    if api < 5 and (cart.used_map or re.search(r"^\s*MAP\s*=", src, re.M)):
+        res.setdefault("warnings", []).append(
+            "it has a map (API 5): add '-- api: 5' to its header, so a board with older firmware says it needs "
+            "an update instead of failing at its first map call")
     if api < 4 and cart.spaced_sprites:
         res.setdefault("warnings", []).append(
             "its sprites have spaces between rows (API 4): add '-- api: 4' to its header, so a board with older "
