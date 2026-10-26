@@ -48,7 +48,7 @@ One Lua 5.4 file:
 -- title: Hello
 -- by: you
 -- about: a dot you move with your finger
--- api: 5
+-- api: 6
 -- canvas: full
 
 x, y = 64, 64
@@ -71,8 +71,8 @@ function _draw()          -- every frame: draw it all again
 end
 ```
 
-- `-- title:`, `-- by:` and `-- about:` are required, in the first 12 lines. `-- api: 5` says which
-  API the cart needs (5 is the newest: use it). `-- canvas: full` gives the cart the whole screen.
+- `-- title:`, `-- by:` and `-- about:` are required, in the first 12 lines. `-- api: 6` says which
+  API the cart needs (6 is the newest: use it). `-- canvas: full` gives the cart the whole screen.
 - The picture is 128 x 128 pixels, (0, 0) at the top left, 16 colors by number: 0 black, 1 dark
   blue, 2 dark purple, 3 dark green, 4 brown, 5 dark gray, 6 light gray, 7 white, 8 red,
   9 orange, 10 yellow, 11 green, 12 blue, 13 lavender, 14 pink, 15 peach.
@@ -116,7 +116,16 @@ SPRITES = {
 }
 ```
 
-Use numbers 0 to 63. The playground's Sprites tab reads and writes this exact layout.
+Sprites are 0 to 255; a map's cells can only be 0 to 63, so keep tiles there and characters and
+items above. The playground's Sprites tab reads and writes this exact layout. More:
+
+- `spr(n, x, y, w, h, [flip_x], [flip_y])` draws a block of `w` x `h` sprites, `n`, `n + 1`, ...
+  row by row: a 16 x 16 character is four sprites in a row of the table, `spr(32, x, y, 2, 2)`.
+- `sspr(n, x, y, dw, dh)` draws a sprite stretched to `dw` x `dh` (a big title, a portrait, a boss).
+- `palt(c, true)` makes color `c` see-through as well; `palt(0, false)` draws black; `palt()` resets.
+- Flags: a `FLAGS` table gives a sprite up to eight on/off flags, `FLAGS = { [3] = 1, [7] = 1 | 2 }`.
+  `fget(n, f)` reads one. What they mean is yours to say; flag 0 for solid is the usual (the `actor`
+  library and the platformer template use it).
 
 ## Maps
 
@@ -140,10 +149,16 @@ function _draw()
   camera()           -- the score and such, fixed on screen
 end
 
+FLAGS = { [3] = 1 }          -- sprite 3 has flag 0: solid
+
 local function solid(x, y)  -- is the pixel at x, y in a wall?
-  return mget(flr(x / 8), flr(y / 8)) == 3
+  local t = mget(flr(x / 8), flr(y / 8))
+  return t ~= nil and fget(t, 0)
 end
 ```
+
+`map(0, 0, 0, 0, 128, 64, 2)` draws only the cells whose sprite has flag 1 (`layer` is a bitmask of
+flags): draw the ground, then the player, then the treetops in front.
 
 `mget(cx, cy)` is the sprite in a cell (nil if empty or off the map), `mset(cx, cy, n)` changes it
 (`mset(cx, cy)` empties it: picking up a coin), `msize()` is the width and height in cells.
@@ -151,7 +166,8 @@ end
 is a byte a cell of the 32 KB. Never draw tiles with `spr` in a loop: `map()` is one call. The
 platformer template uses all of it. For a world bigger than 128 x 64 cells, keep it as a grid of blocks
 and make `MAP` only the blocks around the player, rebuilt as they walk: `examples/overworld.lua`
-does a 4096 x 4096 px world that way. Maps need `-- api: 5`.
+does a 4096 x 4096 px world that way. Maps need `-- api: 5`; flags, `palt`, `sspr`, blocks and
+sprites past 63 need `-- api: 6`.
 
 ## Libraries
 

@@ -1,14 +1,103 @@
 -- title: Overworld
 -- by: geo
--- about: walk a world of 1,024 screens, stored as blocks the way Mother 1 stored its own; B shows the map
--- api: 5
+-- about: walk a world of 1,024 screens, stored as blocks the way Mother 1 stored its own; knock on doors; B shows the map
+-- api: 6
 -- canvas: full
+
+-- lib: dialog 1, api 1: a text box that types itself out a page at a time: dialog.say("Hi!\nNice day.")
+-- In _update: `if dialog.update() then return end` (the game waits while it's open; A shows the
+-- whole page, then the next). In _draw, last: dialog.draw(). Change dialog.x, y, w, h and the
+-- colors to place it; lines wrap at words to fit.
+local dialog = {x = 4, y = 86, w = 120, h = 38, bg = 1, border = 7, color = 7, speed = 40}
+local pages, page, t0, fresh
+
+-- Lines of text no more than cols characters, broken at spaces (and at "\n").
+local function wrap(text, cols)
+  local lines = {}
+  for para in (text .. "\n"):gmatch("(.-)\n") do
+    local line = ""
+    for word in para:gmatch("%S+") do
+      if line == "" then
+        line = word
+      elseif #line + 1 + #word <= cols then
+        line = line .. " " .. word
+      else
+        lines[#lines + 1] = line
+        line = word
+      end
+      while #line > cols do
+        lines[#lines + 1] = line:sub(1, cols)
+        line = line:sub(cols + 1)
+      end
+    end
+    lines[#lines + 1] = line
+  end
+  return lines
+end
+
+-- Opens the box. text: a string, or a list of strings (each starts a page). done(): called when
+-- the last page is closed.
+function dialog.say(text, done)
+  local list = type(text) == "table" and text or {text}
+  local cols, rows = flr((dialog.w - 8) / 4), math.max(1, flr((dialog.h - 6) / 6))
+  pages = {}
+  for _, t in ipairs(list) do
+    local lines = wrap(tostring(t), cols)
+    for i = 1, #lines, rows do
+      pages[#pages + 1] = table.concat(lines, "\n", i, math.min(i + rows - 1, #lines))
+    end
+  end
+  page, t0, fresh, dialog.done = 1, time(), true, done
+end
+
+function dialog.active()
+  return pages ~= nil
+end
+
+local function shown()
+  return math.min(#pages[page], flr((time() - t0) * dialog.speed))
+end
+
+-- Call once a frame in _update; true while the box is open (and on the frame it closes).
+function dialog.update()
+  if not pages then return false end
+  if fresh then fresh = false return true end  -- the press that opened it isn't one for it
+  if btnp(4) then
+    if shown() < #pages[page] then
+      t0 = time() - #pages[page] / dialog.speed  -- all of this page at once
+    elseif page < #pages then
+      page, t0 = page + 1, time()
+    else
+      pages = nil
+      if dialog.done then dialog.done() end
+      return true  -- the press that closed it was the box's too (it mustn't open it again)
+    end
+  end
+  return true
+end
+
+function dialog.draw()
+  if not pages then return end
+  local x, y, w, h = dialog.x, dialog.y, dialog.w, dialog.h
+  rectfill(x, y, x + w - 1, y + h - 1, dialog.bg)
+  rect(x, y, x + w - 1, y + h - 1, dialog.border)
+  local n = shown()
+  print(pages[page]:sub(1, n), x + 4, y + 4, dialog.color)
+  if n >= #pages[page] and time() % 0.8 < 0.5 then
+    print(page < #pages and ">" or "*", x + w - 8, y + h - 8, dialog.border)
+  end
+end
+-- end lib: dialog
 
 -- A giant world in a few KB. The world is a grid of 64 x 64 blocks, a character each; a block is
 -- 8 x 8 map cells, a sprite each. Only the 3 x 3 blocks around the kid are ever a map: MAP is
 -- rebuilt from them when the kid walks into another block, and map() draws it under the camera.
 -- So the world costs ~4.5 KB and the 25 blocks ~3.5 KB (as one map it would be 256 KB), and every
 -- frame is one map() call however big the world is.
+--
+-- What the kid can't walk through is a sprite flag (FLAGS, below: flag 0), so is a door (flag 1):
+-- press A at one and whoever lives there talks, in the dialog library's text box (File, Add a
+-- library), with their face drawn three times its size by sspr() from sprite 64.
 
 SPRITES = {
   [1] = "00000000 00000000 00030000 03030300 00303000 00000000 00000000 00000000",
@@ -31,6 +120,21 @@ SPRITES = {
   [19] = "00888800 08888880 08888880 01888810 00ffff00 0dddddd0 00dddd00 00010010",
   [20] = "00888800 08888888 01fff100 001f1f00 00ffff00 00d77d00 00d77d00 00100100",
   [21] = "00888800 08888888 01fff100 001f1f00 00ffff00 00d77d00 00d77d00 01000010",
+  [64] = "00444400 04444440 44444444 0ffffff0 0f1ff1f0 0ffffff0 00f22f00 000ff000", -- a villager
+}
+-- sprite flags: fget(n, f) (the playground's sprite editor writes this table)
+FLAGS = {
+  [2] = 1, -- flags 0
+  [3] = 1, -- flags 0
+  [4] = 1, -- flags 0
+  [5] = 1, -- flags 0
+  [7] = 1, -- flags 0
+  [8] = 1, -- flags 0
+  [9] = 3, -- flags 0 1
+  [10] = 3, -- flags 0 1
+  [11] = 1, -- flags 0
+  [13] = 1, -- flags 0
+  [14] = 1, -- flags 0
 }
 
 -- The blocks: 8 x 8 cells each (64 x 64 pixels), in MAP's characters ("." grass, 2-5 a tree, 6 path...).
@@ -363,8 +467,7 @@ local PX, PY = c.picture_x, c.picture_y
 local TOP, BOT = PY, PY + 384
 local BLOCK, CELLS = 64, 8                       -- a block's pixels and cells a side
 local WW, WH = #WORLD[1], #WORLD                 -- the world in blocks
-local SOLID = {}                                 -- the sprites the kid can't walk through
-for _, n in ipairs({2, 3, 4, 5, 7, 8, 9, 10, 11, 13, 14}) do SOLID[n] = true end
+local SOLID, DOOR = 0, 1                         -- the flags (FLAGS): can't walk through, a house's front
 local AREA = { ["."] = "fields", [","] = "fields", [";"] = "fields", f = "the woods", t = "a grove", w = "a pond", n = "a meadow",
                r = "the rocks", h = "a town" }
 
@@ -400,9 +503,37 @@ local function cell(x, y)
 end
 local function blocked(x, y)  -- the kid's feet, 6 x 3 px, at (x, y) for its sprite's top left
   for _, p in ipairs({ {x + 1, y + 5}, {x + 6, y + 5}, {x + 1, y + 7}, {x + 6, y + 7} }) do
-    if SOLID[cell(p[1], p[2]) or -1] then return true end
+    local t = cell(p[1], p[2])
+    if t and fget(t, SOLID) then return true end
   end
   return false
+end
+
+-- ---- knocking on doors ----
+local GREETINGS = { "Oh! A visitor.", "Hello there, traveler.", "Come in, come in!", "Well, look who it is." }
+local TIPS = {
+  "The world is 64 blocks across. The woods go on past the edge, but you can't.",
+  "Press B to see the whole world: every dot on it is a block.",
+  "This whole world fits in about 8 KB. Don't tell anyone.",
+  "Ponds are the blue on the map. You can't swim, though.",
+  "Roads join the towns up. Follow one and you'll find another house.",
+  "Hold A to run. My knees aren't what they were, so I walk.",
+}
+local houses, knocked = 0, {}
+-- The cell just in front of the kid (where it faces): a door?
+local function door_ahead()
+  local x, y = kid.x + 4, kid.y + 6
+  if kid.face == "up" then y = y - 5 elseif kid.face == "down" then y = y + 5
+  elseif kid.face == "left" then x = x - 6 else x = x + 6 end
+  local t = cell(x, y)
+  return t and fget(t, DOOR)
+end
+local function knock()
+  local key = bx .. "," .. by
+  if not knocked[key] then knocked[key] = true knocked.n = (knocked.n or 0) + 1 end
+  local h = bx * 31 + by * 17
+  dialog.say({ GREETINGS[h % #GREETINGS + 1], TIPS[h % #TIPS + 1],
+               ("There are %d houses out there. You've knocked on %d."):format(houses, knocked.n) })
 end
 
 -- ---- the bands: the title, where the kid is ----
@@ -412,7 +543,7 @@ local function where()
     local x, y = flr(kid.x / 8), flr(kid.y / 8)
     hd.text(("%s  ·  block %d, %d  ·  cell %d, %d"):format(AREA[block_at(bx, by)] or "the road", bx, by, x, y),
       W / 2, BOT + 14, 0xcfe8cf, 14, "mono", "center")
-    hd.text("walk  ·  hold A: run  ·  B: map", W / 2, BOT + 34, 0x7f9a80, 12, "mono", "center")
+    hd.text("walk  ·  A: run, knock  ·  B: map", W / 2, BOT + 34, 0x7f9a80, 12, "mono", "center")
   end)
 end
 
@@ -466,6 +597,7 @@ function _init()
   build(flr(kid.x / BLOCK), flr(kid.y / BLOCK))
   where()
   plan_map()
+  for _, row in ipairs(WORLD) do houses = houses + select(2, row:gsub("h", "")) end
   last = time()
   log("world", WW .. " x " .. WH, "blocks; start block", bx, by)
 end
@@ -474,6 +606,8 @@ function _update()
   local now = time()
   local dt = min(now - last, 0.1)
   last = now
+  if dialog.update() then return end  -- someone's talking: the world waits
+  if btnp(4) and not showing_map and door_ahead() then knock() return end
   if btnp(5) then
     showing_map = not showing_map
     if showing_map then open_map() else close_map() end
@@ -516,4 +650,10 @@ function _draw()
   spr(frame, flr(kid.x), flr(kid.y), kid.face == "left")
   camera()
   clip()
+  if dialog.active() then  -- the villager's face, three times its size, over the text box
+    rectfill(5, dialog.y - 29, 34, dialog.y - 2, 1)
+    rect(5, dialog.y - 29, 34, dialog.y - 2, 7)
+    sspr(64, 8, dialog.y - 26, 24, 24)
+    dialog.draw()
+  end
 end

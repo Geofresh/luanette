@@ -58,8 +58,8 @@ the rest. `?` lists the keys.
 - **Code.** Mistakes are marked as you type, with the line. Hover a name for its help, or press
   Ctrl+Space for the list. Ctrl+F finds, Ctrl+H replaces. A strip of the cart's 16 colors types a
   color's number when you click it.
-- **Sprites, Map, Sounds and Music.** The Sprites tab draws the cart's 8x8 sprites, and the Map tab
-  paints levels with them, up to 128 x 64 cells, for `map()` to draw. The Sounds tab is a
+- **Sprites, Map, Sounds and Music.** The Sprites tab draws the cart's 8x8 sprites (up to 256) and
+  their flags, and the Map tab paints levels with them, up to 128 x 64 cells, for `map()` to draw. The Sounds tab is a
   note grid: pick an instrument and an effect, draw pitch and volume, and press Play. The Music tab
   strings sounds into a song, up to four playing at once. All four write into the cart's code.
   Open Overdrive to see a finished song.
@@ -182,7 +182,7 @@ playground, with its own sounds and a song, in about half an hour.
 -- title: Hello
 -- by: you
 -- about: a dot you move with your finger
--- api: 5
+-- api: 6
 
 x, y = 64, 64
 

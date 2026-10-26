@@ -57,7 +57,7 @@ local function shown()
   return math.min(#pages[page], flr((time() - t0) * dialog.speed))
 end
 
--- Call once a frame in _update; true while the box is open.
+-- Call once a frame in _update; true while the box is open (and on the frame it closes).
 function dialog.update()
   if not pages then return false end
   if fresh then fresh = false return true end  -- the press that opened it isn't one for it
@@ -69,7 +69,7 @@ function dialog.update()
     else
       pages = nil
       if dialog.done then dialog.done() end
-      return false
+      return true  -- the press that closed it was the box's too (it mustn't open it again)
     end
   end
   return true
