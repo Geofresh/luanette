@@ -38,7 +38,7 @@ SCALE = 3
 MAX_SOURCE = 32 * 1024
 BUDGET = 30_000
 MAX_SAVE = 2048
-API_VERSION = 5  # engine/cart.hpp kApiVersion: 1 before the full-color layer, 2 with it, 3 with sound and music, 4 with log() and spaced sprites, 5 with maps
+API_VERSION = 6  # engine/cart.hpp kApiVersion: 1 before the full-color layer, 2 with it, 3 with sound and music, 4 with log() and spaced sprites, 5 with maps, 6 with sprites 0-255, blocks, sspr, palt and flags
 MAP_W, MAP_H = 128, 64  # the most a map has, in cells (engine/cart.cpp)
 TILES = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ+/"  # a map cell's character: sprites 0-63
 # The board's runtime built for this computer (engine/host/cartrun.cpp): a 3D cart's preview
@@ -124,6 +124,7 @@ class Cart:
         self.logs: list[str] = []      # log() lines (the first 200), as the runtime gives them
         self.spaced_sprites = False    # a sprite string with spaces in it (API 4)
         self.used_map = False          # map(), mget(), mset() or msize() (API 5)
+        self.used_api6 = set()         # what it used of API 6 (sprites past 63, blocks, sspr, palt, flags)
         self.map_cells: list[list[int | None]] = []  # MAP read: rows of sprite numbers, None empty
         self.map_w = 0
         self.map_table = None          # the MAP table read (another one is read again)
@@ -148,6 +149,7 @@ class Cart:
     def reset_draw_state(self):
         self.color = 7
         self.pmap = list(range(16))
+        self.clear = 1  # a bit per color: the ones spr, sspr and map leave out (palt; color 0)
         self.cam = (0, 0)
         self.clipr = (0, 0, W, H)
 
@@ -283,22 +285,135 @@ class Cart:
             x += 4
         return x
 
-    def spr(self, n, x, y, flip_x=False, flip_y=False):
+    def _sprite(self, who, n, block=False):
+        """Sprite n's 64 pixels, as engine/cart.cpp's sprite_pixels (block: as block_pixels)."""
         sprites = self.env["SPRITES"] if self.env is not None else None
-        if sprites is None:
-            raise ValueError("spr: no SPRITES table")
-        s = sprites[int(n)]
-        s = re.sub(r"[ \t\r\n]", "", s) if isinstance(s, str) else None  # spaces between rows are for reading (API 4)
+        if sprites is None or self.lua.globals().type(sprites) != "table":
+            raise ValueError(f"{who}: no SPRITES table")
+        if n > 63:
+            self.used_api6.add("sprites past 63")
+        raw = sprites[n]
+        s = re.sub(r"[ \t\r\n]", "", raw) if isinstance(raw, str) else None  # spaces between rows are for reading (API 4)
         if s is None or not re.fullmatch(r"[0-9a-fA-F]{64}", s):
-            raise ValueError(f"spr: SPRITES[{int(n)}] must be 64 hex digits (spaces between rows are fine)")
-        self.spaced_sprites = self.spaced_sprites or len(sprites[int(n)]) != 64
-        for i, h in enumerate(s):
-            v = int(h, 16)
-            if v:
-                px, py = i % 8, i // 8
-                if flip_x: px = 7 - px
-                if flip_y: py = 7 - py
-                self._px(x + px, y + py, v)
+            raise ValueError(f"{who}: SPRITES[{n}] must be 64 hex digits (spaces between rows are fine)")
+        self.spaced_sprites = self.spaced_sprites or len(raw) != 64
+        return [int(h, 16) for h in s]
+
+    def _block(self, who, n, w, h):
+        if w < 1 or h < 1 or w * h > 256:
+            raise ValueError(f"{who}: a block is 1 to 256 sprites ({w} x {h})")
+        got = []
+        for k in range(n, n + w * h):
+            if not 0 <= k <= 255:
+                raise ValueError(f"{who}: the block from {n} runs to sprite {n + w * h - 1}; sprites are 0-255")
+            got.append(self._sprite(who, k))
+        return got
+
+    def _blit8(self, p, x, y, fx, fy):
+        for i, v in enumerate(p):
+            if not self.clear >> v & 1:
+                self._px(x + (7 - i % 8 if fx else i % 8), y + (7 - i // 8 if fy else i // 8), v)
+
+    @staticmethod
+    def _true(v):  # Lua's truth: all but nil and false (0 is true)
+        return v is not None and v is not False
+
+    @staticmethod
+    def _is_num(v):
+        return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+    def spr(self, n, x, y, a=None, b=None, c=None, d=None):
+        f = lambda v: int(math.floor(v))
+        n, x, y = f(n), f(x), f(y)
+        if not self._is_num(a):  # spr(n, x, y, [fx], [fy])
+            self._blit8(self._sprite("spr", n), x, y, self._true(a), self._true(b))
+            return
+        self.used_api6.add("spr's blocks")  # spr(n, x, y, w, h, [fx], [fy]) (API 6)
+        w, h, fx, fy = f(a), (1 if b is None else f(b)), self._true(c), self._true(d)
+        if self.env is None or self.env["SPRITES"] is None:
+            raise ValueError("spr: no SPRITES table")
+        got = self._block("spr", n, w, h)
+        for r in range(h):
+            for col in range(w):
+                self._blit8(got[r * w + col], x + (w - 1 - col if fx else col) * 8, y + (h - 1 - r if fy else r) * 8, fx, fy)
+
+    def sspr(self, n, x, y, dw, dh, fx=None, fy=None, w=None, h=None):
+        self.used_api6.add("sspr")
+        f = lambda v: int(math.floor(v))
+        n, x, y, dw, dh = f(n), f(x), f(y), f(dw), f(dh)
+        fx, fy = self._true(fx), self._true(fy)
+        w, h = (1 if w is None else f(w)), (1 if h is None else f(h))
+        if self.env is None or self.env["SPRITES"] is None:
+            raise ValueError("sspr: no SPRITES table")
+        got = self._block("sspr", n, w, h)
+        sw, sh = w * 8, h * 8
+        for j in range(max(dh, 0)):
+            v = j * sh // dh
+            if fy:
+                v = sh - 1 - v
+            for i in range(max(dw, 0)):
+                u = i * sw // dw
+                if fx:
+                    u = sw - 1 - u
+                c = got[(v >> 3) * w + (u >> 3)][(v & 7) * 8 + (u & 7)]
+                if not self.clear >> c & 1:
+                    self._px(x + i, y + j, c)
+
+    def palt(self, c=None, on=None):
+        if c is None:
+            self.clear = 1
+            return
+        self.used_api6.add("palt")
+        c = int(math.floor(c))
+        if not 0 <= c <= 15:
+            raise ValueError(f"palt: color {c} isn't one of 0-15")
+        if not isinstance(on, bool):
+            raise ValueError("palt: give a color and true (left out) or false (drawn)")
+        self.clear = self.clear | 1 << c if on else self.clear & ~(1 << c)
+
+    # -- sprite flags (API 6), as engine/cart.cpp's fget and fset: FLAGS, sprite -> bits 0-7 --
+    def _flags_of(self, who, flags, n):
+        if flags is None:
+            return 0
+        v = flags[n]
+        if v is None:
+            return 0
+        if not self._is_num(v) or v != int(v) or not 0 <= v <= 255:
+            raise ValueError(f"{who}: FLAGS[{n}] must be a whole number 0-255 (a bit a flag)")
+        return int(v)
+
+    def _flags_table(self):
+        t = self.env["FLAGS"] if self.env is not None else None
+        return t if t is not None and self.lua.globals().type(t) == "table" else None
+
+    @staticmethod
+    def _flag(who, f):
+        f = int(math.floor(f))
+        if not 0 <= f <= 7:
+            raise ValueError(f"{who}: flag {f} isn't one of 0-7")
+        return f
+
+    def fget(self, n, f=None):
+        self.used_api6.add("flags")
+        v = self._flags_of("fget", self._flags_table(), int(math.floor(n)))
+        return v if f is None else bool(v >> self._flag("fget", f) & 1)
+
+    def fset(self, n, a, on=None):
+        self.used_api6.add("flags")
+        n = int(math.floor(n))
+        flags = self._flags_table()
+        if flags is None:
+            flags = self.lua.table()
+            self.env["FLAGS"] = flags
+        if on is None:
+            v = int(math.floor(a))
+            if not 0 <= v <= 255:
+                raise ValueError(f"fset: {v} isn't 0-255 (a bit a flag)")
+        else:
+            f = self._flag("fset", a)
+            v = self._flags_of("fset", flags, n)
+            v = v | 1 << f if on is not False else v & ~(1 << f)
+        flags[n] = v
 
     # -- the map (API 5), as engine/cart.cpp's read_map, map, mget, mset, msize --
     def _read_map(self, who):
@@ -333,10 +448,14 @@ class Cart:
         self.map_w = w
         self.map_table = m
 
-    def map(self, cx=0, cy=0, sx=0, sy=0, cw=None, ch=None):
+    def map(self, cx=0, cy=0, sx=0, sy=0, cw=None, ch=None, layer=None):
         self._read_map("map")
         f = lambda v: int(math.floor(v or 0))
-        cx, cy, sx, sy = f(cx), f(cy), f(sx), f(sy)
+        cx, cy, sx, sy, layer = f(cx), f(cy), f(sx), f(sy), f(layer)
+        if layer:
+            self.used_api6.add("map's layer")
+        flags = self._flags_table() if layer else None
+        shown = {}
         cw = self.map_w if cw is None else f(cw)
         ch = len(self.map_cells) if ch is None else f(ch)
         sprites = None
@@ -345,6 +464,11 @@ class Cart:
                 t = self.map_cells[r][c]
                 if t is None:
                     continue
+                if layer:
+                    if t not in shown:
+                        shown[t] = self._flags_of("map", flags, t) & layer != 0
+                    if not shown[t]:
+                        continue
                 if sprites is None:
                     sprites = self.env["SPRITES"]
                     if sprites is None:
@@ -353,11 +477,7 @@ class Cart:
                 s = re.sub(r"[ \t\r\n]", "", s) if isinstance(s, str) else None
                 if s is None or not re.fullmatch(r"[0-9a-fA-F]{64}", s):
                     raise ValueError(f"map: cell ({c}, {r}) is sprite {t}, and SPRITES[{t}] isn't 64 hex digits")
-                x, y = sx + (c - cx) * 8, sy + (r - cy) * 8
-                for i, h in enumerate(s):
-                    v = int(h, 16)
-                    if v:
-                        self._px(x + i % 8, y + i // 8, v)
+                self._blit8([int(h, 16) for h in s], sx + (c - cx) * 8, sy + (r - cy) * 8, False, False)
 
     def mget(self, cx, cy):
         self._read_map("mget")
@@ -1019,7 +1139,7 @@ class Cart:
         return self.lua.table_from(list(self.images))
 
     def api(self):
-        names = ["cls", "pset", "pget", "line", "rect", "rectfill", "circ", "circfill", "spr", "map", "mget", "mset", "msize", "pal", "palette", "camera",
+        names = ["cls", "pset", "pget", "line", "rect", "rectfill", "circ", "circfill", "spr", "sspr", "palt", "fget", "fset", "map", "mget", "mset", "msize", "pal", "palette", "camera",
                  "clip", "btn", "btnp", "touch", "tilt", "buzz", "sfx", "music", "time", "now", "date", "rnd", "srand", "save", "load",
                  "data", "ask", "say", "act", "wake", "stat", "level", "trifill", "sin", "cos",
                  "shape", "obj", "place", "orient", "hide", "paint", "view", "light", "sky", "project", "ground", "shadow",
@@ -1469,6 +1589,10 @@ def check(path: Path, frames: int, preview: Path | None, theme: str, dump_input:
         res.setdefault("warnings", []).append(
             "it has a map (API 5): add '-- api: 5' to its header, so a board with older firmware says it needs "
             "an update instead of failing at its first map call")
+    if api < 6 and cart.used_api6:
+        res.setdefault("warnings", []).append(
+            f"it uses API 6 ({', '.join(sorted(cart.used_api6))}): add '-- api: 6' to its header, so a board with older "
+            "firmware says it needs an update instead of failing at its first call")
     if api < 4 and cart.spaced_sprites:
         res.setdefault("warnings", []).append(
             "its sprites have spaces between rows (API 4): add '-- api: 4' to its header, so a board with older "

@@ -40,7 +40,9 @@ Everything else is up to the cart. Globals persist between frames.
 The API has a version. Version 1 is everything before the full-color layer; version 2 adds the
 layer (`hd`), its images, the `ui` helpers, `caps()` and `touch(true)`; version 3 adds the cart's own
 sounds and music (`SOUNDS`, `MUSIC`, `sfx(8-63)`, `music()`); version 4 adds `log()` and spaces in
-sprite strings; version 5 adds maps (`MAP`, `map()`, `mget()`, `mset()`, `msize()`). A runtime older than a
+sprite strings; version 5 adds maps (`MAP`, `map()`, `mget()`, `mset()`, `msize()`); version 6 adds sprites
+64-255, blocks of sprites in `spr()`, `sspr()`, `palt()` and sprite flags (`FLAGS`, `fget()`, `fset()`, `map()`'s
+layer). A runtime older than a
 cart's `-- api: N` refuses it with a message saying so ("it needs API 2; this runtime has 1
 (update the firmware)") instead of failing at the first call it doesn't know. `check.py` refuses
 a version the board doesn't have, and asks for `-- api: 2` when a cart uses the layer.
@@ -57,7 +59,7 @@ a version the board doesn't have, and asks for `-- api: 2` when a cart uses the 
 | `touch`, `tilt`, `buzz`, `sound` | true, true, false (no vibration motor is fitted), true (the speaker plays `sfx`) |
 | `hd`, `stage` | the full-color layer and the 3D scene: true, true |
 | `host` | `data()` and `act()` reach the console: true |
-| `version` | the API version the runtime has: 5 |
+| `version` | the API version the runtime has: 6 |
 | `board` | `"waveshare-amoled-206"` (`"browser"` in the playground) |
 
 ## Limits
@@ -112,8 +114,13 @@ brackets; it defaults to the last color used (7 at start).
 | `circ(x, y, r, [c])` / `circfill(x, y, r, [c])` | a circle outline / filled circle |
 | `trifill(x0, y0, x1, y1, x2, y2, [c])` | a filled triangle. Fractions count (to 1/16 px): triangles sharing an edge meet with no gap and no overlap, so meshes tile cleanly. For solid 3D: drop faces turned away, draw far to near |
 | `print(text, x, y, [c])` | text in the 4x6 font (3x5 glyphs, 4 px a character, so 32 a line); returns the x after the text. Letters show as capitals; `\n` starts a new line at `x`; whole numbers print without `.0` |
-| `spr(n, x, y, [flip_x], [flip_y])` | sprite `n` from `SPRITES` (below), color 0 transparent |
-| `map([cx, cy, sx, sy, cw, ch])` | the map (`MAP`, below): `cw` x `ch` cells from cell (`cx`, `cy`), drawn as sprites with that cell's top left at (`sx`, `sy`). With nothing, the whole map at (0, 0). Color 0 is transparent; the camera moves it, and only the cells on screen cost anything |
+| `spr(n, x, y, [flip_x], [flip_y])` | sprite `n` (0-255) from `SPRITES` (below), color 0 transparent (`palt` changes which) |
+| `spr(n, x, y, w, h, [flip_x], [flip_y])` | a block of `w` x `h` sprites (API 6): `n`, `n + 1`, ... row by row, `w` across, so a 16 x 16 character is four sprites in a row of the table. Flipping flips the whole block. A number as the fourth argument is what makes it a block |
+| `sspr(n, x, y, dw, dh, [flip_x], [flip_y], [w], [h])` | sprite `n` (or the `w` x `h` block from it) stretched or shrunk to `dw` x `dh` pixels (API 6), nearest pixel: big titles, zooms, a boss |
+| `palt(c, on)` / `palt()` | whether color `c` is transparent in `spr`, `sspr` and `map` (API 6) / only color 0 again. `palt(0, false)` draws black; `palt(14, true)` makes pink the see-through color |
+| `map([cx, cy, sx, sy, cw, ch, layer])` | the map (`MAP`, below): `cw` x `ch` cells from cell (`cx`, `cy`), drawn as sprites with that cell's top left at (`sx`, `sy`). With nothing, the whole map at (0, 0). Color 0 is transparent; the camera moves it, and only the cells on screen cost anything. With `layer` (API 6), only the cells whose sprite has one of those flags (`fget(n) & layer ~= 0`): draw the ground, then the player, then `map(0, 0, 0, 0, 128, 64, 2)` for the treetops in front |
+| `fget(n)` / `fget(n, f)` | sprite `n`'s flags as a number (API 6) / whether it has flag `f` (0-7). A sprite not in `FLAGS` has none |
+| `fset(n, f, on)` / `fset(n, v)` | turn flag `f` of sprite `n` on or off / set all eight from `v`'s bits. It writes `FLAGS` (making it when the cart has none) |
 | `mget(cx, cy)` | the sprite in a map cell, or nil for an empty cell or one off the map |
 | `mset(cx, cy, n)` / `mset(cx, cy)` | put sprite `n` (0-63) in a cell / empty it. It changes the map for this run, not `MAP`'s text |
 | `msize()` | the map's width and height in cells |
@@ -132,7 +139,22 @@ SPRITES = {
 }
 ```
 
-The playground's Sprites tab draws them and writes this table for you.
+The playground's Sprites tab draws them and writes this table for you. Sprites are 0-255 (API 6;
+0-63 before); a map's cells are 0-63, so keep tiles there and characters and items above.
+
+Sprite flags (API 6): a global table `FLAGS`, sprite to a number whose bits 0-7 are its flags. What
+a flag means is the cart's to say; a common choice is 0 solid, 1 water, 2 in front of the player:
+
+```lua
+FLAGS = { [1] = 1, [5] = 2, [6] = 1 | 4 }   -- 1 and 6 are solid, 5 is water, 6 is drawn in front
+
+local function solid(x, y)
+  local t = mget(flr(x / 8), flr(y / 8))
+  return t and fget(t, 0)
+end
+```
+
+The Sprites tab has a row of eight flag switches under each sprite.
 
 The map (API 5): a global table `MAP` of rows, top to bottom, each a string with a character a
 cell. `.` is an empty cell; `0`-`9`, `a`-`z`, `A`-`Z`, `+` and `/` are sprites 0 to 63 (`1` is
@@ -155,7 +177,7 @@ function _draw()
   camera()
 end
 
-local function solid(x, y) return mget(flr(x / 8), flr(y / 8)) == 1 end
+local function solid(x, y) return mget(flr(x / 8), flr(y / 8)) == 1 end  -- or with flags, above
 ```
 
 A map costs source like any text, a byte a cell: a 128 x 32 level is about 4 KB of the 32 KB.

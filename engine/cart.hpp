@@ -51,8 +51,9 @@ struct Input {
 // The cart API's version (docs/api.md, "Versions"): a cart may ask for one with `-- api: N`, and
 // a runtime refuses a cart that needs a newer one. 1: everything before the full-color layer;
 // 2: the layer (hd), its images, caps(), touch(true); 3: the cart's own sounds and music (SOUNDS,
-// MUSIC, sfx 8-63, music()); 4: log(), and spaces in sprite strings.
-constexpr int kApiVersion = 5;
+// MUSIC, sfx 8-63, music()); 4: log(), and spaces in sprite strings; 5: maps; 6: sprites 0-255,
+// spr()'s blocks, sspr(), palt(), sprite flags (FLAGS, fget(), fset(), map()'s layer).
+constexpr int kApiVersion = 6;
 constexpr int kLogLine = 200;   // a log() line's characters, at most (the rest is cut)
 constexpr int kLogLines = 20;   // log() lines a frame, at most (then one saying more were dropped)
 
