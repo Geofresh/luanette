@@ -29,11 +29,21 @@
 
 #include "cart.hpp"
 #include "hd.hpp"
+extern "C" {
+#include "lauxlib.h"
+}
 #include "stage.hpp"
 
 namespace {
 
 carts::Cart* g_cart = nullptr;
+
+// HG_TEST_EXTRA: a port's own call, for tests/extra.py (Host::extra_api): twice(n) is n * 2.
+int f_twice(lua_State* L) {
+  lua_pushinteger(L, luaL_checkinteger(L, 1) * 2);
+  return 1;
+}
+const luaL_Reg kTestExtra[] = {{"twice", f_twice}, {nullptr, nullptr}};
 
 // The deadline as on the board: an interruption of the Lua thread itself (here SIGALRM, as lua.c's Ctrl-C).
 void on_alarm(int) {
@@ -59,6 +69,7 @@ struct TestHost final : carts::Host {
   void wake(double) override {}
   std::vector<std::string> logs;  // log() lines, for the result's "log"
   void log(std::string_view line) override { if (logs.size() < 200) logs.emplace_back(line); }
+  const luaL_Reg* extra_api() const override { return std::getenv("HG_TEST_EXTRA") ? kTestExtra : nullptr; }
   bool accepts_act(std::string_view) const override { return true; }  // check.py has the list; this replays its runs
   void act(std::string_view name, std::string_view arg) override {
     ++acts;

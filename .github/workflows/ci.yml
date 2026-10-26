@@ -25,6 +25,7 @@ jobs:
       - run: python tools/share_link.py --check docs/tutorial.md .  # its links open its step carts
       - run: for c in examples/*.lua gallery/*.lua templates/*.lua tests/tutorial/*.lua libs/demos/*.lua engine/builtin/launcher.lua; do python tools/check.py "$c" > /dev/null || { python tools/check.py "$c"; exit 1; }; done
       - run: for c in tests/carts/primitives.lua tests/carts/triangles.lua tests/carts/lazy.lua tests/carts/sounds.lua tests/carts/log.lua tests/carts/sprites.lua tests/carts/map.lua tests/carts/api.lua tests/carts/sprites2.lua; do python tests/parity.py "$c"; done
+      - run: python tests/extra.py  # a port's own calls (Host::extra_api, check.py's EXTRA) reach a cart alike
       - run: python tools/check.py tests/carts/api.lua > /tmp/api.json && python tools/api_check.py /tmp/api.json  # every name documented
 
   firmware:

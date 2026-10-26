@@ -18,6 +18,7 @@
 #include "hg/json.hpp"
 
 struct lua_State;
+struct luaL_Reg;  // lauxlib.h's {name, func}
 
 namespace carts {
 
@@ -114,6 +115,11 @@ class Host {
   }
   virtual std::vector<std::string> image_names() { return {}; }
   virtual Caps caps() { return {}; }
+  // A port's own calls, beside the API's (a board's radio, a dashboard's widgets): a list ending in
+  // {nullptr, nullptr}, made globals before the cart runs and named in caps().extras, so a cart can
+  // check for one. nullptr: none. Their names mustn't be the API's (docs/ARCHITECTURE.md, "Calls of
+  // a port's own").
+  virtual const luaL_Reg* extra_api() const { return nullptr; }
   // Call Cart::interrupt() if Lua still runs `us` from now (from an interrupt on Lua's own core,
   // or any context that preempts it there); 0 cancels. Hosts without one (tests) leave it.
   virtual void deadline(int64_t us) { (void)us; }

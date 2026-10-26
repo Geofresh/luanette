@@ -16,6 +16,7 @@ Prints one JSON line: {"ok": true|false, "error": ..., "max_ops": ..., "calls": 
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import math
 import os
@@ -72,6 +73,9 @@ HD_WARN_MS = 25
 PICO = [0x000000, 0x1D2B53, 0x7E2553, 0x008751, 0xAB5236, 0x5F574F, 0xC2C3C7, 0xFFF1E8,
         0xFF004D, 0xFFA300, 0xFFEC27, 0x00E436, 0x29ADFF, 0x83769C, 0xFF77A8, 0xFFCCAA]
 ACTS = {"open", "volume", "brightness"}  # act()'s commands: Luanette's firmware's (console.cpp, accepts_command)
+# A port's own calls (engine/cart.hpp Host::extra_api), for a checker that loads this one and adds
+# them: name -> fn(cart, *args), its result what the cart gets. caps().extras names them.
+EXTRA: dict = {}
 SAMPLE = {
     # What the console gives data(): the launcher's list, the battery and the settings.
     "carts": [{"name": "lockload", "title": "Lock & Load", "about": "a light-gun rail shooter in 3 stages"},
@@ -559,7 +563,8 @@ class Cart:
                                     "picture_x": WINDOW_X if f else 0, "picture_y": WINDOW_Y if f else 0,
                                     "corner": CORNER if f else 0, "scale": 1, "round": False, "touch": True,
                                     "tilt": True, "buzz": True, "sound": True, "hd": True, "stage": True, "host": True,
-                                    "version": API_VERSION, "board": "waveshare-amoled-206"})
+                                    "version": API_VERSION, "board": "waveshare-amoled-206",
+                                    "extras": self.lua.table_from(sorted(EXTRA))})
 
     def tilt(self):
         self.tilted = True  # (input the lazy rate doesn't watch: no lazy-rate hint for it)
@@ -1148,6 +1153,8 @@ class Cart:
         t["print"] = self.print_
         t["log_line"] = self.log_line  # for the harness's log(); not a cart's
         t["fps"] = self.fps_
+        for name, fn in EXTRA.items():  # a port's own calls
+            t[name] = functools.partial(fn, self)
         # hd's calls are the hd_ methods (hd_rows and the like are this checker's own bookkeeping)
         t["hd"] = self.lua.table_from({n[3:]: getattr(self, n) for n in dir(self) if n.startswith("hd_") and callable(getattr(self, n))})
         return t

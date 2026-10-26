@@ -344,6 +344,31 @@ needs these changed and probably a different scale. A glass narrower than 384 pi
 picture at 2x and the stage and layer windows sized to match. That is the largest piece of
 porting work, and nobody has done it yet.
 
+### Calls of a port's own
+
+A board or a fork can give carts calls the API doesn't have (a radio, a dashboard's widgets)
+without touching `cart.cpp`. Its `Host` returns them from `extra_api()`, a list ending in
+`{nullptr, nullptr}`; the runtime makes them globals before the cart runs and names them in
+`caps().extras`:
+
+```cpp
+int f_wifi(lua_State* L) { lua_pushboolean(L, connected()); return 1; }
+const luaL_Reg kMine[] = {{"wifi", f_wifi}, {nullptr, nullptr}};
+const luaL_Reg* MyHost::extra_api() const { return kMine; }
+```
+
+`check.py` takes the same calls through its `EXTRA` dict, name to `fn(cart, *args)`, from a checker
+of the port's own that loads it (as Hermes Gadget's `carts/check.py` does for its `act()` commands):
+
+```python
+check.EXTRA["wifi"] = lambda cart: True
+```
+
+Give them names the API will never use (a prefix of the board's is safest): a future API call of
+the same name would be hidden by the port's. Carts that use them won't run elsewhere, so they
+should check for them: `if wifi then ... end`. `tests/extra.py` holds the two sides to the same
+result.
+
 ### Input
 
 The player turns touch into the cart's buttons: a tap is A, a drag is the d-pad,

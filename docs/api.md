@@ -61,6 +61,7 @@ a version the board doesn't have, and asks for `-- api: 2` when a cart uses the 
 | `host` | `data()` and `act()` reach the console: true |
 | `version` | the API version the runtime has: 6 |
 | `board` | `"waveshare-amoled-206"` (`"browser"` in the playground) |
+| `extras` | the names of calls this runtime adds beyond this API (a board's or a fork's own; see `docs/ARCHITECTURE.md`): `{}` here. A cart that uses one checks first: `if wifi then ... end` |
 
 ## Limits
 

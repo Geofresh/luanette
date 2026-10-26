@@ -872,6 +872,13 @@ int f_caps(lua_State* L) {
   lua_setfield(L, -2, "version");
   lua_pushlstring(L, c.board.data(), c.board.size());
   lua_setfield(L, -2, "board");
+  lua_newtable(L);  // the port's own calls (Host::extra_api), by name
+  int n = 0;
+  for (const luaL_Reg* r = S->host->extra_api(); r && r->name; ++r) {
+    lua_pushstring(L, r->name);
+    lua_rawseti(L, -2, ++n);
+  }
+  lua_setfield(L, -2, "extras");
   return 1;
 }
 int f_tilt(lua_State* L) {
@@ -1895,6 +1902,10 @@ bool Cart::start(std::string_view name, std::string_view src) {
   for (const auto& f : kApi) {
     lua_pushcfunction(L_, f.func);
     lua_setglobal(L_, f.name);
+  }
+  for (const luaL_Reg* r = host_.extra_api(); r && r->name; ++r) {  // the port's own (Host::extra_api)
+    lua_pushcfunction(L_, r->func);
+    lua_setglobal(L_, r->name);
   }
   {  // hd: the full-color layer (docs/api.md)
     static const luaL_Reg kHd[] = {
