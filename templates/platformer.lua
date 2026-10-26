@@ -1,7 +1,7 @@
 -- title: Platformer
 -- by: you
 -- about: run and jump across a level three screens wide, and pick up every coin
--- api: 5
+-- api: 6
 -- canvas: full
 
 -- sprites (the playground's sprite editor writes this table)
@@ -10,6 +10,12 @@ SPRITES = {
   [2] = "00aaaa00 0aa99aa0 aa9aa9aa aa9aa9aa aa9aa9aa aa9aa9aa 0aa99aa0 00aaaa00", -- coin
   [3] = "bbbbbbbb b3bbb3bb 33b3b333 43334334 44444444 44544444 44444454 44444444", -- grass
   [4] = "44444444 44544444 44444454 44444444 45444444 44444544 44444444 44454444", -- dirt
+}
+-- sprite flags: fget(n, f) (the playground's sprite editor writes this table)
+FLAGS = {
+  [2] = 2, -- flags 1
+  [3] = 1, -- flags 0
+  [4] = 1, -- flags 0
 }
 -- sounds (the playground's sound editor writes this table)
 SOUNDS = {
@@ -54,10 +60,18 @@ end
 local GRAVITY, JUMP, SPEED = 0.25, -3.6, 1.4
 local me, score, left, round, cam = {}, 0, 0, 0, 0
 
--- A wall or floor at pixel (x, y): grass or dirt in that map cell.
+-- Flag 0 is solid (grass, dirt) and flag 1 a coin: set in the Sprites tab, read with fget().
+local SOLID, COIN = 0, 1
+
+-- Whether map cell (cx, cy) holds a sprite with flag f (an empty cell has none).
+local function has(cx, cy, f)
+  local t = mget(cx, cy)
+  return t ~= nil and fget(t, f)
+end
+
+-- A wall or floor at pixel (x, y).
 local function solid(x, y)
-  local t = mget(flr(x / 8), flr(y / 8))
-  return t == 3 or t == 4
+  return has(flr(x / 8), flr(y / 8), SOLID)
 end
 
 local function start()
@@ -66,7 +80,7 @@ local function start()
   left = 0
   for y = 0, h - 1 do
     for x = 0, w - 1 do
-      if mget(x, y) == 2 then left = left + 1 end
+      if has(x, y, COIN) then left = left + 1 end
     end
   end
   me = {x = 8, y = 96, vx = 0, vy = 0, ground = false}
@@ -100,7 +114,7 @@ function _update()
   me.y = ny
   -- a coin in the cell at the player's middle
   local cx, cy = flr((me.x + 4) / 8), flr((me.y + 4) / 8)
-  if mget(cx, cy) == 2 then
+  if has(cx, cy, COIN) then
     mset(cx, cy)
     score, left = score + 1, left - 1
     sfx(9)

@@ -5,7 +5,7 @@
 "use strict";
 
 const MapEditor = (() => {
-  const { readTable, withApi } = Tables;
+  const { readTable, readNumbers, withApi } = Tables;
   const TILES = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ+/";  // sprites 0-63; "." is empty
   const MAX_W = 128, MAX_H = 64, NEW_W = 32, NEW_H = 16;
   const INTRO = "the map: a character a cell, \".\" empty, else a sprite (the playground's map editor writes this table)";
@@ -17,6 +17,7 @@ const MapEditor = (() => {
   let rows = [];      // its rows: strings of cells, all the same width
   let tile = 1, tool = "paint", zoom = 0;
   let sprites = new Map(), colors = [];
+  let flags = new Map(), showFlag = -1;  // FLAGS; the flag whose cells are marked (-1: none)
   let past = [], future = [], written = null;
 
   // ---- the code ---------------------------------------------------------------------------------
@@ -48,6 +49,7 @@ const MapEditor = (() => {
       const d = s.text.replace(/\s+/g, "");
       if (/^[0-9a-fA-F]{64}$/.test(d) && n >= 0 && n < 64) sprites.set(n, { px: [...d].map((h) => parseInt(h, 16)), name: s.name });
     }
+    flags = readNumbers(code.value, "FLAGS").map || new Map();
     if (!sprites.has(tile) && sprites.size) tile = [...sprites.keys()].sort((a, b) => a - b).find((n) => n > 0) ?? [...sprites.keys()][0];
   }
   const block = (n, r) => `${n} = {\n${r.map((s) => `  "${s}",`).join("\n")}\n}`;
@@ -133,6 +135,12 @@ const MapEditor = (() => {
     g.fillRect(x * c, y * c, c, c);
     const n = at(x, y);
     if (n >= 0) drawTile(g, n, x * c, y * c, c);
+    if (n >= 0 && showFlag >= 0 && ((flags.get(n) || 0) >> showFlag) & 1) {  // marked: it has the flag shown
+      g.fillStyle = "rgba(240, 180, 41, 0.35)";
+      g.fillRect(x * c, y * c, c, c);
+      g.strokeStyle = "#f0b429";
+      g.strokeRect(x * c + 1.5, y * c + 1.5, c - 3, c - 3);
+    }
   }
   function lines(g) {
     const c = cell(), w = width(rows), h = rows.length;
@@ -288,6 +296,7 @@ const MapEditor = (() => {
     $("map-w").onchange = resize;
     $("map-h").onchange = resize;
     $("map-zoom").oninput = () => { zoom = Number($("map-zoom").value); draw(); };
+    $("map-flag").onchange = () => { showFlag = Number($("map-flag").value); draw(); };
     addEventListener("keydown", (e) => {  // on this tab: undo, redo; P paint, F fill, E erase
       if (typeof SoundEditor === "undefined" || SoundEditor.tab !== "map" || typing(e)) return;
       const mod = e.ctrlKey || e.metaKey, key = e.key.toLowerCase();

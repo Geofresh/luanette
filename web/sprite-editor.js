@@ -1,13 +1,16 @@
 // The playground's sprite editor. It reads the cart's SPRITES table from the code, lets you draw
 // its 8x8 sprites in the cart's 16 colors, and writes the table back as you go, a sprite a line,
-// its rows spaced so the code reads as the picture (API 4). spr(n, x, y) draws sprite n.
+// its rows spaced so the code reads as the picture (API 4). spr(n, x, y) draws sprite n. It also
+// writes the sprites' flags, a FLAGS table (API 6), and shows the 256 sprites 64 at a time.
 // Uses the playground's globals: $, code, lw, say, typing; and Tables (web/tables.js).
 "use strict";
 
 const SpriteEditor = (() => {
-  const { readTable, writeTable, withApi } = Tables;
-  const COUNT = 64;  // sprites 0-63: the ones the engine keeps decoded
+  const { readTable, writeTable, readNumbers, writeNumbers, withApi } = Tables;
+  const COUNT = 256, PAGE = 64;  // sprites 0-255 (API 6; a map's cells are 0-63), shown a page of 64 at a time
   const INTRO = "sprites (the playground's sprite editor writes this table)";
+  const FLAGS_INTRO = "sprite flags: fget(n, f) (the playground's sprite editor writes this table)";
+  const flagNote = (n, v) => "flags " + [0, 1, 2, 3, 4, 5, 6, 7].filter((f) => (v >> f) & 1).join(" ");
 
   // 64 color numbers <-> the table's text: 8 rows of 8 hex digits, spaces between rows.
   const decode = (text) => {
@@ -17,15 +20,17 @@ const SpriteEditor = (() => {
   const encode = (px) => Array.from({ length: 8 }, (_, r) => px.slice(r * 8, r * 8 + 8).map((v) => v.toString(16)).join("")).join(" ");
 
   let sprites = new Map();  // number -> {text, name}
+  let flags = new Map();    // number -> its flags, bits 0-7
   let slot = 0, color = 7, tool = "pencil", clipboard = null, problem = "";
   let past = [], future = [], written = null;
   let colors = [];
 
   // ---- the code ---------------------------------------------------------------------------------
   function load() {
-    const t = readTable(code.value, "SPRITES");
-    problem = t.problem || "";
+    const t = readTable(code.value, "SPRITES"), f = readNumbers(code.value, "FLAGS");
+    problem = t.problem || f.problem || "";
     sprites = t.map || new Map();
+    flags = f.map || new Map();
     for (const [n, s] of sprites) {
       if (!decode(s.text)) problem ||= `SPRITES[${n}] isn't 64 hex digits; fix it in the code, or delete it there.`;
     }
@@ -38,7 +43,9 @@ const SpriteEditor = (() => {
   }
   function save() {
     let src = writeTable(code.value, "SPRITES", sprites, INTRO);
-    if (sprites.size) src = withApi(src, 4);  // spaced sprite strings need API 4
+    src = writeNumbers(src, "FLAGS", flags, FLAGS_INTRO, flagNote, "SPRITES");
+    const high = [...sprites.keys()].some((n) => n > 63) || [...flags.values()].some((v) => v);
+    if (sprites.size) src = withApi(src, high ? 6 : 4);  // spaced sprite strings need API 4; flags and 64-255, 6
     written = src;
     if (src === code.value) return;
     code.value = src;
@@ -53,9 +60,15 @@ const SpriteEditor = (() => {
     buttons();
     draw();
   }
+  function toggleFlag(f) {
+    remember();
+    flags.set(slot, (flags.get(slot) || 0) ^ (1 << f));
+    save();
+    show();
+  }
 
   // ---- undo ---------------------------------------------------------------------------------------
-  const snapshot = () => JSON.stringify({ s: [...sprites], slot });
+  const snapshot = () => JSON.stringify({ s: [...sprites], f: [...flags], slot });
   function remember() {
     past.push(snapshot());
     if (past.length > 200) past.shift();
@@ -65,6 +78,7 @@ const SpriteEditor = (() => {
   function restore(state) {
     const d = JSON.parse(state);
     sprites = new Map(d.s);
+    flags = new Map(d.f || []);
     slot = d.slot;
     save();
     show();
@@ -114,12 +128,19 @@ const SpriteEditor = (() => {
     g.fillStyle = "#0d1117";
     g.fillRect(0, 0, SHEET, SHEET);
     g.font = "10px monospace";
-    for (let n = 0; n < COUNT; n++) {
-      const x = (n % 8) * cell, y = Math.floor(n / 8) * cell, px = sprites.has(n) ? decode(sprites.get(n).text) : null;
+    const first = page() * PAGE;
+    for (let n = first; n < first + PAGE; n++) {
+      const k = n - first, x = (k % 8) * cell, y = Math.floor(k / 8) * cell, px = sprites.has(n) ? decode(sprites.get(n).text) : null;
       if (px) drawSprite(g, px, x + 4, y + 4, 3);
       else {
         g.fillStyle = "#30363d";
-        g.fillText(String(n), x + 9, y + 20);
+        g.fillText(String(n), x + (n > 99 ? 6 : 9), y + 20);
+      }
+      if (flags.get(n)) {  // a dot a flag along the bottom
+        for (let f = 0; f < 8; f++) {
+          g.fillStyle = (flags.get(n) >> f) & 1 ? "#f0b429" : "transparent";
+          g.fillRect(x + 4 + f * 3, y + cell - 4, 2, 2);
+        }
       }
       if (n === slot) {
         g.strokeStyle = "#f0b429";
@@ -129,6 +150,8 @@ const SpriteEditor = (() => {
       }
     }
   }
+
+  const page = () => Math.floor(slot / PAGE);
 
   function cellAt(e) {
     const r = $("spr-grid").getBoundingClientRect();
@@ -217,6 +240,13 @@ const SpriteEditor = (() => {
     if (problem) return;
     $("spr-num").textContent = slot;
     $("spr-call").textContent = `spr(${slot}, x, y)`;
+    $("spr-pages").querySelectorAll("button").forEach((b, i) => b.classList.toggle("on", i === page()));
+    const has = flags.get(slot) || 0;
+    $("spr-flags").querySelectorAll("button").forEach((b, f) => {
+      b.classList.toggle("on", !!((has >> f) & 1));
+      b.title = `flag ${f}: fget(${slot}, ${f}) is ${!!((has >> f) & 1)}`;
+    });
+    $("spr-flagcall").textContent = has ? `fget(${slot}) is ${has}` : `no flags`;
     $("spr-count").textContent = `${sprites.size} of ${COUNT} used`;
     $("spr-name").value = sprites.has(slot) ? sprites.get(slot).name : "";
     palette();
@@ -240,9 +270,22 @@ const SpriteEditor = (() => {
     grid.addEventListener("pointercancel", () => { dragging = false; });
     sheet.addEventListener("click", (e) => {
       const r = sheet.getBoundingClientRect();
-      const n = Math.floor((e.clientY - r.top) / r.height * 8) * 8 + Math.floor((e.clientX - r.left) / r.width * 8);
-      if (n >= 0 && n < COUNT) { slot = n; show(); }
+      const k = Math.floor((e.clientY - r.top) / r.height * 8) * 8 + Math.floor((e.clientX - r.left) / r.width * 8);
+      if (k >= 0 && k < PAGE) { slot = page() * PAGE + k; show(); }
     });
+    $("spr-pages").replaceChildren(...[0, 1, 2, 3].map((p) => {
+      const b = document.createElement("button");
+      b.textContent = `${p * PAGE}-${p * PAGE + PAGE - 1}`;
+      b.title = p ? "Sprites past 63 need API 6, and can't be map cells" : "Sprites 0-63: the ones a map can use";
+      b.onclick = () => { slot = p * PAGE + (slot % PAGE); show(); };
+      return b;
+    }));
+    $("spr-flags").replaceChildren(...[0, 1, 2, 3, 4, 5, 6, 7].map((f) => {
+      const b = document.createElement("button");
+      b.textContent = f;
+      b.onclick = () => toggleFlag(f);
+      return b;
+    }));
     $("spr-pencil").onclick = () => { tool = "pencil"; buttons(); };
     $("spr-fill").onclick = () => { tool = "fill"; buttons(); };
     for (const fn of ["clear", "flipx", "flipy", "left", "right", "up", "down"]) $("spr-" + fn).onclick = () => edit(fn);

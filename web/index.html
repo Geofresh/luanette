@@ -121,6 +121,10 @@
   #spr-sheet { width: 256px; max-width: 100%; height: auto; aspect-ratio: 1; border: 1px solid var(--line); border-radius: 8px;
                cursor: pointer; image-rendering: pixelated; }
   .spr-previews { display: flex; gap: 8px; align-items: center; }
+  .flags { display: inline-flex; gap: 3px; }
+  .flags button, .pages button { min-width: 28px; padding: 2px 6px; font-variant-numeric: tabular-nums; }
+  .pages { gap: 3px; }
+  .pages button { font-size: 12px; }
   .spr-previews canvas { width: auto; aspect-ratio: auto; border-radius: 4px; border: 1px solid var(--line); image-rendering: pixelated; }
   .swatch { width: 34px; height: 30px; padding: 0; font: 11px var(--mono); border-radius: 6px; }
   .swatch.on { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -517,6 +521,8 @@
           <div class="spr-main">
             <canvas id="spr-grid" aria-label="The sprite's 8 by 8 pixels: draw on it; Alt-click or right-click picks a color up"></canvas>
             <div class="brush" id="spr-colors" aria-label="Colors (keys 0-9 and a-f)"></div>
+            <div class="bar"><span class="note">Flags</span><span class="flags" id="spr-flags" aria-label="Its flags, 0 to 7: what each means is the cart's to say"></span>
+              <span class="note" id="spr-flagcall"></span></div>
           </div>
           <div class="spr-side">
             <div class="bar">
@@ -534,13 +540,15 @@
             </div>
             <div class="spr-previews"><canvas id="spr-1x" width="24" height="24" aria-label="At its size"></canvas>
               <canvas id="spr-4x" width="48" height="48" aria-label="At 4 times its size"></canvas></div>
-            <canvas id="spr-sheet" aria-label="All 64 sprites: pick one"></canvas>
+            <div class="bar pages" id="spr-pages" aria-label="Which 64 sprites the sheet shows"></div>
+            <canvas id="spr-sheet" aria-label="64 of the sprites: pick one"></canvas>
           </div>
         </div>
         <div id="spr-info" class="note"></div>
         <p class="note">Color 0 is see-through when <code>spr()</code> draws. Keys 0-9 and a-f pick a color; Alt-click or
           right-click on the sprite picks one up. The editor writes a <code>SPRITES</code> table into the code, each
-          sprite a row at a time.</p>
+          sprite a row at a time, and a <code>FLAGS</code> table for the flags (say 0 for solid, 1 for water:
+          <code>fget(mget(x, y), 0)</code>). A map's cells are sprites 0-63; keep characters and items above.</p>
       </div>
     </section>
     <section class="editor" id="map" hidden>
@@ -561,6 +569,10 @@
           <button id="map-erase" title="E, or right-click">Erase</button><button id="map-move" title="Scroll the map by dragging (for a phone)">Move</button>
           <button id="map-undo" title="Ctrl+Z">Undo</button><button id="map-redo" title="Ctrl+Shift+Z">Redo</button>
           <label class="note">Zoom <input type="range" id="map-zoom" min="8" max="40" step="4" value="24" aria-label="Zoom"></label>
+          <label class="note">Show flag <select id="map-flag" aria-label="Mark the cells whose sprite has this flag">
+            <option value="-1">none</option><option value="0">0</option><option value="1">1</option><option value="2">2</option>
+            <option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option>
+            <option value="7">7</option></select></label>
         </div>
         <div class="brush tiles" id="map-tiles" aria-label="The sprite to paint with"></div>
         <p class="note" id="map-nosprites" hidden>Draw some sprites in the Sprites tab first: a map is made of them.</p>
