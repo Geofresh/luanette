@@ -1028,7 +1028,8 @@ class Cart:
         t["print"] = self.print_
         t["log_line"] = self.log_line  # for the harness's log(); not a cart's
         t["fps"] = self.fps_
-        t["hd"] = self.lua.table_from({n[3:]: getattr(self, n) for n in dir(self) if n.startswith("hd_")})
+        # hd's calls are the hd_ methods (hd_rows and the like are this checker's own bookkeeping)
+        t["hd"] = self.lua.table_from({n[3:]: getattr(self, n) for n in dir(self) if n.startswith("hd_") and callable(getattr(self, n))})
         return t
 
 
@@ -1077,7 +1078,7 @@ do
 end
 local env = {}
 for _, k in ipairs({"math", "string", "table", "coroutine", "pairs", "ipairs", "tostring", "tonumber", "type",
-                    "select", "pcall", "error", "assert", "setmetatable", "getmetatable", "next", "rawget",
+                    "select", "pcall", "xpcall", "error", "assert", "setmetatable", "getmetatable", "next", "rawget",
                     "rawset", "rawequal", "rawlen"}) do env[k] = _G[k] end
 env.unpack = table.unpack
 env.log = function(...)  -- as the runtime builds the line: tostring() of each, spaces between

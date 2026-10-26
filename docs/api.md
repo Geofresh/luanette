@@ -76,7 +76,7 @@ a version the board doesn't have, and asks for `-- api: 2` when a cart uses the 
   overflows), fractions to about 7 digits (the board's FPU is single precision). check.py's Lua
   is built the same way (`tools/build_lupa32.py`), so it catches these.
 - No `io`, `os`, `require`, `load`, `dofile`, `debug`, `package`. `math`, `string`, `table`,
-  `coroutine`, `pairs`, `ipairs`, `tostring`, `tonumber`, `type`, `select`, `pcall`, `error`,
+  `coroutine`, `pairs`, `ipairs`, `tostring`, `tonumber`, `type`, `select`, `pcall`, `xpcall`, `error`, `rawequal`, `rawlen`,
   `assert`, `setmetatable`, `getmetatable`, `next`, `rawget`, `rawset`, `unpack` are there.
 - A cart can't block or exit. PWR or a swipe down from the top edge leaves it. While the screen
   is dark, no frames run; `time()` keeps counting, and `wake()` can light the screen again when
@@ -328,7 +328,8 @@ the calls as the board does and draws the preview with the board's own runtime (
 | `btn(b)` | true while button `b` is held |
 | `btnp(b)` | true on the frame `b` went down |
 | `touch()` / `touch(true)` | `x, y` in screen pixels while the cart window is touched, else `nil` / the same in canvas units (3x finer: for the full-color layer) |
-| `tilt()` | `ax, ay`, each about -1..1: which way things would roll. `ax` > 0 when the right edge is lower, `ay` > 0 when the bottom edge is lower (screen directions: roll a ball by `ax, ay` and it goes downhill). Measured from how the board was held when the cart started (lying on a desk at a lean counts as level); `level()` takes the pose it's in now as level |
+| `tilt()` | `ax, ay`, each about -1..1: which way things would roll. `ax` > 0 when the right edge is lower, `ay` > 0 when the bottom edge is lower (screen directions: roll a ball by `ax, ay` and it goes downhill). Measured from how the board was held when the cart started (lying on a desk at a lean counts as level) |
+| `level()` | nothing: `tilt()` is measured from the pose the board is in now (for a "hold it how you like, then tap" start) |
 
 Buttons: `0` left, `1` right, `2` up, `3` down, `4` A, `5` B. There are no buttons on screen: a
 drag is the d-pad (its direction from where the finger came down, diagonals too: two of 0-3
@@ -406,6 +407,7 @@ at the `sfx` or `music` that plays it, saying what's wrong (`sfx(8): SOUNDS[8] n
 | `date([t])` | local time (the host's timezone, kept for offline use) as a table: `year`, `month`, `day`, `hour`, `min`, `sec`, `wday` (1 = Sunday), `yday`; for `now()` when `t` is left out. `nil` while the date is unknown |
 | `rnd([x])` | a random number in [0, x) (x defaults to 1); `rnd(t)` with a table picks an element |
 | `srand(seed)` | seed `rnd` |
+| `sin(t)`, `cos(t)` | turns, not radians (below) |
 | `flr(x)`, `ceil(x)`, `abs(x)`, `sgn(x)`, `min(a, b)`, `max(a, b)`, `mid(a, b, c)` | the usual |
 | `save(t)` / `load()` | keep a small table (numbers, strings, booleans, nested tables; at most 2 KB) across runs / get it back (`nil` the first time). Whole numbers come back exactly (timestamps included) |
 | `stat(n)` | `stat(0)` memory in KB, `stat(1)` the last frame's Lua time as a fraction of a frame, `stat(7)` frames a second |

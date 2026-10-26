@@ -42,6 +42,7 @@ with tempfile.TemporaryDirectory() as d:
         diff = [i for i in range(len(a)) if a[i] != b[i]]
         if diff:
             bad.append((f, len(diff), [(i % 128, i // 128, a[i], b[i]) for i in diff[:6]]))
+    logs_differ = res.get("log", []) != run.get("log", [])  # log() lines, in order, the same on both
     print(json.dumps({"cart": cart.name, "frames": res["frames"], "frames_differing": len(bad),
-                      "first": bad[:3], "py_max_ops": res["max_ops"], "c": run}))
-    sys.exit(1 if bad or run.get("hd_bad") else 0)
+                      "first": bad[:3], "logs_differ": logs_differ, "py_max_ops": res["max_ops"], "c": run}))
+    sys.exit(1 if bad or logs_differ or run.get("hd_bad") else 0)

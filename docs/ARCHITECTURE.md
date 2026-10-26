@@ -129,6 +129,19 @@ work a frame spread over both cores. Jet's own pipeline does 26 fps on the same 
    `kApiVersion` and say in `api.md` what the new version adds.
 4. If it needs hardware, add a virtual to `carts::Host` with a harmless default, so `cartrun`
    and other hosts keep building.
+5. Add a parity cart in `tests/carts/` that uses it, and add it to the parity loop in
+   `.github/workflows/ci.yml`. If it raised `kApiVersion`, raise `API_VERSION` in `check.py` and
+   `cli/luanette.mjs` too.
+6. Rebuild the command-line tool's engine (`web/build.sh`, then `cli/build.sh`); the playground's
+   autocomplete and the tool's help are made from `api.md`, so they follow.
+
+CI holds all of this together. `tests/carts/api.lua` logs the name of every global a cart sees;
+`tests/parity.py` fails when check.py's list and the runtime's differ, and `tools/api_check.py`
+fails when a name isn't documented in `api.md` or a documented call is missing:
+
+```sh
+python tools/check.py tests/carts/api.lua > /tmp/api.json && python tools/api_check.py /tmp/api.json
+```
 
 ## The player (`esp32/cart_player.*`)
 
