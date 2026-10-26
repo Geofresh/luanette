@@ -4,3 +4,4 @@ templates/
 api.json
 LICENSE
 *.tgz
+libs/

@@ -70,7 +70,8 @@ the rest. `?` lists the keys.
   and a cart picked from the list opens in it. Keys and a gamepad work too.
 - **Your own carts.** File, New cart starts one from a template: blank, platformer, shooter or
   puzzle. Open a .lua file (or drop one on the page) and Save as .lua move them in and out as files.
-  They're kept in your browser as you type.
+  They're kept in your browser as you type. File, Add a library puts tested code in the cart
+  ([`libs/`](libs/)): moving through a map, a camera, animations, tweens, a text box and more.
 - **Sharing.** Share, Copy a share link puts the whole cart in a link, code, sounds and song.
   Whoever opens it gets the cart in their playground. Nothing is uploaded; the link is the only
   copy. Copy a link to play it does the same, but opens in play mode. Record a 5 s GIF saves what
@@ -94,6 +95,8 @@ On Linux, Chrome can only open the board's port if your user is in the `dialout`
 - `examples/`: seven complete carts
 - `gallery/`: carts people have put forward, shown in the playground
 - `templates/`: the carts New cart starts from
+- `libs/`: libraries a cart can include (movement through a map, a camera, animation, tweens,
+  timers, a text box, particles, scenes, vectors), each with a demo
 - `docs/`: the API, a tutorial, how to make a cart run well, and how it all works
 
 ## What you need
@@ -235,6 +238,7 @@ npx luanette new game --template platformer
 npx luanette check game.lua             # JSON: ok, the error and its line, warnings, the log
 npx luanette run game.lua --input play.json --shots 1,30,90   # play it, then look at the PNGs
 npx luanette link game.lua              # a link that opens it in the playground (--play: in play mode)
+npx luanette add actor cam game.lua     # libraries: map movement, a camera, and more (libs/)
 ```
 
 `npx luanette mcp` is the same as an MCP server (`claude mcp add luanette -- npx -y luanette mcp`

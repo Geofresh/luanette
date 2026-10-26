@@ -15,10 +15,11 @@ npx luanette check mygame.lua                   # JSON: ok, error (with the line
 npx luanette run mygame.lua --input play.json --shots 1,30,90 --out shots   # PNGs to look at
 npx luanette sound "C4 pulse 5, E4 slide, G4 saw 7 fadeout"                # SOUNDS text
 npx luanette link mygame.lua                    # a link that opens it in the playground
+npx luanette add actor cam mygame.lua           # put libraries in it (npx luanette libs lists them)
 ```
 
 Or as MCP tools (`check_cart`, `run_cart` with images back, `render_sound`, `make_sound`,
-`share_link`, `api_help`, `new_cart`):
+`share_link`, `api_help`, `new_cart`, `add_library`):
 
 ```bash
 claude mcp add luanette -- npx -y luanette mcp
@@ -151,6 +152,27 @@ is a byte a cell of the 32 KB. Never draw tiles with `spr` in a loop: `map()` is
 platformer template uses all of it. For a world bigger than 128 x 64 cells, keep it as a grid of blocks
 and make `MAP` only the blocks around the player, rebuilt as they walk: `examples/overworld.lua`
 does a 4096 x 4096 px world that way. Maps need `-- api: 5`.
+
+## Libraries
+
+Don't write movement, cameras, timers or text boxes from scratch: add a library. It goes into the
+cart as code between `-- lib: NAME` and `-- end lib: NAME` lines (the cart stays one file), and its
+comments say how to call it. Leave the code between the markers alone, so `add` can update it.
+
+- `actor`: an actor is a table with `x, y, w, h`; `actor.move(me, dx, dy)` moves it through the map
+  and stops it at solid cells (sprites with flag 0), sets `me.ground`; `actor.overlap(a, b)`.
+- `cam`: `cam.follow(me.x, me.y)` then `cam.apply()` in `_draw` (and `camera()` before the score);
+  keeps inside the map; `cam.shake(0.3, 2)`.
+- `anim`: `local walk = anim.new({16, 17}, 8)`, `spr(walk:frame(), x, y)`, `me.a = anim.switch(me.a, walk)`.
+- `tween`: `tween.to(obj, 0.5, {x = 100}, ease.out_back, done)`, `tween.update()` each frame.
+- `timer`: `timer.after(2, fn)`, `timer.every(0.5, fn)`, `timer.update()` each frame.
+- `dialog`: `dialog.say({"page one", "page two"})`; `if dialog.update() then return end` at the top
+  of `_update`; `dialog.draw()` last in `_draw`.
+- `particles`: `particles.burst(x, y, 20, {colors = {8, 9, 10}, gravity = 120})`, `update()` and `draw()`.
+- `state`: scenes as tables of `enter`, `update`, `draw`; `state.go(game)`.
+- `vec`: `vec.angle(dx, dy)`, `vec.from(a, len)`, `vec.norm`, `vec.dist`, `vec.rot`.
+
+Each has a demo in `libs/demos/`.
 
 ## Sounds and music
 

@@ -495,6 +495,38 @@ async function createCart() {
   addCart(name, src);
 }
 
+// ---- libraries (libs/): code a cart includes, between `-- lib:` and `-- end lib:` lines ---------------
+let libs = null;
+async function openLibs() {
+  if (!libs) {
+    try { libs = await (await fetch("libs.json")).json(); } catch { libs = []; }
+  }
+  renderLibs();
+  $("libs").showModal();
+}
+function renderLibs() {
+  $("libs-list").replaceChildren(...libs.map((l) => {
+    const has = new RegExp(`^-- lib: ${l.name} (\\d+)`, "m").exec(code.value);
+    const row = document.createElement("div"), b = document.createElement("button");
+    row.className = "lib";
+    row.innerHTML = `<strong></strong><span class="note"></span>`;
+    row.querySelector("strong").textContent = l.name;
+    row.querySelector(".note").textContent = `${l.about} (${(l.bytes / 1024).toFixed(1)} KB${l.api > 1 ? `, API ${l.api}` : ""})`;
+    const now = has ? Number(has[1]) : -1;  // the version the cart has (-1: none)
+    b.textContent = !has ? "Add" : now < l.version ? `Update to ${l.version}` : "Added";
+    b.disabled = now >= l.version;
+    b.className = has ? "" : "primary";
+    b.onclick = () => {
+      code.value = Tables.addLib(code.value, l.text).src;
+      code.dispatchEvent(new Event("input"));
+      say(`${has ? "Updated" : "Added"} the ${l.name} library: its comments in the code say how to use it.`);
+      renderLibs();
+    };
+    row.append(b);
+    return row;
+  }));
+}
+
 async function openFile(file) {
   if (!file) return;
   if (file.size > 256 * 1024) { say(`${file.name} is too big to be a cart.`, true); return; }
@@ -1240,6 +1272,7 @@ async function main() {
   $("open").onclick = () => $("file").click();
   $("file").onchange = () => { openFile($("file").files[0]); $("file").value = ""; };
   $("save").onclick = saveFile;
+  $("add-lib").onclick = openLibs;
   try {
     const kept = parseFloat(localStorage.getItem("luanette.volume"));
     if (kept >= 0 && kept <= 1) sound.level = kept;

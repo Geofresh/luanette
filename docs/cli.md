@@ -89,6 +89,17 @@ a d-pad and A and B on a phone (`&play` at the end of any playground link does t
 
 A new cart from a template: full-screen, with sprites, sounds and `log()` already in it.
 
+### `libs`, `add LIB... CART`
+
+`libs` lists the libraries a cart can include ([`libs/`](../libs/)): each one's name, version, the
+API it needs, what it does, and the bytes it adds. `add` puts them in a cart (or updates them to
+this version), between `-- lib: NAME` and `-- end lib: NAME` lines, and raises the cart's `-- api:`
+if a library needs more:
+
+```bash
+npx luanette add actor cam anim mygame.lua
+```
+
 ### `mcp`
 
 The tool as an MCP server over stdio, for coding agents. For Claude Code:
@@ -114,6 +125,7 @@ Its tools:
 | `share_link` | `link`; `play` for play mode |
 | `api_help` | the API from `docs/api.md`: one call by `name`, the calls matching `search`, or the list |
 | `new_cart` | `new`, returning the source |
+| `add_library` | `add`: `library` (a list of names) into the cart given as `source` (returns the new source) or `path` (writes it); with no `library`, `libs` |
 
 ## The input script
 

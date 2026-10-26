@@ -9,6 +9,8 @@
 //   luanette song CART.lua [--from N] --wav OUT.wav         its song
 //   luanette link CART.lua [--name NAME] [--play]            a playground share link (--play: opens in play mode)
 //   luanette new NAME [--template blank|platformer|shooter|puzzle]
+//   luanette libs                                            the libraries a cart can include
+//   luanette add LIB... CART.lua                             put libraries in a cart (or update them)
 //   luanette mcp                                             an MCP server over stdio (for agents)
 //
 // docs/cli.md has the details and the input script's format.
@@ -26,6 +28,7 @@ const find = (...tries) => tries.map((t) => path.join(HERE, t)).find((p) => fs.e
 const ENGINE = find("engine/luanette-node.js", "../web/build/luanette-node.js");
 const LIB = find("lib", "../web");
 const TEMPLATES = find("templates", "../templates");
+const LIBS = find("libs", "../libs");
 export const PLAYGROUND = "https://geofresh.github.io/luanette/";
 const Gif = require(path.join(LIB, "gif.js"));
 const Tables = require(path.join(LIB, "tables.js"));
@@ -390,6 +393,32 @@ export function newCart(name, template = "blank") {
   if (!fs.existsSync(file)) throw new Error(`no template ${template}: ${fs.readdirSync(TEMPLATES).map((f) => f.replace(".lua", "")).join(", ")}`);
   return fs.readFileSync(file, "utf8").replace(/^-- title: .*$/m, "-- title: " + name);
 }
+// ---- libraries (libs/*.lua): code a cart includes, between `-- lib:` and `-- end lib:` lines ----------
+const libText = (name) => {
+  const file = path.join(LIBS, name + ".lua");
+  if (!/^\w+$/.test(name) || !fs.existsSync(file)) throw new Error(`no library ${name}: ${libNames().join(", ")}`);
+  return fs.readFileSync(file, "utf8");
+};
+const libNames = () => fs.readdirSync(LIBS).filter((f) => f.endsWith(".lua")).map((f) => f.replace(".lua", "")).sort();
+// Each one: name, version, the API it needs, what it does, and the bytes it adds to a cart (comments
+// don't count, as for the cart's own code).
+export async function libraries() {
+  const e = await loadEngine();
+  return libNames().map((n) => {
+    const text = libText(n);
+    return { ...Tables.libInfo(text), bytes: Buffer.byteLength(e.shipped(text).trim()) };
+  });
+}
+// The cart's source with these libraries in it, each in place of the version it has, if any.
+export function addLibraries(src, names) {
+  const added = [];
+  for (const n of names) {
+    const r = Tables.addLib(src, libText(n));
+    src = r.src;
+    added.push({ name: n, version: Tables.libInfo(libText(n)).version, was: r.was || null });
+  }
+  return { src, added };
+}
 export const templates = () => fs.readdirSync(TEMPLATES).filter((f) => f.endsWith(".lua")).map((f) => f.replace(".lua", ""));
 
 // ---- the command line ------------------------------------------------------------------------------
@@ -404,7 +433,7 @@ function args(list) {
   }
   return { pos, opt };
 }
-const USAGE = fs.readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(1, 15).map((l) => l.replace(/^\/\/ ?/, "")).join("\n");
+const USAGE = fs.readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(1, 17).map((l) => l.replace(/^\/\/ ?/, "")).join("\n");
 const readCart = (file) => {
   if (!file || !fs.existsSync(file)) throw new Error(`no cart ${file || "given"}`);
   return { src: fs.readFileSync(file, "utf8"), name: path.basename(file, ".lua") };
@@ -447,6 +476,15 @@ async function main() {
     if (fs.existsSync(file)) throw new Error(`${file} is there already`);
     fs.writeFileSync(file, newCart(name, opt.template || "blank"));
     process.stdout.write(`wrote ${file} (from the ${opt.template || "blank"} template)\n`);
+  } else if (cmd === "libs") {
+    print(await libraries());
+  } else if (cmd === "add") {
+    const file = pos[pos.length - 1];
+    if (pos.length < 2 || !file.endsWith(".lua")) throw new Error("add LIB... CART.lua: the libraries, then the cart");
+    const { src } = readCart(file);
+    const r = addLibraries(src, pos.slice(0, -1));
+    fs.writeFileSync(file, r.src);
+    print({ ok: true, cart: file, added: r.added });
   } else if (cmd === "mcp") {
     await (await import("./mcp.mjs")).serve();
   } else {

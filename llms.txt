@@ -10,6 +10,7 @@ Start with AGENTS.md: it has the cart format, the check-run-look-fix loop, the l
 - [docs/api.md](https://github.com/Geofresh/luanette/blob/main/docs/api.md): the whole API
 - [docs/cli.md](https://github.com/Geofresh/luanette/blob/main/docs/cli.md): the command-line tool, the input script and the MCP tools
 - [docs/DESIGN.md](https://github.com/Geofresh/luanette/blob/main/docs/DESIGN.md): making a cart run well and use the whole screen
+- [libs/](https://github.com/Geofresh/luanette/tree/main/libs): libraries a cart includes (`npx luanette add actor cam mygame.lua`): map movement, camera, animation, tweens, timers, a text box, particles, scenes, vectors
 - [docs/tutorial.md](https://github.com/Geofresh/luanette/blob/main/docs/tutorial.md): a first game, step by step
 
 ## Carts to read

@@ -87,6 +87,45 @@ const Tables = (() => {
     return lines.join("\n");
   }
 
+  // A library (libs/*.lua): its first line says what it is, `-- lib: NAME VERSION, api N: about`,
+  // and `-- end lib: NAME` ends it. null when `text` doesn't start that way.
+  function libInfo(text) {
+    const m = /^-- lib: (\w+) (\d+), api (\d+): (.*)$/m.exec(text.split("\n")[0]);
+    return m ? { name: m[1], version: Number(m[2]), api: Number(m[3]), about: m[4] } : null;
+  }
+
+  // The cart with library `text` in it: in place of the version it has (between its markers), or
+  // after the libraries it has, or after the header. The header asks for the API it needs.
+  // Returns {src, name, was} (was: the version replaced, 0 for none).
+  function addLib(src, text) {
+    const info = libInfo(text);
+    if (!info) throw new Error("that isn't a library: its first line should be '-- lib: NAME VERSION, api N: ...'");
+    const block = text.replace(/\n*$/, "\n");
+    const old = new RegExp(`^-- lib: ${info.name} (\\d+)[^\\n]*\\n[^]*?^-- end lib: ${info.name}[ \\t]*(\\n|$)`, "m").exec(src);
+    let out, was = 0;
+    if (old) {
+      was = Number(old[1]);
+      out = src.slice(0, old.index) + block + src.slice(old.index + old[0].length);
+    } else {
+      const ends = [...src.matchAll(/^-- end lib: \w+[ \t]*\n?/gm)];
+      let at;
+      if (ends.length) {
+        const e = ends[ends.length - 1];
+        at = e.index + e[0].length;
+        if (!e[0].endsWith("\n")) { src = src + "\n"; at = at + 1; }
+      } else {
+        const lines = src.split("\n");
+        let n = 0;
+        // the header: its `-- key: value` lines (not a table's comment that follows it)
+        while (n < lines.length && /^--\s*[a-z][\w ]*:/i.test(lines[n]) && !/^-- (end )?lib:/.test(lines[n])) n++;
+        at = lines.slice(0, n).join("\n").length + (n ? 1 : 0);
+      }
+      const before = src.slice(0, at), after = src.slice(at);
+      out = before + "\n" + block + (after.startsWith("\n") || !after ? "" : "\n") + after;
+    }
+    return { src: withApi(out, info.api), name: info.name, was };
+  }
+
   // The header asks for API `min` at least (sounds and music need 3, spaced sprites 4), or a board
   // with older firmware would run the cart as one that doesn't need it.
   function withApi(src, min) {
@@ -104,7 +143,7 @@ const Tables = (() => {
     return lines.join("\n");
   }
 
-  return { readTable, writeTable, readNumbers, writeNumbers, withApi };
+  return { readTable, writeTable, readNumbers, writeNumbers, withApi, libInfo, addLib };
 })();
 
 if (typeof module !== "undefined") module.exports = Tables;

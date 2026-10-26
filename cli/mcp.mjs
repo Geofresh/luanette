@@ -1,7 +1,7 @@
 // `luanette mcp`: the command-line tool as an MCP server over stdio, for coding agents. JSON-RPC 2.0, a
 // message a line (the MCP stdio transport), no dependencies. Its tools check a cart, run it with input
-// and hand back what it drew as images, describe and render its sounds, make a share link, and look
-// up the API. Requests are handled one at a time (the engine is one).
+// and hand back what it drew as images, describe and render its sounds, make a share link, look up the
+// API, and add libraries. Requests are handled one at a time (the engine is one).
 //
 //   claude mcp add luanette -- npx -y luanette mcp
 import fs from "node:fs";
@@ -52,6 +52,8 @@ const TOOLS = [
   { name: "new_cart", description: "A new cart's source from a template (blank, platformer, shooter, puzzle): full-screen, with sprites, sounds and log() to build on.",
     inputSchema: { type: "object", required: ["name"], properties: { name: { type: "string", description: "a-z, 0-9, _ and -" },
       template: { type: "string", enum: ["blank", "platformer", "shooter", "puzzle"] } } } },
+  { name: "add_library", description: "Puts tested library code into a cart (or updates it): actor (moving through the map, stopping at solid cells), anim (sprite animations), cam (a following camera), dialog (a text box), particles, state (scenes), timer, tween (easing), vec (2D math). With no library, lists them with what each adds in bytes. Use these instead of writing your own. The library's comments say how to call it. With path, the file is written.",
+    inputSchema: { type: "object", properties: { ...CART, library: { type: "array", items: { type: "string" }, description: "The libraries to add, by name" } } } },
 ];
 
 function cartOf(a) {
@@ -124,6 +126,13 @@ const handlers = {
       return { content: [text(API.filter((x) => x.name.toLowerCase().includes(w) || x.help.some((h) => h.does.toLowerCase().includes(w))))] };
     }
     return { content: [text(API.map((x) => x.name).join(" "))] };
+  },
+  async add_library(a) {
+    if (!a.library || !a.library.length) return { content: [text(await L.libraries())] };
+    const { src } = cartOf(a);
+    const r = L.addLibraries(src, a.library);
+    if (a.path) fs.writeFileSync(path.resolve(a.path), r.src);
+    return { content: [text({ added: r.added, wrote: a.path || undefined }), ...(a.path ? [] : [text(r.src)])] };
   },
   async new_cart(a) {
     return { content: [text(L.newCart(a.name, a.template || "blank"))] };

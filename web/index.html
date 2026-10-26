@@ -205,6 +205,15 @@
                 max-width: min(620px, calc(100vw - 32px)); padding: 8px 24px 20px; font-size: 14px; }
   dialog#help::backdrop { background: rgba(0, 0, 0, 0.6); }
   dialog#help h2 { font-size: 18px; margin: 12px 0 4px; }
+  dialog#libs { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 12px;
+                width: min(620px, calc(100vw - 32px)); padding: 8px 24px 20px; font-size: 14px; }
+  dialog#libs::backdrop { background: rgba(0, 0, 0, 0.6); }
+  dialog#libs h2 { font-size: 18px; margin: 12px 0 4px; }
+  .lib { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; align-items: center; padding: 10px 0;
+         border-top: 1px solid var(--line); }
+  .lib strong { font: 14px var(--mono); }
+  .lib .note { grid-column: 1; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+  .lib button { grid-column: 2; grid-row: 1 / span 2; white-space: nowrap; }
   dialog#help h3 { font-size: 14px; margin: 16px 0 4px; color: var(--muted); }
   dialog#help ul { margin: 0; padding-left: 20px; }
   dialog#help p { margin: 6px 0; }
@@ -377,6 +386,7 @@
         <button id="new">New cart…</button>
         <button id="open">Open a .lua file…</button>
         <button id="save">Save as .lua</button>
+        <button id="add-lib">Add a library…</button>
         <hr>
         <button id="reset">Reset to original</button>
       </div>
@@ -662,6 +672,14 @@
     </select></label>
   <p class="problem" id="newproblem" hidden></p>
   <div class="bar"><span class="grow"></span><button id="newcancel">Cancel</button><button class="primary" id="create">Create</button></div>
+</dialog>
+<dialog id="libs" aria-labelledby="libs-title">
+  <form method="dialog" class="help-close"><button class="icon" aria-label="Close">✕</button></form>
+  <h2 id="libs-title">Add a library</h2>
+  <p class="note">Code you'd otherwise write yourself, added to the cart between <code>-- lib:</code> and
+    <code>-- end lib:</code> lines, so it stays one file that sends to a board and shares as one link. Adding one
+    again updates it. Its comments explain how to use it, and don't count toward the 32 KB.</p>
+  <div id="libs-list"></div>
 </dialog>
 <dialog id="help" aria-labelledby="help-title">
   <form method="dialog" class="help-close"><button class="icon" aria-label="Close">✕</button></form>
