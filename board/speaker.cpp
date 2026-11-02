@@ -1,7 +1,8 @@
 // The speaker: the ES8311 DAC on I2S (esp_codec_dev does its registers), the NS4150B amplifier on
 // a GPIO that this driver turns on only while sound plays. A task writes what's queued at the I2S
-// pace; after 2 s with nothing to play the codec powers down (~35 mA idling open) and comes back
-// for the next sound.
+// pace; after 10 s with nothing to play the codec powers down (~35 mA idling open) and comes back
+// for the next sound (reopening it costs that sound some milliseconds, so a game's sounds a few
+// seconds apart don't each pay it).
 #include "board.hpp"
 
 #include <algorithm>
@@ -16,7 +17,8 @@ namespace board {
 namespace {
 const char* TAG = "board.speaker";
 constexpr size_t kBuffer = 16 * 1024;  // ~0.5 s at 16 kHz: the sound mixer keeps only a few frames ahead
-constexpr size_t kChunk = 512;         // samples per codec write
+constexpr size_t kChunk = 128;         // samples per codec write (8 ms: what a new sound waits behind, at most)
+constexpr int kIdleCloseUs = 10000000;  // the codec powers down after this long with nothing to play
 }  // namespace
 
 bool Speaker::begin(const CodecConfig& cfg, i2c_master_bus_handle_t bus) {
@@ -28,6 +30,10 @@ bool Speaker::begin(const CodecConfig& cfg, i2c_master_bus_handle_t bus) {
   // (The board's microphones share this I2S bus through an ES7210; the console doesn't use them.)
   i2s_chan_config_t chan = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_1, I2S_ROLE_MASTER);
   chan.auto_clear = true;  // silence on underrun instead of repeating the last buffer
+  // 40 ms of DMA (the default is 90): what plays before a new sound can, and the cushion that keeps
+  // sound going while the flash stalls both cores (a save, a cart being sent: written in pieces).
+  chan.dma_desc_num = 4;
+  chan.dma_frame_num = 160;
   if (i2s_new_channel(&chan, &tx_, nullptr) != ESP_OK) return false;
   i2s_std_config_t std_cfg = {};
   std_cfg.clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(kRate);  // MCLK = 256 x fs
@@ -82,7 +88,9 @@ bool Speaker::begin(const CodecConfig& cfg, i2c_master_bus_handle_t bus) {
   const auto pin = static_cast<gpio_num_t>(cfg.pa);
   pa_.emplace([this](void* chunk, size_t bytes) { return xStreamBufferReceive(buffer_, chunk, bytes, 0); },
               [this] { xStreamBufferReset(buffer_); }, [pin](bool on) { gpio_set_level(pin, on); });
-  xTaskCreate(&Speaker::task, "board-spk", 4096, this, 7, &task_);
+  // On core 1, above the 3D stage's helper (8): core 0's sender draws a 3D frame for most of each
+  // pass at priority 10, and starved the speaker there (clicks). Its work is short (a chunk a write).
+  xTaskCreatePinnedToCore(&Speaker::task, "board-spk", 4096, this, 10, &task_, 1);
   ESP_LOGI(TAG, "ES8311 ready");
   return true;
 }
@@ -147,7 +155,7 @@ void Speaker::task(void* arg) {
   for (;;) {
     // Idle: wait for begin() instead of polling (a dark screen's light sleep isn't cut short).
     if (!playing && !self->open_ && !self->draining_ && !self->flush_ && xStreamBufferBytesAvailable(self->buffer_) == 0) {
-      if (!self->closed_ && esp_timer_get_time() - idle_since >= 2000000) self->set_sleep(true);
+      if (!self->closed_ && esp_timer_get_time() - idle_since >= kIdleCloseUs) self->set_sleep(true);
       ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(1000));
       continue;
     }

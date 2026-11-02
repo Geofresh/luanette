@@ -432,7 +432,7 @@ at the `sfx` or `music` that plays it, saying what's wrong (`sfx(8): SOUNDS[8] n
 | `srand(seed)` | seed `rnd` |
 | `sin(t)`, `cos(t)` | turns, not radians (below) |
 | `flr(x)`, `ceil(x)`, `abs(x)`, `sgn(x)`, `min(a, b)`, `max(a, b)`, `mid(a, b, c)` | the usual |
-| `save(t)` / `load()` | keep a small table (numbers, strings, booleans, nested tables; at most 2 KB) across runs / get it back (`nil` the first time). Whole numbers come back exactly (timestamps included) |
+| `save(t)` / `load()` | keep a small table (numbers, strings, booleans, nested tables; at most 2 KB) across runs / get it back (`nil` the first time). Whole numbers come back exactly (timestamps included). Saving often is fine: the board writes to flash only when the table changed, and at most every 2 s (the last one is written when the cart closes) |
 | `stat(n)` | `stat(0)` memory in KB, `stat(1)` the last frame's Lua time as a fraction of a frame, `stat(7)` frames a second |
 
 `sin(t)` / `cos(t)` take turns (1 = a full circle), as PICO-8's do, and `sin` is upside down (the

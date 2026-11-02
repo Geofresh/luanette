@@ -18,7 +18,7 @@ namespace {
 const char* kTag = "hg.sound";
 constexpr int kVoices = 4;
 constexpr int kFrameMs = 10;
-constexpr int kAheadFrames = 4;  // written ahead of what plays: the speaker's task takes it at its pace
+constexpr int kAheadFrames = 2;  // written ahead of what plays (20 ms): the speaker's task takes it at its pace
 
 hg::AudioOut* g_speaker = nullptr;
 uint32_t g_rate = 16000;
@@ -128,7 +128,9 @@ void begin(hg::AudioOut* speaker, uint32_t rate, bool (*voice_busy)()) {
   g_rate = rate;
   g_voice_busy = voice_busy;
   g_requests = xQueueCreate(8, sizeof(Request));
-  if (!g_requests || xTaskCreatePinnedToCore(mixer, "hg-sfx", 4096, nullptr, 5, nullptr, 0) != pdPASS) {
+  // Core 1, above the 3D stage's helper (8) and the cart's frames (6): on core 0 a 3D cart's sender
+  // (priority 10, busy most of each pass) left it only the gaps. A frame of mixing is ~10 us.
+  if (!g_requests || xTaskCreatePinnedToCore(mixer, "hg-sfx", 4096, nullptr, 9, nullptr, 1) != pdPASS) {
     ESP_LOGW(kTag, "no sound task: carts play silent");
     g_speaker = nullptr;
   }

@@ -247,9 +247,18 @@ Two kinds of sound share the speaker:
 The runtime parses a sound when a cart first plays it (and again if its text changes), a song at
 each `music()`, and hands them to the host as shared pointers (`Host::sound`, `Host::music`), so
 the host can keep them playing after the cart has gone; closing a cart stops both. On the board a
-task on core 0 owns a `Synth` and mixes it with up to four built-in effects in 10 ms frames, opens
-the speaker while anything plays, and lets it go after; the speaker's amplifier draws power only
-while sound plays, and the codec sleeps two seconds after the last sound. The playground runs the
+task on core 1 owns a `Synth` and mixes it with up to four built-in effects in 10 ms frames, two
+frames ahead of what plays, opens the speaker while anything plays, and lets it go after. The
+speaker's task (core 1 too: core 0's sender draws 3D frames at a priority that left audio only the
+gaps) writes it in 8 ms chunks into 40 ms of I2S DMA, about 70 ms from `sfx()` to sound at most;
+those 40 ms are also what keeps sound going through a flash write's stall. The amplifier draws
+power only while sound plays, and the codec sleeps ten seconds after the last sound.
+
+Saves (`save()`) go to NVS. A flash write stalls both cores for a few milliseconds, so the board
+writes a save only when it differs from what's kept, and at most every 2 s: one in between is held
+(`load()` sees it) and written when the 2 s are up, when the cart closes, or before a low battery
+powers the board off. A cart sent over USB is written a 4 KB flash sector at a time, for the same
+reason. The playground runs the
 same `Synth` in WebAssembly at the browser's rate and queues what it renders about 150 ms ahead.
 
 ## Settings (`firmware/main/console.cpp`)

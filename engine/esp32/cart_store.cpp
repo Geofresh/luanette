@@ -90,8 +90,14 @@ bool save(const Entry& e) {
   h.len = static_cast<uint32_t>(e.src.size());
   h.crc = esp_rom_crc32_le(0, reinterpret_cast<const uint8_t*>(e.src.data()), h.len);
   std::strncpy(h.name, e.name.c_str(), sizeof h.name - 1);
-  // The source first, the header last: a slot cut off mid-write reads as empty.
-  esp_err_t err = esp_partition_erase_range(part(), slot * kSlot, kSlot);
+  // The source first, the header last: a slot cut off mid-write reads as empty. The slot is erased
+  // a 4 KB sector at a time, with a breath between: an erase stalls the flash, and with it both
+  // cores (a running cart's frames, the sender), for as long as it runs; 36 KB at once was ~100 ms.
+  esp_err_t err = ESP_OK;
+  for (uint32_t at = 0; at < kSlot && err == ESP_OK; at += 0x1000) {
+    err = esp_partition_erase_range(part(), slot * kSlot + at, 0x1000);
+    vTaskDelay(1);
+  }
   if (err == ESP_OK) err = esp_partition_write(part(), slot * kSlot + sizeof h, e.src.data(), h.len);
   if (err == ESP_OK) err = esp_partition_write(part(), slot * kSlot, &h, sizeof h);
   if (err != ESP_OK) ESP_LOGE(kTag, "carts: saving %s failed: %s", e.name.c_str(), esp_err_to_name(err));
