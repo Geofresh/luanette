@@ -1227,6 +1227,7 @@ uint32_t cart_tick() {
     xtensa_perfmon_reset(1);
   }
   if (perf_n) xtensa_perfmon_start();
+  int lua_slot = -1;  // this tick's frame in lua_recent, when Lua ran
   if (c.stage) {
     // The sender draws the front frame as it sends it: a frame that would start while it's still
     // busy waits for the next pass. Otherwise the frame prepared last time goes to it (and the
@@ -1250,7 +1251,8 @@ uint32_t cart_tick() {
     c.lua_us += c.cart.last().lua_us;
     if (c.cart.last().lua_us > c.lua_max) c.lua_max_freed = c.cart.last().freed;
         c.lua_max = std::max(c.lua_max, c.cart.last().lua_us);
-    c.lua_recent[c.lua_i++ % 16] = c.cart.last().lua_us;
+    lua_slot = c.lua_i++ % 16;  // this frame's lead: its Lua, and its layer's publish below
+    c.lua_recent[lua_slot] = c.cart.last().lua_us;
     if (!c.cart.error().empty()) ESP_LOGW(kTag, "cart %s stopped: %s", c.cart.name().c_str(), c.cart.error().c_str());
     if (!c.stage && c.cart.stage() && !stage_enable(c)) {  // it made something 3D: from this frame, its picture over the scene
       cart_close();
@@ -1302,6 +1304,10 @@ uint32_t cart_tick() {
       const int64_t h = esp_timer_get_time() - h0;
       c.hd_us += h;
       c.hd_max = std::max(c.hd_max, h);
+      // The publish is part of the frame's work before the sender can start on it, so part of the
+      // lead a race needs: without it a layer-heavy frame (publish 2-8 ms) started too late, missed
+      // its pass and went a whole pass later. (A stage's slots hold the lead it measured instead.)
+      if (lua_slot >= 0 && !c.stage) c.lua_recent[lua_slot] += h;
     }
     if (hd_moved) {  // the layer's changed rows go again (the picture rows over them; a full canvas's others), as wide as they changed
       const auto& moved = c.hd->changed();

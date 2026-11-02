@@ -1184,11 +1184,23 @@ local api, src, ui = ...
 local budget, used, per, armed = 0, 0, 100, false
 -- Counts; and while the cart's code runs (armed), stops it past the budget. The few instructions of
 -- this harness around the call count but never stop anything: an error there would escape the pcall.
+-- Once a frame is stopped, every instruction raises the same error again (as engine/cart.cpp's
+-- tripped_hook), so a cart's own pcall can catch it but not carry on in the frame.
+local trip_msg
+local HARNESS_SRC = debug.getinfo(1, "S").source
+local function tripped()  -- the cart's code only: this harness's own lines after its pcall go on
+  local at = debug.getinfo(2, "S")
+  if at and at.source ~= HARNESS_SRC then error(trip_msg, 0) end
+end
 local function hook()
   used = used + per
   if armed and used > budget then
     armed = false
-    error("over budget: more than " .. budget .. " Lua instructions in one frame", 2)
+    local at = debug.getinfo(2, "Sl")  -- the cart's line it was on, as error(msg, 2) gives it
+    trip_msg = (at and at.currentline > 0 and at.short_src .. ":" .. at.currentline .. ": " or "") ..
+               "over budget: more than " .. budget .. " Lua instructions in one frame"
+    debug.sethook(tripped, "", 1)
+    error(trip_msg, 0)
   end
 end
 -- Lua's count runs on through the hook's own instructions (luaG_traceexec), so each call every 100

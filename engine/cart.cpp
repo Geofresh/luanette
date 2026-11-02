@@ -253,6 +253,7 @@ struct Cart::Impl {
   Input in, was;
   int64_t t0_us = 0, frame_t0 = 0, limit_us = 0;
   int ops = 0, budget = 0, polls = 0;  // Lua instructions this frame and the most it may have (count_hook)
+  std::string trip_msg;  // why the frame was stopped (tripped_hook raises it again)
   int count_left = 0;  // instructions to the next count when _update ended: _draw goes on from there
   uint32_t rng = 0x9E3779B9u;
   Host* host = nullptr;
@@ -550,18 +551,33 @@ int f_sspr(lua_State* L) {
   const uint8_t* got[256];
   block_pixels(L, "sspr", lua_gettop(L), n, w, h, got);
   const int sw = w * 8, sh = h * 8;
-  // Only the box's part the clip shows (the camera moves the box; px() clips the rest exactly).
+  // Only the box's part the clip shows (the camera moves the box). The clip lies inside the
+  // picture, so those pixels are written straight in; the products stay under 2^31 (dw, dh are
+  // coordinates, sw, sh at most 2048), so 32-bit division: a 64-bit one is a library call a pixel
+  // on the board. Each column's source column is worked out once.
   const int i0 = std::max(0, S->clip_x0 + S->cam_x - x), i1 = std::min(dw, S->clip_x1 + S->cam_x - x);
   const int j0 = std::max(0, S->clip_y0 + S->cam_y - y), j1 = std::min(dh, S->clip_y1 + S->cam_y - y);
+  if (i0 >= i1 || j0 >= j1) {
+    lua_pop(L, 1);
+    return 0;
+  }
+  int16_t col[kW];  // i1 - i0 <= the clip's width
+  for (int i = i0; i < i1; ++i) {
+    const int u = i * sw / dw;
+    col[i - i0] = static_cast<int16_t>(fx ? sw - 1 - u : u);
+  }
   const unsigned clear = S->clear;
+  const uint8_t* pmap = S->pmap;
   for (int j = j0; j < j1; ++j) {
-    int v = static_cast<int>(static_cast<int64_t>(j) * sh / dh);
+    int v = j * sh / dh;
     if (fy) v = sh - 1 - v;
+    const uint8_t* const* srow = got + (v >> 3) * w;
+    const int vr = (v & 7) * 8;
+    uint8_t* out = S->fb + (y + j - S->cam_y) * kW + (x - S->cam_x);
     for (int i = i0; i < i1; ++i) {
-      int u = static_cast<int>(static_cast<int64_t>(i) * sw / dw);
-      if (fx) u = sw - 1 - u;
-      const int c = got[(v >> 3) * w + (u >> 3)][(v & 7) * 8 + (u & 7)];
-      if (!(clear >> c & 1)) S->px(x + i, y + j, c);
+      const int u = col[i - i0];
+      const int c = srow[u >> 3][vr + (u & 7)];
+      if (!(clear >> c & 1)) out[i] = pmap[c];
     }
   }
   lua_pop(L, 1);
@@ -1662,16 +1678,36 @@ int f_stat(lua_State* L) {
   return 1;
 }
 
+// Once a frame is stopped (the deadline, the budget), every instruction raises the same error
+// again, so a cart's own pcall can catch it but not carry on: `while true do pcall(f) end` would
+// otherwise catch each one and never leave the frame. Cart::run clears the hook after the frame.
+void tripped_hook(lua_State* L, lua_Debug*) {
+  lua_pushstring(L, S->trip_msg.c_str());
+  lua_error(L);
+}
+// Stops the frame with the message on top of the stack.
+[[noreturn]] void trip(lua_State* L) {
+  S->trip_msg = lua_tostring(L, -1);
+  lua_sethook(L, tripped_hook, LUA_MASKCOUNT, 1);
+  lua_error(L);
+  __builtin_unreachable();
+}
+
 // Set by Cart::interrupt() when the deadline passes: the next instruction lands here.
 void deadline_hook(lua_State* L, lua_Debug*) {
-  luaL_error(L, "ran over %d ms (an endless loop?)", static_cast<int>((S->limit_us + 999) / 1000));
+  lua_pushfstring(L, "ran over %d ms (an endless loop?)", static_cast<int>((S->limit_us + 999) / 1000));
+  trip(L);
 }
 
 // A host that polls (Host::deadline_by_polling): every kPollEvery instructions, the clock.
 constexpr int kPollEvery = 20000;
 void poll_hook(lua_State* L, lua_Debug*) {
-  if (S->host->now_us() - S->frame_t0 > S->limit_us)
-    luaL_error(L, "ran over %d ms (an endless loop?)", static_cast<int>((S->limit_us + 999) / 1000));
+  if (S->host->now_us() - S->frame_t0 > S->limit_us) {
+    luaL_where(L, 1);  // as luaL_error said it (in a hook, level 1 is no one: no position)
+    lua_pushfstring(L, "ran over %d ms (an endless loop?)", static_cast<int>((S->limit_us + 999) / 1000));
+    lua_concat(L, 2);
+    trip(L);
+  }
 }
 
 // A host that counts instructions (Host::frame_budget): every kCountEvery, as check.py does; past
@@ -1686,7 +1722,7 @@ void count_hook(lua_State* L, lua_Debug* ar) {
     luaL_where(L, 0);  // the cart's line it was on ("cart:4: "): in a hook, luaL_error's level 1 is no one
     lua_pushfstring(L, "over budget: more than %d Lua instructions in one frame", S->budget);
     lua_concat(L, 2);
-    lua_error(L);
+    trip(L);
   }
   if (S->host->deadline_by_polling() && ++S->polls >= kPollEvery / kCountEvery) {
     S->polls = 0;
