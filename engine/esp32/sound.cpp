@@ -25,7 +25,7 @@ uint32_t g_rate = 16000;
 bool (*g_voice_busy)() = nullptr;
 QueueHandle_t g_requests = nullptr;
 std::atomic<bool> g_muted{false};
-std::vector<int16_t> g_sounds[kSfxCount];  // rendered once, on first use (PSRAM)
+std::vector<int16_t> g_sounds[kSfxCount];  // rendered once, when the mixer starts (PSRAM, ~70 KB)
 
 // What play() and music() queue: a built-in's number, or (n < 0) a cart's sound or song, which the
 // mixer then owns (new'd here, deleted there). Null pointers stop them.
@@ -49,6 +49,9 @@ void mixer(void*) {
   std::vector<int32_t> acc(static_cast<size_t>(frame));
   bool open = false;
   int ahead = 0;  // frames written beyond real time
+  // The built-in sounds, rendered now (at boot) rather than at each one's first sfx(): that took
+  // ~10 ms, on core 1 above the cart's frames, so a game's first coin made a frame late.
+  for (int n = 0; n < kSfxCount; ++n) g_sounds[n] = sfx_render(n, static_cast<int>(g_rate));
   TickType_t last = xTaskGetTickCount();
   for (;;) {
     const bool any = synth.busy() || std::any_of(voices, voices + kVoices, [](const Voice& v) { return v.pcm; });
@@ -75,7 +78,6 @@ void mixer(void*) {
       if (g_voice_busy && g_voice_busy() && !open) {
         continue;  // the voice has the speaker: this one isn't heard
       }
-      if (g_sounds[n].empty()) g_sounds[n] = sfx_render(n, static_cast<int>(g_rate));
       // A free voice, else the one furthest along (the newest sound matters most).
       Voice* v = std::find_if(voices, voices + kVoices, [](const Voice& x) { return !x.pcm; });
       if (v == voices + kVoices)
