@@ -82,6 +82,9 @@ class Stage {
   // while core 0 draws). publish(): the back frame becomes the front, when no band() is drawing.
   void prepare();
   void publish();
+  // The front frame's generation: it moves whenever anything changes what a frame shows, so two
+  // frames of the same generation look the same (a scene at rest need not be drawn and sent again).
+  uint32_t gen() const;
   // Output rows [y0, y1) (multiples of band_rows()), columns [x0, x1) (even; at scale 2 multiples
   // of 4; x1 < 0: to width()), into out ((y1 - y0) * width() pixels, the panel's byte order). work:
   // work_cells() cells. Two cores can draw a band's two halves at once, sharing out and work (they

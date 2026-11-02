@@ -628,6 +628,7 @@ void tick_main() {
     ESP_LOGW(TAG, "battery %u mV, under %u mV for a minute: powering off", static_cast<unsigned>(*p->battery_mv),
              static_cast<unsigned>(board::kConfig.cutoff_mv));
     save_log();  // the run's log survives the power-off (`battery log last` after the next start)
+    carts::player::flush_save();  // and the open cart's last save
     vTaskDelay(pdMS_TO_TICKS(200));  // the log line out
     g.hw.power->power_off();
   }

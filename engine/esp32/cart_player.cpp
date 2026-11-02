@@ -189,32 +189,67 @@ class CartHost final : public carts::Host {
   void act(std::string_view name, std::string_view arg) override { dev_.command(name, arg); }
   bool accepts_act(std::string_view name) const override { return dev_.accepts_command(name); }
   const hg::json::Value* data(std::string_view name, uint32_t* version) override { return dev_.data(name, version); }
-  // Saves in NVS ("hgcarts", a key from the cart's name). A flash write pauses both cores for
-  // a few ms: a save costs a frame, which is why carts save at moments, not every frame.
+  // Saves in NVS ("hgcarts", a key from the cart's name). A flash write pauses both cores for a few
+  // ms (a frame, and the sound's refill), so saves are coalesced: one the same as what's kept isn't
+  // written at all, and a changed one is written at once only if the last write was 2 s ago or
+  // more; otherwise it's held (load() sees it) and written when the 2 s are up (flush_due, each
+  // tick), when the cart closes, or before a low battery powers the board off. A cart that saves
+  // every frame costs a write every 2 s, not 60 a second.
+  static constexpr int64_t kSaveGapUs = 2000000;
   std::string load_save(std::string_view cart) override {
+    if (dirty_ && cart == pending_cart_) return pending_;
+    if (known_set_ && cart == known_cart_) return known_;
     nvs_handle_t h;
     std::string out;
-    if (nvs_open("hgcarts", NVS_READONLY, &h) != ESP_OK) return out;
-    size_t len = 0;
-    const std::string k = key(cart);
-    if (nvs_get_str(h, k.c_str(), nullptr, &len) == ESP_OK && len > 1) {
-      out.resize(len);
-      if (nvs_get_str(h, k.c_str(), out.data(), &len) == ESP_OK) out.resize(len - 1);
-      else out.clear();
+    if (nvs_open("hgcarts", NVS_READONLY, &h) == ESP_OK) {
+      size_t len = 0;
+      const std::string k = key(cart);
+      if (nvs_get_str(h, k.c_str(), nullptr, &len) == ESP_OK && len > 1) {
+        out.resize(len);
+        if (nvs_get_str(h, k.c_str(), out.data(), &len) == ESP_OK) out.resize(len - 1);
+        else out.clear();
+      }
+      nvs_close(h);
     }
-    nvs_close(h);
+    known_cart_ = cart;
+    known_ = out;
+    known_set_ = true;
     return out;
   }
   bool store_save(std::string_view cart, std::string_view json) override {
+    if (dirty_ && cart != pending_cart_) flush_save();  // (another cart's held one first)
+    if (!dirty_ && !known_set_) load_save(cart);  // what's kept, to know an unchanged save
+    if (!dirty_ && cart == known_cart_ && json == known_) return true;  // nothing new to keep
+    pending_cart_ = cart;
+    pending_ = json;
+    dirty_ = true;
+    if (esp_timer_get_time() - last_write_ >= kSaveGapUs) return flush_save();
+    return true;
+  }
+  // The held save, written now. False: the write failed (logged).
+  bool flush_save() {
+    if (!dirty_) return true;
+    dirty_ = false;
+    if (known_set_ && pending_cart_ == known_cart_ && pending_ == known_) return true;  // saved back to what's kept
+    last_write_ = esp_timer_get_time();
     nvs_handle_t h;
     esp_err_t err = nvs_open("hgcarts", NVS_READWRITE, &h);
     if (err == ESP_OK) {
-      err = nvs_set_str(h, key(cart).c_str(), std::string(json).c_str());
+      err = nvs_set_str(h, key(pending_cart_).c_str(), pending_.c_str());
       if (err == ESP_OK) err = nvs_commit(h);
       nvs_close(h);
     }
-    if (err != ESP_OK) ESP_LOGE(kTag, "cart %.*s: save failed: %s", static_cast<int>(cart.size()), cart.data(), esp_err_to_name(err));
-    return err == ESP_OK;
+    if (err != ESP_OK) {
+      ESP_LOGE(kTag, "cart %s: save failed: %s", pending_cart_.c_str(), esp_err_to_name(err));
+      return false;
+    }
+    known_cart_ = pending_cart_;
+    known_ = pending_;
+    known_set_ = true;
+    return true;
+  }
+  void flush_due() {
+    if (dirty_ && esp_timer_get_time() - last_write_ >= kSaveGapUs) flush_save();
   }
 
  private:
@@ -227,6 +262,11 @@ class CartHost final : public carts::Host {
   }
   Device& dev_;
   bool buzz_noted_ = false;
+  std::string known_cart_, known_;      // what NVS keeps for a cart, as last read or written
+  bool known_set_ = false;
+  std::string pending_cart_, pending_;  // a save held back (kSaveGapUs)
+  bool dirty_ = false;
+  int64_t last_write_ = -kSaveGapUs;
 };
 
 struct CartRun {
@@ -281,6 +321,8 @@ struct CartRun {
   size_t lua_max_freed = 0;  // what the Lua heap gave back in the slowest frame (a collection ran in it: tens of KB)
   int64_t lua_own_max = 0;   // a 3D cart's slowest Lua frame less the helper's drawing in it
   int64_t hd_us = 0, hd_max = 0;  // the full-color layer's publish() at each handoff
+  uint32_t sent_gen = ~0u;  // a stage: the generation (Stage::gen) of the last frame sent (~0: none, all again)
+  uint32_t still = 0;     // a stage: frames not drawn or sent, being the last one again (the stats)
   std::atomic<uint32_t> rows_sent{0}, tx_frames{0};
   mutable std::atomic<uint32_t> px_sent{0}, px_rows{0};  // pixels to the panel (cart_write), and in the rows they're in
   std::atomic<int64_t> tx_us{0}, tx_max{0};
@@ -724,6 +766,7 @@ void panel_check(CartRun& c) {
     c.check_frames = c.check_bad = 0;
     c.check_x = c.check_y = -1;
     std::memset(c.shown, 0xFF, carts::kW * carts::kH);  // all of it next frame (the sender's own state: safe here)
+    c.sent_gen = ~0u;  // and a stage's next frame goes whatever its scene
     std::memset(c.edge_due, 0xFF, sizeof c.edge_due);
     std::memset(c.edge_span1, 0, sizeof c.edge_span1);
     return;
@@ -938,6 +981,7 @@ void cart_close() {
     c->host.deadline(0);  // stopped and disabled, if a frame was running
     gptimer_del_timer(c->host.deadline_timer);
   }
+  c->host.flush_save();  // a save held back goes now
   if (c->imu_on && dev->has_imu()) dev->imu_enable(false);
   if (dev->has_motor()) dev->motor_rest();
   ESP_LOGI(kTag, "cart %s: closed%s%s", c->stage ? c->stage_name.c_str() : c->cart.name().c_str(), c->cart.error().empty() ? "" : " after: ",
@@ -973,7 +1017,8 @@ void cart_stats(CartRun& c) {
     if (c.frames)
       ESP_LOGI(kTag, "stage %s: %u frames in %.1f s (%.1f/s, %u late, %u dropped); Lua %.2f ms avg, %.2f max (%.2f its own, %u KB freed in it); prepare (core 1) %.2f ms avg, %.2f max; "
                     "drawing (core 0) %.2f ms avg, %.2f max, %u triangles queued, %.0f drawn in bands; sent %.2f ms avg, %.2f max; "
-                    "internal free %u (low %u); sender stack left %u; start late %.2f ms avg, %.2f max; bands late %u of %u; helper (core 1) %.2f ms a frame; split at %d",
+                    "internal free %u (low %u); sender stack left %u; start late %.2f ms avg, %.2f max; bands late %u of %u; helper (core 1) %.2f ms a frame; split at %d; "
+                    "%u at rest (not sent)",
                c.stage_name.c_str(), static_cast<unsigned>(c.frames), secs, c.frames / secs, static_cast<unsigned>(c.late),
                static_cast<unsigned>(c.dropped), c.lua_us / 1000.0 / c.frames, c.lua_max / 1000.0, c.lua_own_max / 1000.0, static_cast<unsigned>(c.lua_max_freed / 1024),
                c.prep_us / 1000.0 / c.frames,
@@ -983,7 +1028,9 @@ void cart_stats(CartRun& c) {
                static_cast<unsigned>(heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL)),
                static_cast<unsigned>(uxTaskGetStackHighWaterMark(c.sender)), c.start_late_us / 1000.0 / c.frames,
                c.start_late_max / 1000.0, static_cast<unsigned>(te.late - c.te_late0), static_cast<unsigned>(te.bands - c.te_bands0),
-               txf ? hus / 1000.0 / txf : 0.0, txf ? static_cast<int>(c.split_avg_acc.exchange(0) / static_cast<int>(txf)) : 0);
+               txf ? hus / 1000.0 / txf : 0.0, txf ? static_cast<int>(c.split_avg_acc.exchange(0) / static_cast<int>(txf)) : 0,
+               static_cast<unsigned>(c.still));
+    c.still = 0;
     c.prep_us = c.prep_max = 0;
     c.te_late0 = te.late;
     c.te_bands0 = te.bands;
@@ -1292,6 +1339,7 @@ uint32_t cart_tick() {
     if (c.cart.colors_version() != c.pal_ver) {  // palette(): new colors (the sender is idle: safe here)
       set_colors(c);
       std::memset(c.shown, 0xFF, carts::kW * carts::kH);  // every row again, in them
+      c.sent_gen = ~0u;  // and a stage's next frame goes whatever its scene
       if (c.full) {  // and a full canvas's others (the layer shows over color 0 there), all of each
         std::memset(c.edge_due, 0xFF, sizeof c.edge_due);
         std::memset(c.edge_span1, 0, sizeof c.edge_span1);
@@ -1332,11 +1380,28 @@ uint32_t cart_tick() {
     }
     // A stage frame that starts too late for the lead its frames need goes whole behind the scan
     // (a pass later) rather than racing into a seam.
-    c.tx_race_pass = race && (!c.stage || sc.start(show) - esp_timer_get_time() >= stage_need + kStageStartMarginUs) ? show : -1;
-    c.tx_age = t.touching ? latch - t_us : -1;
-    c.tx_t0 = latch;
-    c.busy = true;
-    xTaskNotifyGive(c.sender);
+    // A 3D frame just like the last one sent (the scene at rest, the same picture over it, no
+    // layer rows and no edge rows to go): the glass already shows it, so it isn't drawn or sent.
+    // At rest a scene then costs neither core anything (prepare() skips an unchanged scene too).
+    bool again = false;
+    if (c.stage) {
+      bool edges = false;
+      for (const uint32_t w : c.edge_due) edges |= w != 0;
+      const bool pic = c.overlay && std::memcmp(c.tx, c.shown, carts::kW * carts::kH) != 0;
+      again = c.stage->gen() == c.sent_gen && !pic && !hd_moved && !edges;
+      if (again) ++c.still;
+      else {
+        c.sent_gen = c.stage->gen();
+        if (c.overlay) std::memcpy(c.shown, c.tx, carts::kW * carts::kH);  // (unused otherwise by a stage's sender)
+      }
+    }
+    if (!again) {
+      c.tx_race_pass = race && (!c.stage || sc.start(show) - esp_timer_get_time() >= stage_need + kStageStartMarginUs) ? show : -1;
+      c.tx_age = t.touching ? latch - t_us : -1;
+      c.tx_t0 = latch;
+      c.busy = true;
+      xTaskNotifyGive(c.sender);
+    }
   }
   if (c.stage) {  // the next frame, for the pass after this one's, while the sender draws this one
     const int64_t p0 = esp_timer_get_time();
@@ -1450,6 +1515,7 @@ void cart_relit() {
   if (c.busy.load()) dev->timed_out("the cart sender (relighting)");
   dev->clear_glass();
   std::memset(c.shown, 0xFF, carts::kW * carts::kH);
+  c.sent_gen = ~0u;  // and a stage's next frame goes whatever its scene
   if (c.full) std::memset(c.edge_due, 0xFF, sizeof c.edge_due);  // a full canvas's rows around the window too
   std::memset(c.edge_span1, 0, sizeof c.edge_span1);  // all of each (a narrower change pending is now all of it)
   c.next_pass = -1;
@@ -1466,7 +1532,14 @@ bool open(const std::string& name) { return cart_open(name); }
 void close() { cart_close(); }
 bool running() { return g_cart != nullptr; }
 const std::string& name() { return g_open_name; }
-uint32_t tick() { return g_cart ? cart_tick() : 200; }
+uint32_t tick() {
+  if (!g_cart) return 200;
+  g_cart->host.flush_due();
+  return cart_tick();
+}
+void flush_save() {
+  if (g_cart) g_cart->host.flush_save();
+}
 bool closed_by_gesture() { return g_gesture_closed.exchange(false); }
 bool slow() { return g_cart && g_slow.load(); }
 bool stopped() { return g_cart && !g_cart->own_stage && !g_cart->cart.running(); }

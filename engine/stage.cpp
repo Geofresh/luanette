@@ -286,6 +286,7 @@ struct Mesh {
 // drawing reads only the frame's own triangles and color tables. The Jet scene, camera and sun
 // serve the comparison path (Jet's own pipeline and rasteriser).
 struct Frame {
+  uint32_t gen = 0;  // the Stage::Impl::gen it was prepared at
   Scene scene;
   Camera camera;
   DirectionalLight sun{Vector3{-40, 35, 0}, Color{255, 244, 228}, 255};
@@ -363,6 +364,7 @@ struct Stage::Impl {
   float ground_y = 0;
   int shadow_mat = -1;  // the shadows' material (unlit), once ground() is called
   uint32_t scene_version = 1;  // light or sky changed: the frames' color tables and sky are remade
+  uint32_t gen = 1;  // anything that changes what a frame shows: a frame prepared at this gen is still right (Stage::gen)
   Frame frames[2];
   int front = 0;  // the frame band() draws; prepare() fills the other
   std::vector<Mesh> meshes;
@@ -514,6 +516,7 @@ void quad(Mesh& m, const float* c0, const float* c1, const float* c2, const floa
 }  // namespace
 
 int Stage::box(float w, float h, float d) {
+  ++p_->gen;
   Mesh m;
   const float x = w / 2, y = h / 2, z = d / 2;
   for (int axis = 0; axis < 3; ++axis)
@@ -535,6 +538,7 @@ int Stage::box(float w, float h, float d) {
 }
 
 int Stage::sphere(float r, int segs) {
+  ++p_->gen;
   segs = std::clamp(segs, 4, 64);
   const int rings = std::max(2, segs / 2);
   Mesh m;
@@ -558,6 +562,7 @@ int Stage::sphere(float r, int segs) {
 }
 
 int Stage::torus(float big_r, float small_r, int segs) {  // a ring around the z axis (facing the camera)
+  ++p_->gen;
   segs = std::clamp(segs, 6, 96);
   const int tube = std::max(3, segs / 2);
   Mesh m;
@@ -614,18 +619,21 @@ void lathe(Mesh& m, float rt, float rb, float h, int segs) {
 }  // namespace
 
 int Stage::cylinder(float r, float h, int segs) {
+  ++p_->gen;
   Mesh m;
   lathe(m, r, r, h, std::clamp(segs, 3, 96));
   return p_->add_mesh(std::move(m));
 }
 
 int Stage::cone(float r, float h, int segs) {
+  ++p_->gen;
   Mesh m;
   lathe(m, 0, r, h, std::clamp(segs, 3, 96));
   return p_->add_mesh(std::move(m));
 }
 
 int Stage::mesh(const std::vector<float>& xyz, const std::vector<int>& idx, bool smooth, const std::vector<float>* uv) {
+  ++p_->gen;
   const int nv = static_cast<int>(xyz.size() / 3);
   if (xyz.size() % 3 || idx.size() % 3) return p_->fail("a shape's vertices come in threes (x, y, z) and its faces in threes (a, b, c)"), -1;
   if (uv && uv->size() != static_cast<size_t>(nv) * 2)
@@ -677,6 +685,7 @@ int Stage::mesh(const std::vector<float>& xyz, const std::vector<int>& idx, bool
 // ---- objects, camera, light ----
 
 int Stage::add(int mesh, uint32_t rgb, int shine, bool unlit) {
+  ++p_->gen;
   Impl& p = *p_;
   if (mesh < 0 || mesh >= static_cast<int>(p.meshes.size())) return p.fail("no shape " + std::to_string(mesh)), -1;
   if (static_cast<int>(p.nodes.size()) >= kMaxNodes) return p.fail("too many objects (the limit is " + std::to_string(kMaxNodes) + ")"), -1;
@@ -693,6 +702,7 @@ int Stage::add(int mesh, uint32_t rgb, int shine, bool unlit) {
 }
 
 bool Stage::place(int obj, float x, float y, float z, float rx, float ry, float rz) {
+  ++p_->gen;
   Node* n = p_->node(obj);
   if (!n) return false;
   n->pos[0] = x;
@@ -706,6 +716,7 @@ bool Stage::place(int obj, float x, float y, float z, float rx, float ry, float 
 }
 
 bool Stage::orient(int obj, const float m[9]) {
+  ++p_->gen;
   Node* n = p_->node(obj);
   if (!n) return false;
   std::memcpy(n->rot.m, m, sizeof n->rot.m);
@@ -713,6 +724,7 @@ bool Stage::orient(int obj, const float m[9]) {
 }
 
 bool Stage::hide(int obj, bool hidden) {
+  ++p_->gen;
   Node* n = p_->node(obj);
   if (!n) return false;
   n->hidden = hidden;
@@ -720,6 +732,7 @@ bool Stage::hide(int obj, bool hidden) {
 }
 
 bool Stage::recolor(int obj, uint32_t rgb, int shine, bool unlit) {
+  ++p_->gen;
   Node* n = p_->node(obj);
   if (!n) return false;
   const int mat = p_->mat_for(rgb, shine, unlit, n->tex);
@@ -732,6 +745,7 @@ bool Stage::recolor(int obj, uint32_t rgb, int shine, bool unlit) {
 }
 
 int Stage::texture(int w, int h, const std::vector<uint8_t>& texels, const uint32_t palette[16]) {
+  ++p_->gen;
   Impl& p = *p_;
   auto bits = [](int v) {  // log2 of a power of two from 4 to 64, else -1
     for (int b = 2; b <= 6; ++b)
@@ -753,6 +767,7 @@ int Stage::texture(int w, int h, const std::vector<uint8_t>& texels, const uint3
 }
 
 bool Stage::skin(int obj, int tex, float ru, float rv) {
+  ++p_->gen;
   Impl& p = *p_;
   Node* n = p.node(obj);
   if (!n) return false;
@@ -767,6 +782,7 @@ bool Stage::skin(int obj, int tex, float ru, float rv) {
 }
 
 void Stage::view(float x, float y, float z, float yaw, float pitch, float fov) {
+  ++p_->gen;
   Impl& p = *p_;
   p.cam_pos[0] = x;
   p.cam_pos[1] = y;
@@ -777,24 +793,28 @@ void Stage::view(float x, float y, float z, float yaw, float pitch, float fov) {
 }
 
 void Stage::light(float azimuth, float elevation, int intensity, uint32_t ambient_rgb) {
+  ++p_->gen;
   p_->set_light(azimuth, elevation, static_cast<uint32_t>(std::clamp(intensity, 0, 255)));
   p_->amb = Color{static_cast<uint8_t>(ambient_rgb >> 16 & 255), static_cast<uint8_t>(ambient_rgb >> 8 & 255),
                   static_cast<uint8_t>(ambient_rgb & 255)};
 }
 
 void Stage::sky(uint32_t top_rgb, uint32_t bottom_rgb) {
+  ++p_->gen;
   p_->sky_top = top_rgb;
   p_->sky_bottom = bottom_rgb;
   ++p_->scene_version;
 }
 
 void Stage::ground(float height, uint32_t rgb) {
+  ++p_->gen;
   p_->ground_y = height;
   const int m = p_->mat_for(rgb, 0, true);
   if (m >= 0) p_->shadow_mat = m;
 }
 
 bool Stage::shadow(int obj, bool on) {
+  ++p_->gen;
   Node* n = p_->node(obj);
   if (!n) return false;
   n->shadow = on;
@@ -820,6 +840,7 @@ int Stage::objects() const { return static_cast<int>(p_->nodes.size()); }
 // ---- the test scene ----
 
 void Stage::build_rings(int segs) {
+  ++p_->gen;
   Impl& p = *p_;
   const int a = torus(80, 28, segs), b = torus(80, 28, segs);
   add(a, 0xFFAA3C, 40, false);
@@ -840,6 +861,7 @@ void Stage::build_rings(int segs) {
 }
 
 void Stage::step(float t, float drag_x, float drag_y) {
+  ++p_->gen;
   if (p_->nodes.size() < 2) return;
   // The pair turns as one: a links into b at right angles, offset along its own x.
   const float spin = t * 40.0f + drag_x * 0.5f;
@@ -1163,6 +1185,10 @@ void Stage::prepare() {
     p.rh = kH / p.scale;
   }
   Frame& f = p.frames[p.front ^ 1];
+  // Nothing changed since this frame was last prepared (a scene at rest): it's still right. (Jet
+  // keeps state of its own between frames: its frames are always prepared.)
+  if (f.gen == p.gen && f.scale == p.scale && !p.jet_raster) return;
+  f.gen = p.gen;
   if (f.scale != p.scale) f.resize(p.scale, p.rw, p.rh);
   for (auto& b : f.bins) b.clear();
   const auto t0 = std::chrono::steady_clock::now();
@@ -1180,6 +1206,7 @@ void Stage::prepare() {
 }
 
 void Stage::publish() { p_->front ^= 1; }
+uint32_t Stage::gen() const { return p_->frames[p_->front].gen; }
 
 int Stage::band_rows() const { return kPiece * 2; }  // a piece at half size (two at full)
 int Stage::work_cells() const {  // depth, and a color piece at half size: whichever scale needs more
@@ -1471,9 +1498,16 @@ int Stage::band(int y0, int y1, uint16_t* out, uint16_t* work, int x0, int x1) {
   return drawn;
 }
 
-void Stage::use_jet_raster(bool on) { p_->jet_raster = on; }
+void Stage::use_jet_raster(bool on) {
+  if (p_->jet_raster != on) ++p_->gen;
+  p_->jet_raster = on;
+}
 int Stage::scale() const { return p_->scale; }
-void Stage::set_scale(int s) { p_->want_scale = s == 2 ? 2 : 1; }
+void Stage::set_scale(int s) {
+  const int want = s == 2 ? 2 : 1;
+  if (p_->want_scale != want) ++p_->gen;
+  p_->want_scale = want;
+}
 int Stage::wanted_scale() const { return p_->want_scale; }
 void Stage::set_auto_res(bool on) { p_->auto_res = on; }
 bool Stage::auto_res() const { return p_->auto_res; }

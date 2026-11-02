@@ -98,6 +98,7 @@ bool slow();               // a frame every 100 ms or more: the host may nap bet
 bool stopped();            // the open cart stopped with an error (its message on the glass)
 const std::string& error();  // that error ("" when none)
 void relit();              // the screen lit again: everything is sent anew
+void flush_save();         // a save the open cart made that's held back (saves are coalesced), written now
 bool screenshot(uint16_t* px);  // the glass as the cart shows it (width x height, zeroed by the caller); false: busy
 void set_button_b(bool down);   // BOOT
 
