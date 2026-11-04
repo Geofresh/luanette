@@ -30,6 +30,8 @@ claude mcp add luanette -- npx -y luanette mcp
 ## The loop
 
 1. Start from a template (`new`): it already uses the whole screen, sprites, sounds and `log()`.
+   For a bigger platformer, start from `examples/hilltop.lua` instead: three levels, enemies, hazards,
+   springs, scenes and lives, built on the libraries.
 2. Change it. Keep the header lines.
 3. `check` after every change. Fix any `error` (it names the line and the frame) before anything else.
 4. `run` it with input that plays it (below) and look at the shots: does it show what you meant?

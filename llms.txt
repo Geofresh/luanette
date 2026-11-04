@@ -16,7 +16,7 @@ Start with AGENTS.md: it has the cart format, the check-run-look-fix loop, the l
 ## Carts to read
 
 - [templates/](https://github.com/Geofresh/luanette/tree/main/templates): blank, platformer, shooter, puzzle
-- [examples/](https://github.com/Geofresh/luanette/tree/main/examples): seven complete carts; overworld.lua is a giant map built from blocks, with sprite flags and a dialog library
+- [examples/](https://github.com/Geofresh/luanette/tree/main/examples): eight complete carts; overworld.lua is a giant map built from blocks, with sprite flags and a dialog library; hilltop.lua is a full platformer (three levels, enemies, springs, scenes) to build on
 - [gallery/](https://github.com/Geofresh/luanette/tree/main/gallery): carts people made
 
 ## Optional

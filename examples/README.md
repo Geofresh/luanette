@@ -1,6 +1,6 @@
 # Example carts
 
-Seven complete carts, each one Lua file. The firmware carries all seven, so they're in the launcher
+Eight complete carts, each one Lua file. The firmware carries all eight, so they're in the launcher
 from the first boot, and the [playground](https://geofresh.github.io/luanette/) runs them in a
 browser. To change one on the board, edit it and send your version. It replaces the built-in copy:
 
@@ -17,8 +17,9 @@ python tools/push.py examples/bubbles.lua
 | `dice.lua` | shake the board or tap to throw any mix of dice | the 3D stage and tilt: dice tumble with physics and land on a felt table |
 | `overdrive.lua` | a chiptune: drums, a galloping bass, a lead and C64-style arpeggios, looping; tap to fire a laser over it | the cart's own sounds and song (`SOUNDS`, `MUSIC`, `music()`), made in the playground's Sounds and Music tabs: open it there to see how it's built |
 | `overworld.lua` | walk a world of 1,024 screens with towns, woods, ponds and roads; hold A to run, press A at a door to knock, B shows the whole map | a giant world in ~8 KB: the world is a grid of 64 x 64 blocks, each block 8 x 8 map cells (as Mother 1 stored its world), and `MAP` is only ever the 3 x 3 blocks around you, rebuilt as you walk, so a frame is one `map()` call. What blocks the kid and what's a door are sprite flags (`FLAGS`, `fget`); the villagers talk through the `dialog` library, their faces drawn by `sspr` |
+| `hilltop.lua` | a platformer in three levels: run, jump, stomp slimes, dodge spikes, ride springs, collect coins and reach the flag; three lives and a best score | a base for your own platformer: the levels are `LEVEL1` to `LEVEL3` for the Map tab, and what's solid, a coin, a hazard, a spring or the goal is sprite flags, so a new tile only needs its flags. It's built on the `actor`, `cam`, `anim`, `particles` and `state` libraries, runs at 60 fps (`_update60`) with coyote time and a jump buffer, and keeps how it feels in a few numbers at the top of the game code |
 
-All seven pass `check.py`. Lock & Load is the largest: 32,550 bytes without its comments, just
+All eight pass `check.py`. Lock & Load is the largest: 32,550 bytes without its comments, just
 under the 32 KB limit.
 
 None of them uses `data()` or `act()`, so they need nothing from a host once they're on the
