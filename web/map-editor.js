@@ -19,6 +19,7 @@ const MapEditor = (() => {
   let sprites = new Map(), colors = [];
   let flags = new Map(), showFlag = -1;  // FLAGS; the flag whose cells are marked (-1: none)
   let past = [], future = [], written = null;
+  let opened = null;  // the map last scrolled into view
 
   // ---- the code ---------------------------------------------------------------------------------
   function find(src) {
@@ -253,6 +254,11 @@ const MapEditor = (() => {
     buttons();
     sizes();
     draw();
+    if (name !== opened) {  // a map just opened: a level with sky at the top and ground at the bottom shows its ground
+      opened = name;
+      const used = (r) => /[^.]/.test(r || "");
+      $("map-canvas").parentElement.scrollTop = !used(rows[0]) && used(rows[rows.length - 1]) ? 1e6 : 0;
+    }
   }
   function resize() {
     const w = Math.max(1, Math.min(MAX_W, Math.floor(Number($("map-w").value)) || 1));
