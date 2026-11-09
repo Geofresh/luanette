@@ -53,8 +53,9 @@ struct Input {
 // a runtime refuses a cart that needs a newer one. 1: everything before the full-color layer;
 // 2: the layer (hd), its images, caps(), touch(true); 3: the cart's own sounds and music (SOUNDS,
 // MUSIC, sfx 8-63, music()); 4: log(), and spaces in sprite strings; 5: maps; 6: sprites 0-255,
-// spr()'s blocks, sspr(), palt(), sprite flags (FLAGS, fget(), fset(), map()'s layer).
-constexpr int kApiVersion = 6;
+// spr()'s blocks, sspr(), palt(), sprite flags (FLAGS, fget(), fset(), map()'s layer); 7: tline(),
+// rowshift(), rowpal().
+constexpr int kApiVersion = 7;
 constexpr int kLogLine = 200;   // a log() line's characters, at most (the rest is cut)
 constexpr int kLogLines = 20;   // log() lines a frame, at most (then one saying more were dropped)
 
@@ -166,7 +167,17 @@ class Cart {
   void set_rate(int active, int idle);  // idle 0: always `active`
   static bool rate_ok(int fps) { return fps >= 1 && fps <= 60 && 60 % fps == 0; }
   static constexpr int64_t kLazyHoldUs = 500000;
-  const uint8_t* picture() const { return fb_; }
+  // The picture as it shows: what the cart drew, each row moved by its rowshift() (API 7).
+  const uint8_t* picture() const { return shifted_ ? shown_ : fb_; }
+  // rowpal() (API 7): whether picture row y shows colors of its own, and what color c shows there
+  // (0xRRGGBB; the cart's own, colors()[c], where the row doesn't change it). rows_version() moves
+  // whenever a row's colors do: a port rebuilds its rows' tables, and sends every row again, then.
+  bool row_own(int y) const { return row_mask_[y] != 0; }
+  uint32_t row_color(int y, int c) const { return row_mask_[y] >> c & 1 ? row_rgb_[y][c] : rgb_[c]; }
+  uint32_t rows_version() const { return rows_ver_; }
+  // The Lua side's: rowshift() and rowpal() set these.
+  void set_shift(int y, int dx);
+  void set_row_color(int y, int c, int64_t rgb);  // rgb < 0: the cart's own again
   // What each of the picture's 16 indices shows (0xRRGGBB), and a count that moves whenever the cart
   // changes one (palette()): a port rebuilds its color tables, and sends every row again, then.
   const uint32_t* colors() const { return rgb_; }
@@ -222,6 +233,13 @@ class Cart {
   uint32_t rgb_[16] = {0x000000, 0x1D2B53, 0x7E2553, 0x008751, 0xAB5236, 0x5F574F, 0xC2C3C7, 0xFFF1E8,
                        0xFF004D, 0xFFA300, 0xFFEC27, 0x00E436, 0x29ADFF, 0x83769C, 0xFF77A8, 0xFFCCAA};
   uint32_t colors_ver_ = 0;
+  int16_t shift_[kH] = {};          // rowshift(): each row's move, in pixels
+  bool shifted_ = false;            // a row has one: picture() is shown_
+  uint8_t* shown_ = nullptr;        // the picture with the rows moved (made when a frame ends)
+  void make_shown();
+  uint16_t row_mask_[kH] = {};      // rowpal(): a bit per color a row shows its own way
+  uint32_t row_rgb_[kH][16] = {};
+  uint32_t rows_ver_ = 0;
   Impl* impl_ = nullptr;
 };
 
@@ -231,8 +249,40 @@ namespace carts {
 
 // A 3D cart's picture over its scene: window rows [y0, y0 + rows) of out (`stride` wide, the
 // picture at 3x from column x0), pal and dim (the scanline rows, y % 3 == 2) in out's pixel format.
-// Color 0 shows the scene through; the picture's edge columns run on to out's edges.
-void overlay_rows(uint16_t* out, int stride, int x0, int y0, int rows, const uint8_t* pic, const uint16_t* pal, const uint16_t* dim);
+// Color 0 shows the scene through; the picture's edge columns run on to out's edges. own: rowpal()'s
+// rows (nullptr: none), own[r] that picture row's 32 colors (16 pal, then 16 dim) or nullptr for pal
+// and dim (RowTables makes them).
+void overlay_rows(uint16_t* out, int stride, int x0, int y0, int rows, const uint8_t* pic, const uint16_t* pal, const uint16_t* dim,
+                  const uint16_t* const* own = nullptr);
+
+// rowpal()'s rows in a port's pixel format: a row with colors of its own gets 32 entries (its 16,
+// then its scanline row's), the others nullptr. `make(rgb, dim)` packs one color (dim: the scanline
+// row's). update() rebuilds them when the cart's colors or its rows' have changed.
+struct RowTables {
+  const uint16_t* row[kH] = {};
+  uint16_t tab[kH][32];
+  uint32_t rows_ver = UINT32_MAX, colors_ver = UINT32_MAX;
+  bool any = false;
+  template <class Make>
+  bool update(const Cart& c, Make make) {
+    if (c.rows_version() == rows_ver && c.colors_version() == colors_ver) return false;
+    rows_ver = c.rows_version();
+    colors_ver = c.colors_version();
+    any = false;
+    for (int y = 0; y < kH; ++y) {
+      row[y] = nullptr;
+      if (!c.row_own(y)) continue;
+      for (int i = 0; i < 16; ++i) {
+        tab[y][i] = make(c.row_color(y, i), false);
+        tab[y][16 + i] = make(c.row_color(y, i), true);
+      }
+      row[y] = tab[y];
+      any = true;
+    }
+    return true;
+  }
+  const uint16_t* const* rows() const { return any ? row : nullptr; }
+};
 
 // Drawing into any 8-bit picture with the carts' own rules and font (the board's touch pad).
 struct Canvas {

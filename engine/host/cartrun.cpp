@@ -167,6 +167,13 @@ int main(int argc, char** argv) {
     }
     pal_ver = c.colors_version();
   };
+  carts::RowTables own;  // rowpal()'s rows
+  auto pack_own = [](uint32_t rgb, bool d) {
+    uint32_t r = rgb >> 16 & 255, g = rgb >> 8 & 255, b = rgb & 255;
+    if (d) r = r * 3 / 4, g = g * 3 / 4, b = b * 3 / 4;
+    const uint16_t v = static_cast<uint16_t>((r >> 3) << 11 | (g >> 2) << 5 | b >> 3);
+    return static_cast<uint16_t>(v >> 8 | v << 8);
+  };
   bool any3d = false, anyhd = false;
   TestHost host;
   if (in["images"].is_string()) {
@@ -259,20 +266,25 @@ int main(int argc, char** argv) {
         std::vector<uint16_t> img(static_cast<size_t>(W) * OH);
         std::vector<uint16_t> work(st ? static_cast<size_t>(st->work_cells()) : 0);
         if (cart.colors_version() != pal_ver) set_colors(cart);
+        own.update(cart, pack_own);
         const int band = st ? st->band_rows() : 16;
         for (int y = 0; y < H; y += band) {
           uint16_t* rows = img.data() + static_cast<size_t>(top + y) * W;
           if (st) {
             st->band(y, y + band, rows, work.data());
           } else {
-            for (int r = 0; r < band; ++r) std::fill(rows + r * W, rows + (r + 1) * W, (y + r) % 3 == 2 ? dim[0] : pal[0]);
+            for (int r = 0; r < band; ++r) {
+              const uint16_t* t = own.rows() ? own.row[(y + r) / 3] : nullptr;
+              const bool d = (y + r) % 3 == 2;
+              std::fill(rows + r * W, rows + (r + 1) * W, t ? t[d ? 16 : 0] : d ? dim[0] : pal[0]);
+            }
           }
           auto layer = [&]() {
             for (int r = 0; r < band; ++r)
               hd->compose(rows + r * W, top + y + r, full ? 0 : -carts::kStageX, W);
           };
           if (hd && !hd->over()) layer();
-          carts::overlay_rows(rows, W, carts::kStageX, y, band, cart.picture(), pal, dim);
+          carts::overlay_rows(rows, W, carts::kStageX, y, band, cart.picture(), pal, dim, own.rows());
           if (hd && hd->over()) layer();
         }
         for (int gy = 0; full && gy < OH; ++gy) {

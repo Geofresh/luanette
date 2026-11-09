@@ -42,7 +42,7 @@ layer (`hd`), its images, the `ui` helpers, `caps()` and `touch(true)`; version 
 sounds and music (`SOUNDS`, `MUSIC`, `sfx(8-63)`, `music()`); version 4 adds `log()` and spaces in
 sprite strings; version 5 adds maps (`MAP`, `map()`, `mget()`, `mset()`, `msize()`); version 6 adds sprites
 64-255, blocks of sprites in `spr()`, `sspr()`, `palt()` and sprite flags (`FLAGS`, `fget()`, `fset()`, `map()`'s
-layer). A runtime older than a
+layer); version 7 adds `tline()`, `rowshift()` and `rowpal()`. A runtime older than a
 cart's `-- api: N` refuses it with a message saying so ("it needs API 2; this runtime has 1
 (update the firmware)") instead of failing at the first call it doesn't know. `check.py` refuses
 a version the board doesn't have, and asks for `-- api: 2` when a cart uses the layer.
@@ -59,7 +59,7 @@ a version the board doesn't have, and asks for `-- api: 2` when a cart uses the 
 | `touch`, `tilt`, `buzz`, `sound` | true, true, false (no vibration motor is fitted), true (the speaker plays `sfx`) |
 | `hd`, `stage` | the full-color layer and the 3D scene: true, true |
 | `host` | `data()` and `act()` reach the console: true |
-| `version` | the API version the runtime has: 6 |
+| `version` | the API version the runtime has: 7 |
 | `board` | `"waveshare-amoled-206"` (`"browser"` in the playground) |
 | `extras` | the names of calls this runtime adds beyond this API (a board's or a fork's own; see `docs/ARCHITECTURE.md`): `{}` here. A cart that uses one checks first: `if wifi then ... end` |
 
@@ -120,6 +120,7 @@ brackets; it defaults to the last color used (7 at start).
 | `sspr(n, x, y, dw, dh, [flip_x], [flip_y], [w], [h])` | sprite `n` (or the `w` x `h` block from it) stretched or shrunk to `dw` x `dh` pixels (API 6), nearest pixel: big titles, zooms, a boss |
 | `palt(c, on)` / `palt()` | whether color `c` is transparent in `spr`, `sspr` and `map` (API 6) / only color 0 again. `palt(0, false)` draws black; `palt(14, true)` makes pink the see-through color |
 | `map([cx, cy, sx, sy, cw, ch, layer])` | the map (`MAP`, below): `cw` x `ch` cells from cell (`cx`, `cy`), drawn as sprites with that cell's top left at (`sx`, `sy`). With nothing, the whole map at (0, 0). Color 0 is transparent; the camera moves it, and only the cells on screen cost anything. With `layer` (API 6), only the cells whose sprite has one of those flags (`fget(n) & layer ~= 0`): draw the ground, then the player, then `map(0, 0, 0, 0, 128, 64, 2)` for the treetops in front |
+| `tline(x0, y0, x1, y1, mx, my, [mdx, mdy, layer])` | a line whose pixels come from the map (API 7), as PICO-8's: the first from map point (`mx`, `my`), in cells (2.5 is the middle of cell 2), each next a step (`mdx`, `mdy`) on, 1/8 and 0 when left out (the map at its own size). Empty cells, cells off the map and transparent colors leave the pixel as it was. A line a row, the steps changing with the row, draws the map as a floor in perspective or turned and zoomed: the `mode7` library does the sums |
 | `fget(n)` / `fget(n, f)` | sprite `n`'s flags as a number (API 6) / whether it has flag `f` (0-7). A sprite not in `FLAGS` has none |
 | `fset(n, f, on)` / `fset(n, v)` | turn flag `f` of sprite `n` on or off / set all eight from `v`'s bits. It writes `FLAGS` (making it when the cart has none) |
 | `mget(cx, cy)` | the sprite in a map cell, or nil for an empty cell or one off the map |
@@ -127,6 +128,8 @@ brackets; it defaults to the last color used (7 at start).
 | `msize()` | the map's width and height in cells |
 | `pal(c0, c1)` / `pal()` | draw color `c0` as `c1` from now on / reset |
 | `palette(i, 0xRRGGBB)` / `palette(i)` / `palette()` | change what color index `i` (0-15) looks like, for the whole picture (this frame included) / its color now / the starting 16 again. A cart still has 16 colors at a time; this picks which 16 (an exact red, softer pastels). `pal` remaps indices, `palette` the colors behind them |
+| `rowpal(y, c, 0xRRGGBB)` / `rowpal(y, c)` / `rowpal(y)` / `rowpal()` | in picture row `y` only, color `c` shows as that color (API 7) / as the cart's color again / all of row `y`'s / every row's. A different blue each row is a sky in 128 shades from one index; the screen still has 16 indices, but each row can show its own 16. It lasts until changed, as `palette` does |
+| `rowshift(y, dx)` / `rowshift(y)` / `rowshift()` | picture row `y` shows moved `dx` pixels right (left when negative), its edge pixel running on into the gap (API 7) / as drawn / every row as drawn. Water, heat haze, a wavy dream: a sine of the row each frame. Only the showing moves: `pget` and the next frame see what was drawn. It lasts until changed |
 | `camera(x, y)` / `camera()` | offset everything drawn by (-x, -y) / reset |
 | `clip(x, y, w, h)` / `clip()` | draw only inside a rectangle / reset |
 

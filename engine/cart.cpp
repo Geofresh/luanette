@@ -397,6 +397,12 @@ __attribute__((always_inline)) inline int color_arg(lua_State* L, int i) {
   S->color = coord(L, i) & 15;
   return S->color;
 }
+// A number as check.py writes it in a color's error: 0x1000000, -0x1 (Lua's own formatter has no %x).
+std::string hex_of(lua_Integer v) {
+  char b[24];
+  std::snprintf(b, sizeof b, "%s0x%llx", v < 0 ? "-" : "", static_cast<unsigned long long>(v < 0 ? -v : v));
+  return b;
+}
 inline void push_num(lua_State* L, float v) {
   // Whole numbers as integers (faster arithmetic in the cart, and "3" not "3.0" when printed).
   if (v >= -2147483520.0f && v <= 2147483520.0f && v == std::floor(v)) lua_pushinteger(L, static_cast<lua_Integer>(v));
@@ -744,6 +750,75 @@ int f_map(lua_State* L) {
   lua_settop(L, sprites - 1);
   return 0;
 }
+// tline(x0, y0, x1, y1, mx, my, [mdx, mdy, layer]) (API 7): the line from (x0, y0) to (x1, y1), its
+// pixels taken from the map: the first from map point (mx, my), in cells (fractions are inside the
+// cell: x 2.5 is sprite column 4 of cell 2), the next a step (mdx, mdy) on (1/8, 0: the map at its
+// size). Empty cells, cells off the map and clear colors leave the pixel. The line's pixels are
+// line()'s. The map points are fixed point, 16 bits of fraction (check.py's are too), so the steps
+// add up the same everywhere. A row a line, mdx and mdy changing with the row: a floor in
+// perspective (libs/mode7.lua), a map turned and zoomed.
+int f_tline(lua_State* L) {
+  read_map(L, "tline");
+  int x0 = coord(L, 1), y0 = coord(L, 2);
+  const int x1 = coord(L, 3), y1 = coord(L, 4);
+  const auto fixed = [&](int i, double d) -> int64_t {
+    const double v = absent(L, i) ? d : static_cast<double>(luaL_checknumber(L, i));
+    if (!(v > -1e6 && v < 1e6)) return 0;  // NaN, or a point no map reaches
+    return static_cast<int64_t>(std::floor(v * 65536.0));
+  };
+  int64_t mx = fixed(5, 0), my = fixed(6, 0);
+  const int64_t dmx = fixed(7, 0.125), dmy = fixed(8, 0);
+  const int layer = opt_coord(L, 9, 0);
+  const int ax0 = x0 - S->cam_x, ax1 = x1 - S->cam_x, ay0 = y0 - S->cam_y, ay1 = y1 - S->cam_y;
+  if ((ax0 < S->clip_x0 && ax1 < S->clip_x0) || (ax0 >= S->clip_x1 && ax1 >= S->clip_x1) ||
+      (ay0 < S->clip_y0 && ay1 < S->clip_y0) || (ay0 >= S->clip_y1 && ay1 >= S->clip_y1))
+    return 0;
+  if (lua_getglobal(L, "SPRITES") != LUA_TTABLE) return luaL_error(L, "tline: no SPRITES table");
+  const int sprites = lua_gettop(L);
+  const int flags = layer && lua_getglobal(L, "FLAGS") == LUA_TTABLE ? lua_gettop(L) : 0;
+  const uint8_t* got[64] = {};
+  int8_t shown[64];
+  std::memset(shown, -1, sizeof shown);
+  Cart::Impl::Sprite tmp;
+  const unsigned clear = S->clear;
+  const int64_t mw = static_cast<int64_t>(S->map_w) << 16, mh = static_cast<int64_t>(S->map_h) << 16;
+  const int dx = std::abs(x1 - x0), dy = -std::abs(y1 - y0);
+  const int sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+  int err = dx + dy;
+  for (;;) {
+    if (mx >= 0 && my >= 0 && mx < mw && my < mh) {
+      const int c = static_cast<int>(mx >> 16), r = static_cast<int>(my >> 16);
+      const int t = S->map_cells[r * Cart::Impl::kMapW + c];
+      if (t != Cart::Impl::kNoTile) {
+        bool draw = true;
+        if (layer) {
+          if (shown[t] < 0) shown[t] = (flags_of(L, "tline", flags, t) & layer) != 0;
+          draw = shown[t];
+        }
+        if (draw) {
+          if (!got[t] && !(got[t] = sprite_pixels(L, sprites, t, tmp)))
+            return luaL_error(L, "tline: cell (%d, %d) is sprite %d, and SPRITES[%d] isn't 64 hex digits", c, r, t, t);
+          const int v = got[t][(static_cast<int>(my >> 13) & 7) * 8 + (static_cast<int>(mx >> 13) & 7)];
+          if (!(clear >> v & 1)) S->px(x0, y0, v);
+        }
+      }
+    }
+    if (x0 == x1 && y0 == y1) break;
+    const int e2 = 2 * err;
+    if (e2 >= dy) {
+      err += dy;
+      x0 += sx;
+    }
+    if (e2 <= dx) {
+      err += dx;
+      y0 += sy;
+    }
+    mx += dmx;
+    my += dmy;
+  }
+  lua_settop(L, sprites - 1);
+  return 0;
+}
 // mget(cx, cy): the sprite in that cell, or nil for an empty cell or one off the map.
 int f_mget(lua_State* L) {
   read_map(L, "mget");
@@ -789,8 +864,49 @@ int f_palette(lua_State* L) {
     return 1;
   }
   const lua_Integer rgb = luaL_checkinteger(L, 2);
-  if (rgb < 0 || rgb > 0xFFFFFF) return luaL_error(L, "palette: 0x%x isn't a 0xRRGGBB color", static_cast<unsigned>(rgb));
+  if (rgb < 0 || rgb > 0xFFFFFF) return luaL_error(L, "palette: %s isn't a 0xRRGGBB color", hex_of(rgb).c_str());
   S->cart->set_color(static_cast<int>(i), static_cast<uint32_t>(rgb));
+  return 0;
+}
+
+// rowshift(y, dx) (API 7): picture row y shows moved dx pixels right (left when negative), its edge
+// pixel run on into the gap; rowshift(y): row y as drawn; rowshift(): every row. Rows keep their
+// moves until changed. Only the showing moves: pget() and the next frame see what was drawn.
+// Rows off the picture are left alone, as drawing there is.
+int f_rowshift(lua_State* L) {
+  if (lua_isnoneornil(L, 1)) {
+    for (int y = 0; y < kH; ++y) S->cart->set_shift(y, 0);
+    return 0;
+  }
+  const int y = coord(L, 1), dx = opt_coord(L, 2, 0);
+  if (y >= 0 && y < kH) S->cart->set_shift(y, dx);
+  return 0;
+}
+// rowpal(y, c, 0xRRGGBB) (API 7): in picture row y, color c shows as that color (a sky in 128
+// shades: a different blue a row); rowpal(y, c): the cart's color again there; rowpal(y): all of
+// row y's; rowpal(): every row's. Kept until changed, as palette() is.
+int f_rowpal(lua_State* L) {
+  if (lua_isnoneornil(L, 1)) {
+    for (int y = 0; y < kH; ++y)
+      for (int c = 0; c < 16; ++c) S->cart->set_row_color(y, c, -1);
+    return 0;
+  }
+  const int y = coord(L, 1);
+  int c0 = 0, c1 = 15;
+  if (!absent(L, 2)) {
+    const int c = coord(L, 2);
+    if (c < 0 || c > 15) return luaL_error(L, "rowpal: color %d isn't one of 0-15", c);
+    c0 = c1 = c;
+  }
+  int64_t rgb = -1;
+  if (!absent(L, 3)) {
+    if (absent(L, 2)) return luaL_error(L, "rowpal: give a row, a color and 0xRRGGBB");
+    const lua_Integer v = luaL_checkinteger(L, 3);
+    if (v < 0 || v > 0xFFFFFF) return luaL_error(L, "rowpal: %s isn't a 0xRRGGBB color", hex_of(v).c_str());
+    rgb = v;
+  }
+  if (y < 0 || y >= kH) return 0;
+  for (int c = c0; c <= c1; ++c) S->cart->set_row_color(y, c, rgb);
   return 0;
 }
 
@@ -1370,7 +1486,7 @@ Hd& hd_of(lua_State* L) {
 
 uint32_t hd_rgb(lua_State* L, int i) {
   const lua_Integer v = luaL_checkinteger(L, i);
-  if (v < 0 || v > 0xFFFFFF) luaL_error(L, "0x%x isn't a 0xRRGGBB color", static_cast<unsigned>(v));
+  if (v < 0 || v > 0xFFFFFF) luaL_error(L, "%s isn't a 0xRRGGBB color", hex_of(v).c_str());
   return static_cast<uint32_t>(v);
 }
 uint8_t hd_alpha(lua_State* L, int i) {
@@ -1751,12 +1867,55 @@ Cart::~Cart() {
     host_.music(nullptr);
     impl_->heap.close();
     if (fb_) host_.release_fast(fb_);
+    if (shown_) host_.release_fast(shown_);
     impl_->drop_images();
     impl_->hd.reset();
     for (void* m : impl_->hd_mem)
       if (m) host_.release(m);
     delete impl_;
   }
+}
+
+void Cart::set_shift(int y, int dx) {
+  dx = std::clamp(dx, -kW, kW);
+  if (shift_[y] == dx) return;
+  shift_[y] = static_cast<int16_t>(dx);
+  if (dx && !shown_) {
+    shown_ = static_cast<uint8_t*>(host_.alloc_fast(kW * kH));
+    if (!shown_) luaL_error(L_, "rowshift: no memory for the moved picture");
+  }
+  shifted_ = false;
+  for (int r = 0; r < kH && !shifted_; ++r) shifted_ = shift_[r] != 0;
+  // (hosts read picture() between frames: make_shown() builds it when this one ends)
+}
+void Cart::make_shown() {
+  if (!shifted_) return;
+  for (int y = 0; y < kH; ++y) {
+    const uint8_t* src = fb_ + y * kW;
+    uint8_t* d = shown_ + y * kW;
+    const int dx = shift_[y];
+    if (dx == 0) {
+      std::memcpy(d, src, kW);
+    } else if (dx > 0) {
+      std::memset(d, src[0], static_cast<size_t>(dx));
+      std::memcpy(d + dx, src, static_cast<size_t>(kW - dx));
+    } else {
+      std::memcpy(d, src - dx, static_cast<size_t>(kW + dx));
+      std::memset(d + kW + dx, src[kW - 1], static_cast<size_t>(-dx));
+    }
+  }
+}
+void Cart::set_row_color(int y, int c, int64_t rgb) {
+  const uint16_t bit = static_cast<uint16_t>(1u << c);
+  if (rgb < 0) {
+    if (!(row_mask_[y] & bit)) return;
+    row_mask_[y] = static_cast<uint16_t>(row_mask_[y] & ~bit);
+  } else {
+    if ((row_mask_[y] & bit) && row_rgb_[y][c] == static_cast<uint32_t>(rgb)) return;
+    row_mask_[y] = static_cast<uint16_t>(row_mask_[y] | bit);
+    row_rgb_[y][c] = static_cast<uint32_t>(rgb);
+  }
+  ++rows_ver_;
 }
 
 size_t Cart::memory() const { return impl_ ? impl_->heap.used : 0; }
@@ -1792,6 +1951,12 @@ void Cart::stop(std::string why) {
   if (!impl_ || !fb_) return;
   Impl& I = *impl_;
   I.reset_draw();
+  shifted_ = false;  // the message shows as it's drawn, in the cart's own colors
+  std::memset(shift_, 0, sizeof shift_);
+  if (std::any_of(std::begin(row_mask_), std::end(row_mask_), [](uint16_t m) { return m != 0; })) {
+    std::memset(row_mask_, 0, sizeof row_mask_);
+    ++rows_ver_;
+  }
   std::memset(fb_, 1, kW * kH);
   I.print("CART STOPPED", 12, 4, 4, 8);
   // The first line of the message (the traceback goes to the log), wrapped at 30 characters: at
@@ -1924,8 +2089,8 @@ bool Cart::start(std::string_view name, std::string_view src) {
   lua_pop(L_, 1);
   static const luaL_Reg kApi[] = {
       {"cls", f_cls},       {"pset", f_pset},   {"pget", f_pget},     {"line", f_line},   {"rect", f_rect},
-      {"rectfill", f_rectfill}, {"circ", f_circ}, {"circfill", f_circfill}, {"print", f_print}, {"spr", f_spr}, {"sspr", f_sspr}, {"palt", f_palt}, {"fget", f_fget}, {"fset", f_fset}, {"map", f_map}, {"mget", f_mget}, {"mset", f_mset}, {"msize", f_msize},
-      {"pal", f_pal},       {"palette", f_palette}, {"camera", f_camera}, {"clip", f_clip},   {"btn", f_btn},     {"btnp", f_btnp},
+      {"rectfill", f_rectfill}, {"circ", f_circ}, {"circfill", f_circfill}, {"print", f_print}, {"spr", f_spr}, {"sspr", f_sspr}, {"palt", f_palt}, {"fget", f_fget}, {"fset", f_fset}, {"map", f_map}, {"tline", f_tline}, {"mget", f_mget}, {"mset", f_mset}, {"msize", f_msize},
+      {"pal", f_pal},       {"palette", f_palette}, {"rowshift", f_rowshift}, {"rowpal", f_rowpal}, {"camera", f_camera}, {"clip", f_clip},   {"btn", f_btn},     {"btnp", f_btnp},
       {"touch", f_touch},   {"tilt", f_tilt},     {"level", f_level},   {"buzz", f_buzz},     {"sfx", f_sfx},     {"music", f_music}, {"log", f_log}, {"wake", f_wake},
       {"time", f_time},     {"fps", f_fps},     {"rnd", f_rnd},     {"srand", f_srand},   {"flr", f_flr},     {"ceil", f_ceil},
       {"sin", f_sin},       {"cos", f_cos},     {"trifill", f_trifill}, {"abs", f_abs},       {"sgn", f_sgn},     {"min", f_min},       {"max", f_max},     {"mid", f_mid},
@@ -1983,6 +2148,7 @@ bool Cart::start(std::string_view name, std::string_view src) {
   } else {
     lua_pop(L_, 1);
   }
+  make_shown();
   return true;
 }
 
@@ -2005,6 +2171,7 @@ bool Cart::frame(const Input& in) {
     ok = run(0, std::max<int64_t>(1000, kFrameLimitUs - (host_.now_us() - t0)), fn);  // one limit for both
     if (!ok) break;
   }
+  make_shown();
   const int64_t now = host_.now_us();
   last_.lua_us = now - t0;
   last_.freed = I.heap.freed - freed0;
@@ -2028,11 +2195,13 @@ void Cart::set_rate(int active, int idle) {
 
 namespace carts {
 
-void overlay_rows(uint16_t* out, int stride, int x0, int y0, int rows, const uint8_t* pic, const uint16_t* pal, const uint16_t* dim) {
+void overlay_rows(uint16_t* out, int stride, int x0, int y0, int rows, const uint8_t* pic, const uint16_t* pal, const uint16_t* dim,
+                  const uint16_t* const* own) {
   for (int r = 0; r < rows; ++r) {
     const int y = y0 + r;
     const uint8_t* src = pic + (y / 3) * kW;
-    const uint16_t* p = y % 3 == 2 ? dim : pal;
+    const uint16_t* t = own ? own[y / 3] : nullptr;
+    const uint16_t* p = t ? (y % 3 == 2 ? t + 16 : t) : y % 3 == 2 ? dim : pal;
     uint16_t* d = out + r * stride + x0;
     const auto* w4 = reinterpret_cast<const uint32_t*>(src);  // clear pixels (most, over a scene) four at a time
     for (int q = 0; q < kW / 4; ++q) {

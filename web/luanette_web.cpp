@@ -113,6 +113,7 @@ std::vector<uint16_t> g_work;
 std::vector<int16_t> g_pcm;
 uint16_t g_pal[16], g_dim[16];
 uint32_t g_pal_ver = UINT32_MAX;
+carts::RowTables g_own;  // rowpal()'s rows
 
 uint16_t pack(uint32_t r, uint32_t g, uint32_t b) {
   const uint16_t v = static_cast<uint16_t>((r >> 3) << 11 | (g >> 2) << 5 | b >> 3);
@@ -134,6 +135,10 @@ void set_colors(const carts::Cart& c) {
 void compose() {
   carts::Cart& cart = *g_cart;
   if (cart.colors_version() != g_pal_ver) set_colors(cart);
+  g_own.update(cart, [](uint32_t rgb, bool d) {
+    return d ? pack((rgb >> 16 & 255) * 3 / 4, (rgb >> 8 & 255) * 3 / 4, (rgb & 255) * 3 / 4) : pack(rgb >> 16 & 255, rgb >> 8 & 255, rgb & 255);
+  });
+  const uint16_t* const* own = g_own.rows();
   carts::Stage* st = cart.stage();
   carts::Hd* hd = cart.hd();
   const carts::Caps caps = g_host.caps();
@@ -146,13 +151,17 @@ void compose() {
     if (st) {
       st->band(y, y + band, rows, g_work.data());
     } else {
-      for (int r = 0; r < band; ++r) std::fill(rows + r * kW, rows + (r + 1) * kW, (y + r) % 3 == 2 ? g_dim[0] : g_pal[0]);
+      for (int r = 0; r < band; ++r) {
+        const uint16_t* t = own ? own[(y + r) / 3] : nullptr;
+        const bool d = (y + r) % 3 == 2;
+        std::fill(rows + r * kW, rows + (r + 1) * kW, t ? t[d ? 16 : 0] : d ? g_dim[0] : g_pal[0]);
+      }
     }
     auto layer = [&]() {
       for (int r = 0; r < band; ++r) hd->compose(rows + r * kW, (full ? top : 0) + y + r, full ? 0 : -carts::kStageX, kW);
     };
     if (hd && !hd->over()) layer();
-    carts::overlay_rows(rows, kW, carts::kStageX, y, band, cart.picture(), g_pal, g_dim);
+    carts::overlay_rows(rows, kW, carts::kStageX, y, band, cart.picture(), g_pal, g_dim, own);
     if (hd && hd->over()) layer();
   }
   for (int gy = 0; gy < kH; ++gy) {  // around the window: dark, or a full canvas's own rows
@@ -185,6 +194,7 @@ EMSCRIPTEN_KEEPALIVE int lw_start(const char* name, const char* src) {
   g_host.sounds.clear();
   g_host.logs.clear();
   g_pal_ver = UINT32_MAX;
+  g_own = carts::RowTables();
   g_cart = std::make_unique<carts::Cart>(g_host);
   const bool ok = g_cart->start(name, src);
   g_error = g_cart->error();

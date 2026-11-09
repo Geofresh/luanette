@@ -21,6 +21,7 @@ comments say how to call it, and each has a demo cart in [`demos/`](demos/).
 | [`anim`](anim.lua) | sprite animations: frame lists at so many a second, looping or not, by `time()` | 0.6 KB | 1 |
 | [`cam`](cam.lua) | a camera that follows a point with a dead zone and easing, stays inside the map, and shakes | 1.2 KB | 1 |
 | [`dialog`](dialog.lua) | a text box that types itself out, wraps at words, and pages on A | 2.0 KB | 1 |
+| [`mode7`](mode7.lua) | the map as a floor in perspective (racers, flying), sprites standing on it, and the map turned and zoomed from above, all on `tline()` | 1.3 KB | 7 |
 | [`particles`](particles.lua) | bursts of sparks, dust and smoke, with gravity, capped at 200 | 1.1 KB | 1 |
 | [`state`](state.lua) | scenes (title, game, game over) with enter, update, draw and leave | 0.5 KB | 1 |
 | [`timer`](timer.lua) | `timer.after(secs, fn)` and `timer.every(secs, fn)` | 0.9 KB | 1 |

@@ -39,7 +39,7 @@ SCALE = 3
 MAX_SOURCE = 32 * 1024
 BUDGET = 30_000
 MAX_SAVE = 2048
-API_VERSION = 6  # engine/cart.hpp kApiVersion: 1 before the full-color layer, 2 with it, 3 with sound and music, 4 with log() and spaced sprites, 5 with maps, 6 with sprites 0-255, blocks, sspr, palt and flags
+API_VERSION = 7  # engine/cart.hpp kApiVersion: 1 before the full-color layer, 2 with it, 3 with sound and music, 4 with log() and spaced sprites, 5 with maps, 6 with sprites 0-255, blocks, sspr, palt and flags, 7 with tline, rowshift and rowpal
 MAP_W, MAP_H = 128, 64  # the most a map has, in cells (engine/cart.cpp)
 TILES = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ+/"  # a map cell's character: sprites 0-63
 # The board's runtime built for this computer (engine/host/cartrun.cpp): a 3D cart's preview
@@ -124,11 +124,14 @@ class Cart:
         self.saved = None
         self.wall0 = int(time.time())
         self.rgb = list(PICO)
+        self.shift = [0] * H          # rowshift(): each row's move (API 7)
+        self.row_rgb = {}             # rowpal(): {row: {color: 0xRRGGBB}} (API 7)
         self.calls = {"buzz": 0, "sfx": 0, "music": 0, "wake": 0, "act": [], "save": 0, "data": set()}
         self.logs: list[str] = []      # log() lines (the first 200), as the runtime gives them
         self.spaced_sprites = False    # a sprite string with spaces in it (API 4)
         self.used_map = False          # map(), mget(), mset() or msize() (API 5)
         self.used_api6 = set()         # what it used of API 6 (sprites past 63, blocks, sspr, palt, flags)
+        self.used_api7 = set()         # what it used of API 7 (tline, rowshift, rowpal)
         self.map_cells: list[list[int | None]] = []  # MAP read: rows of sprite numbers, None empty
         self.map_w = 0
         self.map_table = None          # the MAP table read (another one is read again)
@@ -483,6 +486,64 @@ class Cart:
                     raise ValueError(f"map: cell ({c}, {r}) is sprite {t}, and SPRITES[{t}] isn't 64 hex digits")
                 self._blit8([int(h, 16) for h in s], sx + (c - cx) * 8, sy + (r - cy) * 8, False, False)
 
+    def tline(self, x0, y0, x1, y1, mx=None, my=None, mdx=None, mdy=None, layer=None):
+        """As engine/cart.cpp's f_tline: line()'s pixels, each from the map, stepping in 16.16 fixed point."""
+        self.used_api7.add("tline")
+        self._read_map("tline")
+        f = lambda v: int(math.floor(v))
+        x0, y0, x1, y1 = f(x0), f(y0), f(x1), f(y1)
+
+        def fixed(v, d):
+            v = d if v is None else float(v)
+            return int(math.floor(v * 65536.0)) if -1e6 < v < 1e6 else 0
+        mx, my, dmx, dmy = fixed(mx, 0), fixed(my, 0), fixed(mdx, 0.125), fixed(mdy, 0)
+        layer = 0 if layer is None else f(layer)
+        cx, cy, cw, ch = self.clipr
+        ax0, ax1, ay0, ay1 = x0 - self.cam[0], x1 - self.cam[0], y0 - self.cam[1], y1 - self.cam[1]
+        if ((ax0 < cx and ax1 < cx) or (ax0 >= cx + cw and ax1 >= cx + cw) or (ay0 < cy and ay1 < cy)
+                or (ay0 >= cy + ch and ay1 >= cy + ch)):
+            return
+        sprites = self.env["SPRITES"]
+        if sprites is None or self.lua.globals().type(sprites) != "table":
+            raise ValueError("tline: no SPRITES table")
+        flags = self._flags_table() if layer else None
+        got, shown = {}, {}
+        mw, mh = self.map_w << 16, len(self.map_cells) << 16
+        dx, dy = abs(x1 - x0), -abs(y1 - y0)
+        sx, sy = (1 if x0 < x1 else -1), (1 if y0 < y1 else -1)
+        err = dx + dy
+        while True:
+            if 0 <= mx < mw and 0 <= my < mh:
+                c, r = mx >> 16, my >> 16
+                t = self.map_cells[r][c]
+                if t is not None:
+                    draw = True
+                    if layer:
+                        if t not in shown:
+                            shown[t] = self._flags_of("tline", flags, t) & layer != 0
+                        draw = shown[t]
+                    if draw:
+                        if t not in got:
+                            s = sprites[t]
+                            s = re.sub(r"[ \t\r\n]", "", s) if isinstance(s, str) else None
+                            if s is None or not re.fullmatch(r"[0-9a-fA-F]{64}", s):
+                                raise ValueError(f"tline: cell ({c}, {r}) is sprite {t}, and SPRITES[{t}] isn't 64 hex digits")
+                            got[t] = [int(h, 16) for h in s]
+                        v = got[t][((my >> 13) & 7) * 8 + ((mx >> 13) & 7)]
+                        if not self.clear >> v & 1:
+                            self._px(x0, y0, v)
+            if x0 == x1 and y0 == y1:
+                break
+            e2 = 2 * err
+            if e2 >= dy:
+                err += dy
+                x0 += sx
+            if e2 <= dx:
+                err += dx
+                y0 += sy
+            mx += dmx
+            my += dmy
+
     def mget(self, cx, cy):
         self._read_map("mget")
         c, r = int(math.floor(cx)), int(math.floor(cy))
@@ -520,6 +581,60 @@ class Cart:
             raise ValueError(f"palette: {rgb:#x} isn't a 0xRRGGBB color")
         self.rgb[i] = rgb
         return None
+
+    # rowshift(y, dx) / rowshift(y) / rowshift() (API 7), as engine/cart.cpp's: only the showing moves.
+    def rowshift(self, y=None, dx=None):
+        self.used_api7.add("rowshift")
+        if y is None:
+            self.shift = [0] * H
+            return
+        y = int(math.floor(y))
+        if 0 <= y < H:
+            self.shift[y] = max(-W, min(W, 0 if dx is None else int(math.floor(dx))))
+
+    def shown(self) -> bytes:
+        """The picture as it shows: each row moved by its rowshift(), its edge pixel run on into the gap."""
+        if not any(self.shift):
+            return bytes(self.fb)
+        out = bytearray(W * H)
+        for y in range(H):
+            row, dx = self.fb[y * W:(y + 1) * W], self.shift[y]
+            if dx > 0:
+                row = bytes([row[0]]) * dx + row[:W - dx]
+            elif dx < 0:
+                row = row[-dx:] + bytes([row[W - 1]]) * -dx
+            out[y * W:(y + 1) * W] = row
+        return bytes(out)
+
+    # rowpal(y, c, rgb) / rowpal(y, c) / rowpal(y) / rowpal() (API 7): a row's own colors.
+    def rowpal(self, y=None, c=None, rgb=None):
+        self.used_api7.add("rowpal")
+        if y is None:
+            self.row_rgb = {}
+            return
+        y = int(math.floor(y))
+        if c is not None:
+            c = int(math.floor(c))
+            if not 0 <= c <= 15:
+                raise ValueError(f"rowpal: color {c} isn't one of 0-15")
+        if rgb is not None:
+            if c is None:
+                raise ValueError("rowpal: give a row, a color and 0xRRGGBB")
+            if not (self._is_num(rgb) and rgb == int(rgb)):
+                raise ValueError("rowpal: 0xRRGGBB must be a whole number")
+            rgb = int(rgb)
+            if not 0 <= rgb <= 0xFFFFFF:
+                raise ValueError(f"rowpal: {rgb:#x} isn't a 0xRRGGBB color")
+        if not 0 <= y < H:
+            return
+        row = self.row_rgb.setdefault(y, {})
+        for k in ([c] if c is not None else range(16)):
+            if rgb is None:
+                row.pop(k, None)
+            else:
+                row[k] = rgb
+        if not row:
+            del self.row_rgb[y]
 
     def pal(self, c0=None, c1=None):
         if c0 is None:
@@ -1144,7 +1259,7 @@ class Cart:
         return self.lua.table_from(list(self.images))
 
     def api(self):
-        names = ["cls", "pset", "pget", "line", "rect", "rectfill", "circ", "circfill", "spr", "sspr", "palt", "fget", "fset", "map", "mget", "mset", "msize", "pal", "palette", "camera",
+        names = ["cls", "pset", "pget", "line", "rect", "rectfill", "circ", "circfill", "spr", "sspr", "palt", "fget", "fset", "map", "tline", "mget", "mset", "msize", "pal", "palette", "rowshift", "rowpal", "camera",
                  "clip", "btn", "btnp", "touch", "tilt", "buzz", "sfx", "music", "time", "now", "date", "rnd", "srand", "save", "load",
                  "data", "ask", "say", "act", "wake", "stat", "level", "trifill", "sin", "cos",
                  "shape", "obj", "place", "orient", "hide", "paint", "view", "light", "sky", "project", "ground", "shadow",
@@ -1313,10 +1428,11 @@ def render(fbs, theme: str) -> Image.Image:
     gap = 16
     out = Image.new("RGB", (len(fbs) * (W * SCALE + gap) + gap, H * SCALE + 2 * gap), (24, 24, 24))
     for i, fb in enumerate(fbs):
-        fb, rgb = fb if isinstance(fb, tuple) else (fb, PICO)
+        fb, rgb, own = (fb + ({},))[:3] if isinstance(fb, tuple) else (fb, PICO, {})
         cols = colors(rgb)
+        rows = {y: colors([r.get(c, rgb[c]) for c in range(16)]) for y, r in own.items()}  # rowpal()'s rows
         img = Image.new("RGB", (W, H))
-        img.putdata([cols[v] for v in fb])
+        img.putdata([rows.get(k // W, cols)[v] for k, v in enumerate(fb)])
         out.paste(img.resize((W * SCALE, H * SCALE), Image.NEAREST), (gap + i * (W * SCALE + gap), gap))
     return out
 
@@ -1509,7 +1625,7 @@ def check(path: Path, frames: int, preview: Path | None, theme: str, dump_input:
                 return res
         cart.hd_us, cart.hd_rows = 0.0, set()  # _init's drawing happens once, before the frames
         hd_ms = []  # each frame's estimated device cost of the layer
-        idle_frames, quiet_frames, prev_fb = 0, 0, bytes(cart.fb)  # frames at 20+ fps with no input; those that changed nothing
+        idle_frames, quiet_frames, prev_fb = 0, 0, cart.shown()  # frames at 20+ fps with no input; those that changed nothing
         upd = "_update60" if harness.env["_update60"] else "_update"  # (its name sets the first rate; fps() changes it)
         if not any(harness.env[n] for n in ("_update", "_update60", "_draw")):
             res["error"] = "the cart defines none of _update, _update60, _draw"
@@ -1524,10 +1640,10 @@ def check(path: Path, frames: int, preview: Path | None, theme: str, dump_input:
             if not ok:
                 res["error"] = f"error in frame {f}: {err}"
                 res["frame"] = f
-                shots[f] = (bytes(cart.fb), tuple(cart.rgb))
+                shots[f] = (bytes(cart.fb), tuple(cart.rgb))  # (the stopped message: as drawn, as the engine shows it)
                 return res
             max_ops, total = max(max_ops, used), total + used
-            fb = bytes(cart.fb)
+            fb = cart.shown() + repr(sorted(cart.row_rgb.items())).encode()  # (rows that move or recolor are changes too)
             if cart.fps >= 20 and not cart.idle and cart.touch_at is None and not any(cart.held):
                 quiet_frames += 1
                 if fb == prev_fb and not cart.hd_rows and not cart.hd_us:
@@ -1538,9 +1654,9 @@ def check(path: Path, frames: int, preview: Path | None, theme: str, dump_input:
                 hd_ms.append((cart.hd_us + len(cart.hd_rows) * HD_ROW_US) / 1000)
                 cart.hd_us, cart.hd_rows = 0.0, set()
             if dump_frames:
-                (dump_frames / f"frame_{f}.bin").write_bytes(bytes(cart.fb))
+                (dump_frames / f"frame_{f}.bin").write_bytes(cart.shown())
             if f in keep:
-                shots[f] = (bytes(cart.fb), tuple(cart.rgb))
+                shots[f] = (cart.shown(), tuple(cart.rgb), {y: dict(r) for y, r in cart.row_rgb.items()})
     except getattr(lua54, "LuaMemoryError", MemoryError):
         res["error"] = "the cart used more than 1 MB of memory"
         return res
@@ -1608,6 +1724,10 @@ def check(path: Path, frames: int, preview: Path | None, theme: str, dump_input:
         res.setdefault("warnings", []).append(
             "it has a map (API 5): add '-- api: 5' to its header, so a board with older firmware says it needs "
             "an update instead of failing at its first map call")
+    if api < 7 and cart.used_api7:
+        res.setdefault("warnings", []).append(
+            f"it uses API 7 ({', '.join(sorted(cart.used_api7))}): add '-- api: 7' to its header, so a board with older "
+            "firmware says it needs an update instead of failing at its first call")
     if api < 6 and cart.used_api6:
         res.setdefault("warnings", []).append(
             f"it uses API 6 ({', '.join(sorted(cart.used_api6))}): add '-- api: 6' to its header, so a board with older "

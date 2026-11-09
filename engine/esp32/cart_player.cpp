@@ -277,6 +277,7 @@ struct CartRun {
   uint8_t* shown = nullptr;  // what the panel shows (PSRAM); 0xFF where unknown
   uint16_t pal[16], dim[16];  // panel byte order; dim: the scanline rows, a quarter darker
   uint32_t pal_ver = UINT32_MAX;  // the cart's colors_version() they were made from
+  carts::RowTables own;           // rowpal()'s rows, the same way (made at the handoff, as pal is)
   carts::Hd* hd = nullptr;        // the cart's full-color layer, as of the last handoff (the sender's to compose)
   bool full = false;              // its layer covers the glass ("-- canvas: full"): canvas = glass pixels
   uint32_t edge_due[(kGlassRows + 31) / 32] = {};  // a full canvas's rows outside the window still to send
@@ -449,17 +450,19 @@ inline bool pic_row_clear(const uint8_t* pic, int n, int r) {
 void cart_row(uint16_t* d, int stride, int x, const uint8_t* pic, int n, int r, const CartRun& c) {
   const int py = r * kCartScale;  // its three rows, from the picture's top
   const carts::Hd* hd = n == carts::kW ? c.hd : nullptr;
+  const uint16_t* own = n == carts::kW && c.own.rows() ? c.own.row[r] : nullptr;  // rowpal(): the row's own 16, then its dim 16
   // The layer's canvas: the window (its row 0 the picture's, its column 0 at x), or the glass.
   const int cy = py + (c.full ? kCartY : 0), lx = c.full ? x - kCartX : x;
   // The layer opaque over all three, and the picture under it or clear there: the rows as they are.
   if (hd && hd->row_opaque(cy) && hd->row_opaque(cy + 1) && hd->row_opaque(cy + 2) && (hd->over() || pic_row_clear(pic, n, r))) {
     for (int i = 0; i < kCartScale; ++i) layer_row_direct(*hd, d + static_cast<size_t>(i) * stride, stride, lx, cy + i);
   } else if (hd && !hd->over()) {  // under: color 0's background, the layer, then the picture's other colors
-    for (int i = 0; i < kCartScale; ++i) std::fill_n(d + static_cast<size_t>(i) * stride, stride, i == 2 ? c.dim[0] : c.pal[0]);
+    const uint16_t* t = own ? own : c.pal;
+    for (int i = 0; i < kCartScale; ++i) std::fill_n(d + static_cast<size_t>(i) * stride, stride, i == 2 ? (own ? own[16] : c.dim[0]) : t[0]);
     layer_rows(*hd, d, stride, lx, cy, kCartScale);
-    carts::overlay_rows(d, stride, x, py, kCartScale, pic, c.pal, c.dim);
+    carts::overlay_rows(d, stride, x, py, kCartScale, pic, c.pal, c.dim, c.own.rows());
   } else {
-    expand_row(d, stride, x, pic + static_cast<size_t>(r) * n, n, c.pal, c.dim);
+    expand_row(d, stride, x, pic + static_cast<size_t>(r) * n, n, own ? own : c.pal, own ? own + 16 : c.dim);
     if (hd) layer_rows(*hd, d, stride, lx, cy, kCartScale);
   }
 }
@@ -704,7 +707,7 @@ void stage_send_frame(CartRun& c) {
     const int lx = (c.full ? 0 : kCartX) - c.stage_x, ly = (c.full ? kCartY : 0) + y;
     if (c.hd && !c.hd->over()) layer_rows(*c.hd, dev->band(k), c.stage->width(), lx, ly, kStageBand);
     if (c.overlay)  // a 3D cart's picture over its scene
-      carts::overlay_rows(dev->band(k), c.stage->width(), kCartX - c.stage_x, y, kStageBand, c.tx, c.pal, c.dim);
+      carts::overlay_rows(dev->band(k), c.stage->width(), kCartX - c.stage_x, y, kStageBand, c.tx, c.pal, c.dim, c.own.rows());
     if (c.hd && c.hd->over()) layer_rows(*c.hd, dev->band(k), c.stage->width(), lx, ly, kStageBand);
     const int64_t r1 = esp_timer_get_time();
     raster += r1 - r0;
@@ -1336,7 +1339,11 @@ uint32_t cart_tick() {
     dev->timed_out("the cart sender (a frame dropped)");
   } else {
     if (!c.stage || c.overlay) std::memcpy(c.tx, c.cart.picture(), carts::kW * carts::kH);  // a 3D cart's: last tick's, as its scene
-    if (c.cart.colors_version() != c.pal_ver) {  // palette(): new colors (the sender is idle: safe here)
+    const bool rows_changed = c.own.update(c.cart, [](uint32_t rgb, bool d) {  // rowpal(): new row colors (the same)
+      const uint16_t p = to_panel(rgb);
+      return d ? hg::panel_order(hg::scan_dim(hg::panel_order(p))) : p;
+    });
+    if (c.cart.colors_version() != c.pal_ver || rows_changed) {  // palette(): new colors (the sender is idle: safe here)
       set_colors(c);
       std::memset(c.shown, 0xFF, carts::kW * carts::kH);  // every row again, in them
       c.sent_gen = ~0u;  // and a stage's next frame goes whatever its scene
@@ -1494,7 +1501,7 @@ bool cart_shot(uint16_t* px) {
       c.stage->band(y, y + kStageBand, rows, c.depth);
       const int lx = (c.full ? 0 : kCartX) - c.stage_x, ly = (c.full ? kCartY : 0) + y;
       if (c.hd && !c.hd->over()) layer_rows(*c.hd, rows, c.stage->width(), lx, ly, kStageBand);
-      if (c.overlay) carts::overlay_rows(rows, c.stage->width(), kCartX - c.stage_x, y, kStageBand, c.tx, c.pal, c.dim);
+      if (c.overlay) carts::overlay_rows(rows, c.stage->width(), kCartX - c.stage_x, y, kStageBand, c.tx, c.pal, c.dim, c.own.rows());
       if (c.hd && c.hd->over()) layer_rows(*c.hd, rows, c.stage->width(), lx, ly, kStageBand);
       for (int r = 0; r < kStageBand; ++r)
         std::memcpy(px + static_cast<size_t>(kCartY + y + r) * w + c.stage_x, rows + r * c.stage->width(), c.stage->width() * 2);
