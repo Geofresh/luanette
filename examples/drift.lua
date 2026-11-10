@@ -167,12 +167,18 @@ SPRITES = {
   [5] = "77117711 77117711 11771177 11771177 77117711 77117711 11771177 11771177", -- finish
   [6] = "3333b333 33333333 b3333333 33333333 333333b3 33b33333 33333333 3333333b", -- grass
   [16] = "00033000 00333300 03333b30 333b3333 03333330 00044000 00044000 00444400", -- tree
-  [32] = "0000000c 000000c7 00000888 11108888 11188888 11188998 11188888 00005550", -- kart, left half
-  [33] = "c0000000 7c000000 88800000 88880111 88888111 89988111 88888111 05550000", -- kart, right half
-  [34] = "000000cc 00000c77 00008888 11108888 11188888 11188998 11188888 00005550", -- kart, turning left, left half
-  [35] = "00000000 c0000000 88000000 88880111 88888111 89988111 88888111 05550000", -- kart, turning left, right half
-  [36] = "00000000 0000000c 00000088 11108888 11188888 11188998 11188888 00005550", -- kart, turning right, left half
-  [37] = "cc000000 77c00000 88880000 88880111 88888111 89988111 88888111 05550000", -- kart, turning right, right half
+  [32] = "00000000 000000aa 00000a11 00000aaa 00000005 08888888 08222222 00088888", -- kart, top left
+  [33] = "00000000 aa000000 11a00000 acc00000 50000000 88888880 22222280 88888000", -- kart, top right
+  [34] = "11188888 15188888 15188998 15188888 15122222 11100550 01100000 00000000", -- kart, bottom left
+  [35] = "88888111 88888151 89988151 88888151 22222151 05500111 00000110 00000000", -- kart, bottom right
+  [36] = "00000000 0000000a 000000a1 000000aa 00000000 00888888 00822222 00022888", -- kart turning, top left
+  [37] = "00000000 aaa00000 111a0000 aacc0000 55000000 88888888 22222228 88888880", -- kart turning, top right
+  [38] = "11122888 15122888 15122889 15122888 15122222 11100055 01100000 00000000", -- kart turning, bottom left
+  [39] = "88888811 88888811 98899811 88888811 22222211 00550011 00000010 00000000", -- kart turning, bottom right
+  [40] = "00000000 00000000 0000000a 0000000a 00000000 00088888 00082222 00222888", -- kart turning hard, top left
+  [41] = "00000000 aaaa0000 1111a000 aaacc000 05500000 88888888 22222222 88888880", -- kart turning hard, top right
+  [42] = "11122288 15122288 15122288 15122288 15122222 11110005 01110000 00000000", -- kart turning hard, bottom left
+  [43] = "88888881 88888881 99889981 88888881 22222221 50055001 00000110 00000000", -- kart turning hard, bottom right
 }
 -- flags (the playground's sprite editor writes this table): 0 road, 1 sand, 2 grass, 3 the line
 FLAGS = {
@@ -325,9 +331,28 @@ local function surface(x, y)
   return 2
 end
 
+-- The camera rides CAM_BACK pixels behind the kart, swinging round behind it CAM_TURN of the way each
+-- frame: in a turn the kart points away from where it looks, and slides across the screen.
+local CAM_TURN, CAM_BACK = 0.12, 23
+local cam_x, cam_y = 0, 0
+local function follow(snap)
+  cam_angle = snap and kart.a or cam_angle + (kart.a - cam_angle) * CAM_TURN
+  local tx, ty = kart.x + sin(cam_angle) * CAM_BACK, kart.y + cos(cam_angle) * CAM_BACK
+  if snap then cam_x, cam_y = tx, ty
+  else cam_x, cam_y = cam_x + (tx - cam_x) * 0.3, cam_y + (ty - cam_y) * 0.3 end
+end
+
+-- How a kart pointing `a` turns shows from the camera: its sprites (straight, turning, turning hard:
+-- 2 x 2 blocks from 32, 36 and 40), flipped when it points left of where the camera looks.
+local function pose(a)
+  local r = ((a - cam_angle + 0.5) % 1 - 0.5) * 20 + (a == kart.a and kart.steer * 0.35 or 0)  -- (and leaning into a turn)
+  local m = abs(r)
+  return m < 0.2 and 32 or m < 0.55 and 36 or 40, r < 0
+end
+
 local function reset_kart()
-  kart = {x = START_X, y = START_Y, a = START_ANGLE, vx = 0, vy = 0, steer = 0, slip = 0}
-  cam_angle = START_ANGLE
+  kart = {x = START_X, y = START_Y, a = START_ANGLE, vx = 0, vy = 0, steer = 0, slip = 0, sx = 64, sy = 116}
+  follow(true)
   lap, lap_frames, race_frames, next_cp, lap_times, new_best, lap_ghost, lap_packed = 1, 0, 0, 2, {}, false, {}, {}
 end
 
@@ -359,9 +384,10 @@ local function drive(go)
     end
   end
   -- dust off the road, smoke from a drift (on the screen, at the back wheels)
+  follow()
   local surf = surface(kart.x, kart.y)
   if sp > 0.6 and (surf > 0 or kart.slip > 0.55) and rnd(1) < 0.6 then
-    particles.burst(56 + rnd(16), 112, 1, {colors = surf > 0 and {4, 15, 9} or {6, 7, 13}, speed = 12, life = 0.4, gravity = -10})
+    particles.burst(kart.sx - 10 + rnd(20), kart.sy - 4, 1, {colors = surf > 0 and {4, 15, 9} or {6, 7, 13}, speed = 12, life = 0.4, gravity = -10})
   end
 end
 
@@ -410,9 +436,8 @@ end
 -- The world: sky, floor, trees and the ghost farthest first, then the kart.
 local function world(t)
   cls(12)
-  local s, cs = -sin(cam_angle), cos(cam_angle)
   mode7.angle = cam_angle
-  mode7.x, mode7.y = kart.x - s * 28, kart.y + cs * 28
+  mode7.x, mode7.y = cam_x, cam_y
   mode7.height, mode7.horizon = 18, HORIZON
   sky()
   mode7.floor()
@@ -430,20 +455,24 @@ local function world(t)
   if ghost and state.is(race) then
     local g = ghost[min(#ghost, flr(lap_frames / 4) + 1)]
     local _, _, _, d = mode7.project(g[1], g[2])
-    if d then list[#list + 1] = {d = d, x = g[1], y = g[2], ghost = true} end
+    if d then list[#list + 1] = {d = d, x = g[1], y = g[2], a = g[3], ghost = true} end
   end
   table.sort(list, function(a, b) return a.d > b.d end)
   for _, o in ipairs(list) do
     if o.ghost then  -- the best lap's kart, in ghostly colors
-      pal(8, 13) pal(9, 7) pal(12, 7) pal(5, 1) pal(1, 1)
-      mode7.sprite(32, o.x, o.y, 7, 2, 1)
+      pal(8, 13) pal(9, 7) pal(10, 6) pal(2, 5) pal(5, 1)
+      local n, flip = pose(o.a)
+      mode7.sprite(n, o.x, o.y, 8, 2, 2, flip)
       pal()
     else
       mode7.sprite(16, o.x, o.y, 22)
     end
   end
-  local lean = kart.steer < -0.35 and 34 or kart.steer > 0.35 and 36 or 32
-  sspr(lean, 48, 100 + (kart.slip > 0.55 and t % 2 or 0), 32, 16, false, false, 2, 1)
+  -- the kart where it is, twice its size, shaking a little in a drift
+  local sx, sy = mode7.project(kart.x, kart.y)
+  kart.sx, kart.sy = mid(16, sx or 64, 112), sy or 116
+  local n, flip = pose(kart.a)
+  sspr(n, kart.sx - 16 + (kart.slip > 0.55 and t % 2 or 0), kart.sy - 30, 32, 32, flip, false, 2, 2)
   particles.draw()
 end
 
