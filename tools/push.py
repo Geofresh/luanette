@@ -142,7 +142,7 @@ class Link:
         return back
 
 
-def messages(path: Path, run: bool = True, images: Path | None = None) -> tuple[list[dict], dict]:
+def messages(path: Path, run: bool = True, images: Path | None = None, live: bool = False) -> tuple[list[dict], dict]:
     """A cart as the messages that deliver it (its images first), checked; and what was sent."""
     if path.suffix != ".lua" or not path.exists():
         fail(f"no cart {path}")
@@ -153,6 +153,8 @@ def messages(path: Path, run: bool = True, images: Path | None = None) -> tuple[
     bundle, info = pack_images.pack(name, images or path.parent / "images" / name)
     body = {"type": "cart", "name": name, "title": res.get("title", name), "lua": check.shipped(path.read_text()),
             "run": run}
+    if live:  # new code for the cart if it's the one running: it keeps its state (Cart::reload)
+        body["live"] = True
     msgs = []
     if bundle:  # its images first, in 12 KB parts
         step = 12 * 1024
@@ -172,14 +174,24 @@ def main() -> None:
     ap.add_argument("cart", type=Path)
     ap.add_argument("--port")
     ap.add_argument("--no-run", action="store_true", help="keep it on the board without opening it")
+    ap.add_argument("--live", action="store_true",
+                    help="if it's the cart running, put the new code into it: it keeps its state (score, where you are)")
     a = ap.parse_args()
-    msgs, out = messages(a.cart, not a.no_run)
+    msgs, out = messages(a.cart, not a.no_run, live=a.live)
     link = Link(a.port)
     link.ask(f"time {int(time.time())}")
     tz = local_tz()
     if tz:
         link.ask(f"tz {tz}")
+    before = json.loads(link.ask("status")[8:]) if a.live else {}
     out["went_back"] = sum(link.message(m) for m in msgs)
+    if a.live and "reloads" in before:  # (a board that says how its live sends went)
+        for _ in range(30):
+            now = json.loads(link.ask("status")[8:])
+            if now.get("reloads", 0) > before["reloads"]:
+                out["live"] = now.get("reload_error") or "went in"
+                break
+            time.sleep(0.2)
     print(json.dumps(out))
 
 

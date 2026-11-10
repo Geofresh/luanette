@@ -66,6 +66,14 @@ the rest. `?` lists the keys.
 - **Running it.** Under the screen are Pause, Step (one frame at a time), Restart, the page's volume,
   and a meter of how much of the frame's 30,000 Lua instructions the cart used. What the cart
   `log()`s shows in the Console, with the frame it came in.
+- **Rewind.** The timeline under the screen goes back through the last few minutes of play, frame
+  by frame: drag it back and the screen shows that frame exactly as it was played. Press play and
+  the game goes on from there, a new future.
+- **Live.** With Live ticked, code you change goes into the running game, which keeps its state:
+  the score, where you are, what's on screen. Change the jump height and the next jump is higher.
+  Rewound, the change goes in at the frame shown, so a cart that crashed can be dragged back to
+  before the crash, fixed, and played on. Edits in the Sprites, Map and Sounds tabs go in the same
+  way. Run still starts it over.
 - **Play mode** shows the screen alone, full screen. On a phone it adds a d-pad and A and B buttons,
   and a cart picked from the list opens in it. Keys and a gamepad work too.
 - **Your own carts.** File, New cart starts one from a template: blank, platformer, shooter or
@@ -74,13 +82,15 @@ the rest. `?` lists the keys.
   ([`libs/`](libs/)): moving through a map, a camera, animations, tweens, a text box and more.
 - **Sharing.** Share, Copy a share link puts the whole cart in a link, code, sounds and song.
   Whoever opens it gets the cart in their playground. Nothing is uploaded; the link is the only
-  copy. Copy a link to play it does the same, but opens in play mode. Record a 5 s GIF saves what
-  the screen shows.
+  copy. Copy a link to play it does the same, but opens in play mode. Copy a link to this run puts
+  what you played in the link too: whoever opens it watches your run, frame for frame, and can
+  take over at any point. Record a 5 s GIF saves what the screen shows.
 - **The gallery** is carts people have made. **Share, Submit to the gallery** puts yours forward:
   it opens a GitHub issue with the cart's link in it ([`gallery/`](gallery/)).
 - **On a board** (Chrome or Edge on a computer), from the Board menu: Install puts the latest
-  firmware on it, and Send this cart to the board sends the one you're editing. Remove from board
-  takes one off again; on an example it's Restore the built-in.
+  firmware on it, and Send this cart to the board sends the one you're editing. With Live ticked
+  and that cart running on the board, the new code goes into it there too, and it keeps its state.
+  Remove from board takes one off again; on an example it's Restore the built-in.
 
 On Linux, Chrome can only open the board's port if your user is in the `dialout` group.
 
@@ -153,7 +163,8 @@ python tools/push.py examples/bubbles.lua
 ```
 
 `push.py` runs the cart through `check.py` first, so a broken cart never reaches the board. It
-also sets the board's clock and timezone from your computer. Sent carts stay in flash.
+also sets the board's clock and timezone from your computer. Sent carts stay in flash. With
+`--live`, a cart the board is running takes the new code without starting over.
 
 To take a screenshot:
 

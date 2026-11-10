@@ -85,13 +85,15 @@ class Library {
     std::string name, title, about;
   };
   std::vector<Item> list() const;
-  // A cart message from the host (carts/push.py): {"name", "lua", "run"?, "images"?}, {"open": name},
+  // A cart message from the host (carts/push.py): {"name", "lua", "run"?, "live"?, "images"?}, {"open": name},
   // {"close": true}, {"delete": name}; "cart.images" (a cart's images, in parts, before it);
   // "cart.image" (a live image asked for). True when it was one.
   struct Outcome {
     bool close = false;    // leave the cart that's open
     bool changed = false;  // the list changed
     std::string open;      // a cart to open
+    bool live = false;     // {"live": true}: if `open` is the cart running, new code into it (Cart::reload), not a restart
+    std::string src;       // (its code, for that)
     std::string deleted;   // a cart taken out of flash (the host closes it if it's the one open)
   };
   bool on_message(const hg::json::Value& msg, Outcome& out);

@@ -589,11 +589,18 @@ async function readLink(data) {
 }
 
 // A link's cart among your carts: under its name, or a new one when that's taken by something else.
-async function openLink(data) {
+async function openLink(data, isReplay) {
   let cart;
   try { cart = await readLink(data); } catch {
     say("This link's cart couldn't be read. It may have been cut short when it was copied.", true);
     return false;
+  }
+  if (isReplay) {  // a run: the cart as any link's, then its frames played back
+    const r = cart;
+    if (!Array.isArray(r.runs) || typeof r.clock !== "number") { say("This replay couldn't be read.", true); return false; }
+    const opened = await openLink(data, false);
+    if (opened) run(r.src, r);
+    return opened;
   }
   if (isGallery(cart.name)) {  // a gallery cart as it ships opens itself, as an example does
     const original = await shippedSource(cart.name), draft = storeGet(sourceKey(cart.name));
@@ -953,7 +960,8 @@ async function send() {
       "could fall behind. Make the slow frame do less, then send it.", true);
     return;
   }
-  run(code.value);
+  const live = $("live").checked;
+  if (!(live && running && runSrc === code.value)) run(code.value);  // (Live, and running here as it is: it keeps running)
   if (!running) return;  // run() says why
   const src = lw.shipped(code.value);
   const head = src.split("\n").slice(0, 12).join("\n");
@@ -974,9 +982,11 @@ async function send() {
   $("send").disabled = true;
   say(`Sending ${title} to the board…`);
   try {
-    await Board.sendCart(port, { name: plainName(current), title, lua: src });
-    say(`${title} is on the board and open there. It stays in its flash` +
-      (isExample(current) ? ", in place of the built-in one." : " until you remove it."));
+    const back = await Board.sendCart(port, { name: plainName(current), title, lua: src, live });
+    const kept = `It stays in its flash` + (isExample(current) ? ", in place of the built-in one." : " until you remove it.");
+    if (back.live === "") say(`Live: the change went into ${title} as it runs on the board, its state kept. ${kept}`);
+    else if (back.live && back.live !== "it wasn't running, so it started") say(`${title} is on the board, but the change didn't go into the running cart: ${back.live.split("\n")[0]}. Open it again there to start it over.`, true);
+    else say(`${title} is on the board and open there. ${kept}`);
   } catch (e) {
     portTrouble(e);
   } finally {
@@ -1072,7 +1082,13 @@ function clearLog() {
   logged = 0;
   $("console-count").textContent = "";
 }
-function run(src) {
+// The cart runs on a clock of frames, not the computer's (time() moves 1/fps a frame), from a
+// random start (its rnd() differs run to run), so the same input runs it the same way again: the
+// timeline (web/timeline.js) shows past frames by running them again, and replays play.
+let clock = 0;
+let replay = null;  // a replay playing: {inputs, hashes, frames}; null: the player's input
+let hashes = {};    // the picture's hash every 60 frames, for a replay to check itself against
+function run(src, from) {
   runSrc = src;
   frameNo = 0;
   clearLog();
@@ -1080,23 +1096,57 @@ function run(src) {
   setPaused(false);
   const name = current || "playground";
   sound.stop();
+  replay = from ? { inputs: Timeline.unpack(from), hashes: from.hashes || {}, frames: from.frames } : null;
+  showReplay();
+  hashes = {};
+  clock = from ? from.clock : Math.floor(Math.random() * 1e9);
+  const unix = from ? from.unix : Date.now() / 1000 - clock / 1e6;
+  lw.clock(clock);
+  lw.unix(unix);
+  // A replay's saves are its own: what the player had when it was made. Otherwise this browser's.
+  lw.saves(from ? 1 : 0, from ? from.save || "" : "");
+  const save = from ? from.save || "" : lw.save_now(name);
   const ok = lw.ccall("lw_start", "number", ["string", "string"], [name, src]);
   show();
   drainLog();  // what the top of the cart and _init logged: frame 0
   colorStrip();
+  Timeline.begin(lw.mod, { name, src, clock, unix, save });
+  scrubber();
   if (!ok) { running = false; say(lw.error(), true); return; }
-  say("");
+  say(from ? `A replay: ${mmss(from.frames)} played by someone, frame for frame. Take over to play on from any point.` : "");
   running = true;
   last = performance.now();
   spare = 0;
-  if (!isShipped(name) || src !== originals[name]) keep(name, src);
+  if (!from && (!isShipped(name) || src !== originals[name])) keep(name, src);
 }
 
 // One frame of the cart: its input, its log, its sounds; false once it has stopped.
+const q = (v) => Math.round(v * 100) / 100;  // input as a replay keeps it (and so as the cart got it)
 function frameOnce() {
   frameNo++;
-  if (frameNo === 60) keepThumb();
-  const alive = lw.lw_frame(...input());
+  if (frameNo === 60 && !replay) keepThumb();
+  let inp;
+  if (replay && frameNo <= replay.frames) {
+    inp = replay.inputs[frameNo - 1];
+    input();  // (the player's input goes nowhere, but taps and eased tilt don't pile up meanwhile)
+  } else {
+    if (replay) { replay = null; showReplay(); say("The replay is over. It's yours now: play on."); }
+    const [held, touching, tx, ty, ax, ay] = input();
+    inp = [held, touching, q(tx), q(ty), q(ax), q(ay)];
+  }
+  clock += 1e6 / lw.lw_fps();
+  lw.clock(clock);
+  const alive = lw.lw_frame(...inp);
+  Timeline.record(frameNo, inp, clock);
+  if (frameNo % 60 === 0) {
+    const h = lw.picture_hash() >>> 0;
+    hashes[frameNo] = h;
+    if (replay && replay.hashes[frameNo] !== undefined && replay.hashes[frameNo] !== h && !replay.off) {
+      replay.off = frameNo;
+      say(`This replay went its own way at frame ${frameNo}: the cart or the engine has changed since it was made.`, true);
+    }
+  }
+  if (frameNo % 15 === 0) scrubber();
   drainLog();
   for (let n = lw.lw_sound(); n >= 0; n = lw.lw_sound()) sound.play(n);
   meter.count(lw.lw_ops());
@@ -1127,9 +1177,87 @@ function tick(now) {
   if (frames) show();
 }
 
+// ---- the timeline: drag back through the last few minutes; play on from there --------------------
+// Frame n as it was: the snapshot before it, then the frames between run again, quietly.
+function seek(n) {
+  n = Math.max(Timeline.first(), Math.min(n, Timeline.end()));
+  lw.quiet(1);
+  const ok = Timeline.seek(n, (inp, c) => { lw.clock(c); lw.step(...inp); });
+  lw.quiet(0);
+  if (!ok) return;
+  frameNo = n;
+  clock = n ? Timeline.clocks[n - 1] : Timeline.start.clock;
+  lw.clock(clock);
+  lw.compose();
+  show();
+  colorStrip();
+  const err = lw.error();
+  running = !err;
+  say(err ? err : "");
+  scrubber();
+}
+const mmss = (frames) => {
+  const s = frames / (lw ? lw.lw_fps() : 30);
+  return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+};
+function scrubber() {
+  const el = $("scrub"), end = Timeline.end();
+  el.min = Timeline.first();
+  el.max = Math.max(end, Timeline.first());
+  el.value = frameNo;
+  el.disabled = end === 0;
+  const back = end - frameNo;
+  $("scrub-at").textContent = back > 0 ? `−${mmss(back)}` : mmss(frameNo);
+  $("scrub-at").title = `frame ${frameNo} of ${end}` + (back > 0 ? ": play goes on from here" : "");
+}
+// Live: code you change goes into the running cart (Cart::reload), which keeps its state; rewound,
+// it goes in at the frame shown, and the old future goes. Run still starts it over.
+function liveEdit() {
+  if (!$("live").checked || !lw || replay || code.value === runSrc) return;
+  if (lw.compile(code.value)) return;  // (the editor marks what doesn't compile)
+  if (!running) {
+    say("Live: the cart has stopped, so the change can't go in. Drag the timeline back to before it stopped, then change it again, or Run to start over.", true);
+    return;
+  }
+  const why = lw.reload(code.value);
+  if (why) {
+    say("Live: the change didn't go in: " + why.split("\n")[0], true);
+    return;
+  }
+  runSrc = code.value;
+  Timeline.branch(frameNo);
+  Timeline.edited = true;
+  hashes = {};
+  show();
+  colorStrip();
+  say(`Live: changed at frame ${frameNo}, its state kept. Run starts it over.`);
+}
+function showReplay() {
+  $("replay-bar").hidden = !replay;
+  document.body.classList.toggle("replaying", !!replay);
+}
+async function shareReplay() {
+  if (!lw || !Timeline.end()) { say("Play a little first: the link replays what you played.", true); return; }
+  if (Timeline.edited) { say("This run had code changed as it ran, which a replay can't show. Run it again from the start, then copy the link.", true); return; }
+  const r = Timeline.pack(hashes);
+  const raw = new TextEncoder().encode(JSON.stringify(r));
+  const data = typeof CompressionStream === "function" ? "d" + b64url(await through(raw, new CompressionStream("deflate-raw"))) : "u" + b64url(raw);
+  const url = location.href.split("#")[0] + "#replay=" + data;
+  let copied = false;
+  try { await navigator.clipboard.writeText(url); copied = true; } catch {}
+  $("sharelink").value = url;
+  $("sharebox").hidden = copied;
+  say(copied ? `Link copied: ${mmss(r.frames)} of your run (${url.length} characters). It opens the cart and plays what you played, frame for frame.` : "Copy this link: it replays your run.");
+}
+
 // ---- run controls: pause, a frame at a time, restart; the frame's cost against the budget ------
 let paused = false;
 function setPaused(p) {
+  if (!p && paused && lw && frameNo < Timeline.end() && !replay) {  // play from a rewound frame: a new future
+    Timeline.branch(frameNo);
+    hashes = Object.fromEntries(Object.entries(hashes).filter(([f]) => f <= frameNo));
+    if (!running && !lw.error()) running = true;
+  }
   paused = p;
   $("pause").classList.toggle("paused", p);
   $("pause").setAttribute("aria-label", p ? "Resume" : "Pause");
@@ -1296,7 +1424,30 @@ async function main() {
   $("share-play").onclick = () => shareLink(true);
   $("pause").onclick = () => setPaused(!paused);
   $("gif").onclick = recordGif;
-  $("step").onclick = () => { if (paused && running && frameOnce()) show(); meter.shown = 0; meter.show(performance.now()); };
+  $("step").onclick = () => {
+    if (!paused) return;
+    if (frameNo < Timeline.end()) seek(frameNo + 1);  // rewound: the next frame as it was played
+    else if (running && frameOnce()) show();
+    scrubber();
+    meter.shown = 0;
+    meter.show(performance.now());
+  };
+  $("scrub").oninput = () => {
+    if (!paused) setPaused(true);
+    seek(Number($("scrub").value));
+  };
+  $("take-over").onclick = () => {
+    if (!replay) return;
+    replay = null;
+    showReplay();
+    Timeline.branch(frameNo);
+    hashes = Object.fromEntries(Object.entries(hashes).filter(([f]) => f <= frameNo));
+    setPaused(false);
+    say(`It's yours from frame ${frameNo}: play on.`);
+  };
+  $("share-replay").onclick = shareReplay;
+  try { $("live").checked = localStorage.getItem("luanette.live") !== "0"; } catch {}
+  $("live").onchange = () => { try { localStorage.setItem("luanette.live", $("live").checked ? "1" : "0"); } catch {} };
   $("restart").onclick = () => { sound.unlock(); run(code.value); };
   setInterval(() => { if (lw && running) colorStrip(); }, 1000);  // palette() may change them as the cart runs
   $("console-clear").onclick = clearLog;
@@ -1311,6 +1462,7 @@ async function main() {
       if (isShipped(current) && code.value === originals[current]) storeDel(sourceKey(current));  // back as it ships
       else keep(current, code.value);
       showEdited();
+      liveEdit();
     }, 400);
   });
   // The browser's lists before the engine: with no cart in the address, they're the first thing shown.
@@ -1318,7 +1470,7 @@ async function main() {
   try { for (const e of await (await fetch("examples.json")).json()) EXAMPLES[e.name] = e; } catch {}
   renderCarts();
   const { h: fromHash, play } = address();
-  const opening = fromHash.startsWith("cart=") || isShipped(fromHash) || mine.includes(fromHash);
+  const opening = fromHash.startsWith("cart=") || fromHash.startsWith("replay=") || isShipped(fromHash) || mine.includes(fromHash);
   if (!opening) showBrowser();
   say("Loading the engine…");
   const mod = await Luanette();
@@ -1347,6 +1499,15 @@ async function main() {
     play_song: mod.cwrap("lw_play_song", "string", ["string", "number"]),
     render_audio: mod.cwrap("lw_render_audio", "string", ["string", "number", "number", "number", "number"]),
     pcm_data: mod.cwrap("lw_pcm_data", "number", []),
+    clock: mod.cwrap("lw_clock", null, ["number"]),
+    unix: mod.cwrap("lw_unix", null, ["number"]),
+    saves: mod.cwrap("lw_saves", null, ["number", "string"]),
+    save_now: mod.cwrap("lw_save_now", "string", ["string"]),
+    step: mod.cwrap("lw_step", "number", ["number", "number", "number", "number", "number", "number"]),
+    compose: mod.cwrap("lw_compose", null, []),
+    quiet: mod.cwrap("lw_quiet", null, ["number"]),
+    reload: mod.cwrap("lw_reload", "string", ["string"]),
+    picture_hash: mod.cwrap("lw_picture_hash", "number", []),
     ccall: mod.ccall,
   };
   requestAnimationFrame(tick);
@@ -1357,6 +1518,7 @@ async function main() {
     const { h, play } = address();
     const then = (opened) => { if (opened && play) enterPlay(); };
     if (h.startsWith("cart=")) openLink(h.slice(5)).then(then);
+    else if (h.startsWith("replay=")) openLink(h.slice(7), true).then(then);
     else if (h === "carts" || !h) showBrowser();
     else if (h === current) { showEditor(); then(true); }
     else if (isShipped(h) || mine.includes(h)) select(h).then(() => then(true));
@@ -1364,6 +1526,7 @@ async function main() {
   engineReady();
   say("");
   if (fromHash.startsWith("cart=") && await openLink(fromHash.slice(5))) { if (play) enterPlay(); return; }
+  if (fromHash.startsWith("replay=") && await openLink(fromHash.slice(7), true)) { if (play) enterPlay(); return; }
   if (isShipped(fromHash) || mine.includes(fromHash)) { await select(fromHash); if (play) enterPlay(); }
   else if (!browsing()) showBrowser();  // no cart named (or a link that couldn't be read): the cart browser is the way in
 }

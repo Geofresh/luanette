@@ -87,6 +87,8 @@ struct Config {
 void begin(Device& device, store::Library& library, const Config& config);
 // A cart by name (the library's, or "@stage...": the 3D test scene). False: no such cart, or no memory.
 bool open(const std::string& name);
+// New code into the open cart, its state kept (Cart::reload): "" when it went in, else why not.
+std::string reload(const std::string& src);
 void close();
 bool running();
 const std::string& name();  // the open cart's ("" when none)

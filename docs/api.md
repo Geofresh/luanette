@@ -442,6 +442,30 @@ at the `sfx` or `music` that plays it, saying what's wrong (`sfx(8): SOUNDS[8] n
 screen's y grows downwards): `sin(0.25)` is -1. They're a table lookup, faster than `math.sin` /
 `math.cos` (radians), which also work.
 
+## Live editing, rewinding and replays
+
+New code can go into a cart while it runs (the playground's Live, Send to the board with Live,
+`push.py --live`). The new code's top level runs, then the running cart takes from it:
+
+- every function, so the next frame runs the new code;
+- every other value the game hadn't changed since the old code set it up (a constant, a level's
+  rows, a sprite), so editing `JUMP = -2.45` to `-3` makes the next jump higher;
+- but not values the game changed (the score, the player's position, the list of enemies): those
+  stay as they are. A table is patched in place, key by key by the same rule, so whatever holds it
+  (the scene running, an object's metatable) sees the new code too.
+
+Top-level locals go the same way as globals. `_init` doesn't run again. A global the new code no
+longer has goes, if the game hadn't changed it. Code that doesn't compile or fails at its top
+level doesn't go in, and the cart runs on as it was. Functions made while the game ran (a closure a
+timer holds) are the old code's until made again.
+
+A cart runs the same way every time it's given the same input: the playground runs carts on a
+clock of frames (`time()` moves 1/fps a frame, and `now()` with it), `rnd()` is seeded from the
+clock the run starts at, and `pairs()` visits tables in the same order. That's what rewinding and
+replays stand on: a past frame is shown by running again from a moment kept in memory, and a replay
+is the cart, the moment it started and every frame's input. `stat()` and the computer's own time
+are the exceptions; a cart whose play depends on them won't replay exactly.
+
 ## The host
 
 The console that runs the cart gives it data and takes commands. In Luanette's firmware:

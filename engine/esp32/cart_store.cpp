@@ -426,7 +426,7 @@ bool Library::on_message(const hg::json::Value& msg, Outcome& out) {
     }
     return true;
   }
-  if (type == "cart") {  // a cart from the host (carts/push.py): {"name", "lua", "run"?}; {"open": name}; {"close": true}
+  if (type == "cart") {  // a cart from the host (carts/push.py): {"name", "lua", "run"?, "live"?}; {"open": name}; {"close": true}
     if (msg["close"].as_bool()) {
       out.close = true;
       return true;
@@ -472,7 +472,11 @@ bool Library::on_message(const hg::json::Value& msg, Outcome& out) {
     xSemaphoreGive(m_);
     out.changed = true;
     ESP_LOGI(kTag, "cart %s arrived (%u bytes)%s", name.c_str(), static_cast<unsigned>(src.size()), kept ? ", kept in flash" : "");
-    if (msg["run"].as_bool(true)) out.open = name;
+    if (msg["run"].as_bool(true)) {
+      out.open = name;
+      out.live = msg["live"].as_bool(false);
+      if (out.live) out.src = src;
+    }
     return true;
   }
   return false;

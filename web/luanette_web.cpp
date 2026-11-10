@@ -50,22 +50,88 @@ namespace {
 constexpr int kW = carts::kStageW;  // the glass, 410 x 502
 constexpr int kH = 502;
 
+// The Lua heap's arena (Host::alloc_lua): the same addresses every run, so a cart given the same
+// input runs the same, down to the order pairs() visits tables used as keys (those hash by
+// address). The playground's rewinding and replays depend on that. First fit, its free list in
+// address order, neighbors joined when freed; all of it free again when a cart starts.
+alignas(16) uint8_t g_arena[6 << 20];  // the 1 MB a cart may have, in 32 KB blocks, and room to spare
+struct Arena {
+  struct Free {
+    size_t size;
+    Free* next;
+  };
+  static constexpr size_t kHead = 16;  // a used chunk's size, before what it gives out
+  Free* head = nullptr;
+  void reset() {
+    head = reinterpret_cast<Free*>(g_arena);
+    head->size = sizeof g_arena;
+    head->next = nullptr;
+  }
+  void* alloc(size_t n) {
+    n = (n + kHead + 15) & ~size_t{15};
+    for (Free **pp = &head, *f = head; f; pp = &f->next, f = f->next) {
+      if (f->size < n) continue;
+      if (f->size - n >= 64) {
+        auto* rest = reinterpret_cast<Free*>(reinterpret_cast<uint8_t*>(f) + n);
+        rest->size = f->size - n;
+        rest->next = f->next;
+        *pp = rest;
+      } else {
+        n = f->size;
+        *pp = f->next;
+      }
+      *reinterpret_cast<size_t*>(f) = n;
+      return reinterpret_cast<uint8_t*>(f) + kHead;
+    }
+    return nullptr;  // (Lua then collects, and fails "not enough memory")
+  }
+  void release(void* p) {
+    if (!p) return;
+    uint8_t* c = static_cast<uint8_t*>(p) - kHead;
+    auto* f = reinterpret_cast<Free*>(c);
+    f->size = *reinterpret_cast<size_t*>(c);
+    Free *prev = nullptr, *cur = head;
+    while (cur && reinterpret_cast<uint8_t*>(cur) < c) prev = cur, cur = cur->next;
+    f->next = cur;
+    if (prev) prev->next = f;
+    else head = f;
+    if (cur && c + f->size == reinterpret_cast<uint8_t*>(cur)) f->size += cur->size, f->next = cur->next;
+    if (prev && reinterpret_cast<uint8_t*>(prev) + prev->size == c) prev->size += f->size, prev->next = f->next;
+  }
+};
+Arena g_lua_arena;
+
 struct WebHost final : carts::Host {
   std::deque<int> sounds;  // sfx() calls the page hasn't played yet
   int64_t clock_us = -1;  // >= 0: a clock of the tool's (lw_clock), a frame's time each frame, as check.py's
   int64_t now_us() override { return clock_us >= 0 ? clock_us : static_cast<int64_t>(emscripten_get_now() * 1000.0); }
+  // lw_unix: now() and date() from the frame clock too (a run that goes again must read the same
+  // time): this many seconds at clock 0. < 0: the computer's clock.
+  double unix_at_zero = -1;
+  int64_t unix_time() override {
+    if (unix_at_zero < 0 || clock_us < 0) return carts::Host::unix_time();
+    return static_cast<int64_t>(unix_at_zero + static_cast<double>(clock_us) / 1e6);
+  }
+  // lw_saves: a replay's saves are its own (what the player had when it was made, then what it
+  // saves as it plays), not this browser's.
+  void unix_time_set(double secs) { unix_at_zero = secs; }
+  bool own_saves = false;
+  std::string saved;
   void* alloc(size_t n) override { return std::malloc(n); }
   void release(void* p) override { std::free(p); }
+  void* alloc_lua(size_t n) override { return g_lua_arena.alloc(n); }
+  void release_lua(void* p) override { g_lua_arena.release(p); }
+  bool quiet = false;  // lw_quiet: frames being run again (rewinding) make no sound and log nothing
   void buzz(int) override {}
   void sfx(int n) override {
-    if (sounds.size() < 16) sounds.push_back(n);
+    if (!quiet && sounds.size() < 16) sounds.push_back(n);
   }
   void sound(std::shared_ptr<const carts::Sound> s) override;
   void music(std::shared_ptr<const carts::Song> song) override;
   void wake(double) override {}
   std::deque<std::string> logs;  // log() lines the page hasn't shown yet
   void log(std::string_view line) override {
-    if (logs.size() < 500) logs.emplace_back(line);
+    if (!quiet && logs.size() < 500) logs.emplace_back(line);
   }
   void act(std::string_view, std::string_view) override {}
   bool accepts_act(std::string_view name) const override {  // the board's (the launcher's), so carts fail the same way
@@ -81,12 +147,17 @@ struct WebHost final : carts::Host {
     return c;
   }
   std::string load_save(std::string_view cart) override {
+    if (own_saves) return saved;
     char* v = js_load_save(std::string(cart).c_str());
     std::string out(v);
     std::free(v);
     return out;
   }
   bool store_save(std::string_view cart, std::string_view json) override {
+    if (own_saves) {
+      saved = std::string(json);
+      return true;
+    }
     return js_store_save(std::string(cart).c_str(), std::string(json).c_str()) != 0;
   }
   bool deadline_by_polling() const override { return true; }
@@ -99,7 +170,7 @@ std::vector<float> g_audio;
 
 WebHost g_host;
 void WebHost::sound(std::shared_ptr<const carts::Sound> s) {
-  if (g_synth) g_synth->sfx(std::move(s));
+  if (g_synth && !g_host.quiet) g_synth->sfx(std::move(s));
 }
 void WebHost::music(std::shared_ptr<const carts::Song> song) {
   g_song = song;  // a browser allows no sound until a click: a song started before it plays from then
@@ -191,6 +262,7 @@ extern "C" {
 // A cart from its source; false: it won't start (lw_error says why).
 EMSCRIPTEN_KEEPALIVE int lw_start(const char* name, const char* src) {
   g_cart.reset();
+  g_lua_arena.reset();
   g_host.sounds.clear();
   g_host.logs.clear();
   g_pal_ver = UINT32_MAX;
@@ -200,6 +272,65 @@ EMSCRIPTEN_KEEPALIVE int lw_start(const char* name, const char* src) {
   g_error = g_cart->error();
   if (ok) compose();
   return ok ? 1 : 0;
+}
+
+// A frame without the glass made (lw_frame's, less compose()): frames run again to reach a point
+// in the past are only stepped through; lw_compose() then shows the last.
+EMSCRIPTEN_KEEPALIVE int lw_step(int held, int touching, float tx, float ty, float ax, float ay) {
+  if (!g_cart) return 0;
+  carts::Cart& cart = *g_cart;
+  if (carts::Hd* h = cart.hd()) h->release_front();
+  carts::Input in;
+  in.held = static_cast<uint8_t>(held);
+  in.touching = touching != 0;
+  in.tx = tx;
+  in.ty = ty;
+  in.ax = ax;
+  in.ay = ay;
+  const bool running = cart.frame(in);
+  if (carts::Stage* st = cart.stage()) {
+    st->prepare();
+    st->publish();
+  }
+  if (carts::Hd* h = cart.hd()) h->publish();
+  g_error = cart.error();
+  return running ? 1 : 0;
+}
+EMSCRIPTEN_KEEPALIVE void lw_compose() {
+  if (g_cart) compose();
+}
+// now() and date() from the frame clock: `secs` (since 1970) at clock 0; < 0: the computer's clock.
+EMSCRIPTEN_KEEPALIVE void lw_unix(double secs) { g_host.unix_time_set(secs); }
+// on: the cart's saves are `json` to start with, and what it saves stays here (a replay); off: this
+// browser's again. lw_save_now: what a cart's load() would give now (a recording keeps it).
+EMSCRIPTEN_KEEPALIVE void lw_saves(int on, const char* json) {
+  g_host.own_saves = on != 0;
+  g_host.saved = json ? json : "";
+}
+EMSCRIPTEN_KEEPALIVE const char* lw_save_now(const char* cart) {
+  static std::string out;
+  out = g_host.load_save(cart);
+  return out.c_str();
+}
+// The picture as it shows (128 x 128 indices), hashed: a replay checks it went the same way.
+EMSCRIPTEN_KEEPALIVE uint32_t lw_picture_hash() {
+  if (!g_cart) return 0;
+  uint32_t h = 2166136261u;
+  const uint8_t* p = g_cart->picture();
+  for (int i = 0; i < carts::kW * carts::kH; ++i) h = (h ^ p[i]) * 16777619u;
+  return h;
+}
+// While on, the cart's sounds and log() lines go nowhere (frames being run again).
+EMSCRIPTEN_KEEPALIVE void lw_quiet(int on) { g_host.quiet = on != 0; }
+// New code into the running cart, its data kept (Cart::reload): "" when it worked, else why not.
+EMSCRIPTEN_KEEPALIVE const char* lw_reload(const char* src) {
+  static std::string why;
+  why = g_cart ? g_cart->reload(src) : "no cart is running";
+  if (g_cart) {
+    g_error = g_cart->error();
+    compose();
+  }
+  return why.c_str();
 }
 
 // One frame with this input (held: a bit per button; tx, ty in cart pixels; ax, ay tilt -1..1).

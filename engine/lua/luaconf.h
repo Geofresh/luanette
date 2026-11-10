@@ -126,6 +126,13 @@
 #define LUA_32BITS	0
 #endif
 
+/*
+** carts: string hashes from a fixed seed, not the clock and addresses, so a cart given the same
+** input runs the same every time (pairs() visits in the same order): replays and rewinding in the
+** playground depend on it. (Lua seeds them to make hash flooding harder; a cart has no such input.)
+*/
+#define luai_makeseed(L)	0x4C75616Eu
+
 
 /*
 @@ LUA_C89_NUMBERS ensures that Lua uses the largest types available for

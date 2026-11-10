@@ -60,6 +60,7 @@ jobs:
       - run: for c in examples/*.lua gallery/*.lua templates/*.lua tests/tutorial/*.lua libs/demos/*.lua; do node cli/luanette.mjs check "$c" > /dev/null || { node cli/luanette.mjs check "$c"; exit 1; }; done
       - run: node cli/luanette.mjs run templates/platformer.lua --frames 60 --gif --out /tmp/run && test -s /tmp/run/run.gif && test -s /tmp/run/shots.png
       - run: node cli/luanette.mjs song examples/overdrive.lua --wav /tmp/song.wav && test -s /tmp/song.wav
+      - run: node tests/reload.mjs  # new code into a running cart; the same input runs a cart the same
       - run: |  # the MCP server: it answers, lists its tools, and checks a cart
           printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}' \
             '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \

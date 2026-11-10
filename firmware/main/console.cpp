@@ -94,6 +94,10 @@ struct State {
   uint8_t volume = kDefaultVolume, brightness = kDefaultBrightness;  // the settings, as steps
   std::atomic<bool> close_due{false}, open_due{false};
   std::string open_name;  // under the lock
+  bool open_live = false;  // open_name is new code for the cart running: into it, not a restart (under the lock)
+  std::string live_src;
+  int reloads = 0;          // live sends done, and the last one's trouble ("" when it went in): the status says
+  std::string reload_error;
   // Data channels for carts' data(): "carts" (the launcher's list), "battery" and "settings".
   SemaphoreHandle_t data_m = nullptr;
   std::vector<Channel> channels;
@@ -292,6 +296,7 @@ class Device final : public carts::player::Device {
   void command(std::string_view name, std::string_view arg) override {
     if (name == "open") {
       g.open_name = std::string(arg);
+      g.open_live = false;
       g.open_due = true;
     } else if (name == "volume" || name == "brightness") {
       const int step = std::atoi(std::string(arg).c_str());
@@ -362,7 +367,19 @@ void console_task(void*) {
       if (want != g.screen_on) apply_screen(want);
       if (g.screen_on) idle_policy();
       if (g.close_due.exchange(false) && carts::player::running()) carts::player::close();
-      if (g.open_due.exchange(false) && !carts::player::open(g.open_name)) ESP_LOGW(TAG, "can't open %s", g.open_name.c_str());
+      if (g.open_due.exchange(false)) {
+        if (g.open_live && carts::player::running() && carts::player::name() == g.open_name && !carts::player::stopped()) {
+          g.reload_error = carts::player::reload(g.live_src);
+          ++g.reloads;
+        } else if (!carts::player::open(g.open_name)) {
+          ESP_LOGW(TAG, "can't open %s", g.open_name.c_str());
+        } else if (g.open_live) {
+          g.reload_error = "it wasn't running, so it started";
+          ++g.reloads;
+        }
+        g.open_live = false;
+        g.live_src.clear();
+      }
       // The launcher stopped (an error in it): it goes, and starts again in a moment.
       if (carts::player::running() && carts::player::name() == kLauncher && carts::player::stopped()) {
         ESP_LOGE(TAG, "the launcher stopped: %s; starting it again", carts::player::error().c_str());
@@ -410,6 +427,7 @@ std::string status_json() {
       if (p->external_power) s.set("usb", *p->external_power);
     }
   s.set("cart", carts::player::name()).set("screen", g.screen_on ? "on" : "off");
+  s.set("reloads", g.reloads).set("reload_error", g.reload_error);
   s.set("volume", static_cast<int>(g.volume)).set("brightness", static_cast<int>(g.brightness));
   s.set("uptime_s", static_cast<double>(esp_timer_get_time() / 1000000));
   s.set("internal_free", static_cast<int>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL)));
@@ -648,6 +666,8 @@ bool on_message(const hg::json::Value& msg) {
     if (!o.deleted.empty() && carts::player::name() == o.deleted) g.close_due = true;  // removed while open: it stops
     if (!o.open.empty()) {
       g.open_name = o.open;
+      g.open_live = o.live;
+      g.live_src = std::move(o.src);
       g.open_due = true;
       request_screen(true);
     }
@@ -805,6 +825,7 @@ std::string on_line(std::string_view line) {
   if (rest.rfind("open ", 0) == 0) {
     Lock l;
     g.open_name = std::string(rest.substr(5));
+    g.open_live = false;
     g.open_due = true;
     request_screen(true);
     return "@ok";

@@ -87,6 +87,11 @@ class Host {
   virtual void* alloc(size_t bytes) = 0;
   virtual void release(void* p) = 0;
   virtual void* alloc_fast(size_t bytes) { return alloc(bytes); }
+  // The Lua heap's own memory (its 32 KB blocks, and objects over 1 KB). A host that wants a cart to
+  // run the same on every run, down to the order pairs() visits tables used as keys (those hash by
+  // address), gives it the same addresses each time (the playground: an arena at a fixed place).
+  virtual void* alloc_lua(size_t bytes) { return alloc(bytes); }
+  virtual void release_lua(void* p) { release(p); }
   virtual void release_fast(void* p) { release(p); }
   virtual void buzz(int ms) = 0;
   virtual void sfx(int n) = 0;
@@ -155,6 +160,11 @@ class Cart {
   // One frame: _update (or _update60), then _draw. False: the cart stopped (error(); picture shows it).
   bool frame(const Input& in);
   bool running() const { return L_ != nullptr && error_.empty(); }
+  // New code for the running cart, its data kept (docs/api.md, "Live editing"): the new top level
+  // runs, then its functions take over and its other values do where the game hadn't changed what
+  // the old code set up. _init doesn't run again. "" when it worked; else why not, and the cart goes
+  // on as it was (unless the merge itself failed: then it has stopped, and error() says so).
+  std::string reload(std::string_view src);
   // The deadline passed (Host::deadline): the VM stops at its next instruction with an error.
   // Async-safe on Lua's own core (an interrupt there), as lua_sethook is.
   void interrupt();
@@ -216,7 +226,9 @@ class Cart {
   struct Impl;  // the Lua side's view (cart.cpp)
 
  private:
-  bool run(int nargs, int64_t limit_us, const char* where);
+  bool run(int nargs, int64_t limit_us, const char* where, std::string* failed = nullptr);
+  bool call_reload(const char* fn, int nargs);
+  bool reloadable_ = false;
   void stop(std::string why);
 
   Host& host_;

@@ -230,16 +230,24 @@ const Board = (() => {
   // Sends a cart (its source as it ships: comments out) to the board on `port`, sets the board's
   // clock and timezone on the way, and opens it there. The port is closed again after, so other
   // tools (the installer, push.py) can have it.
-  async function sendCart(port, { name, title, lua }) {
+  // live: new code for the cart if it's the one running there, which keeps its state (firmware 0.9 on;
+  // an older board opens it afresh). Then the answer's `live` is "" when it went in, else why not.
+  async function sendCart(port, { name, title, lua, live }) {
     const link = new Link(port);
     await link.open();
     try {
       await link.ask(`time ${Math.floor(Date.now() / 1000)}`);
       const tz = posixTz();
       if (/^[A-Za-z<>+\-0-9,./:]+$/.test(tz)) await link.ask(`tz ${tz}`);
-      const back = await link.message({ type: "cart", name, title, lua, run: true });
+      const before = live ? await status(link) : null;
+      const back = await link.message({ type: "cart", name, title, lua, run: true, live: !!live });
+      if (live && before && typeof before.reloads === "number") {  // (a board that says how its live sends went)
+        let now = null;
+        await settled(link, async () => { now = await status(link); return now && now.reloads > before.reloads; }, "take the new code");
+        return { resent: back, live: now.reload_error };
+      }
       await settled(link, async () => (await status(link))?.cart === name, "open the cart");
-      return back;
+      return { resent: back };
     } finally {
       await link.close();
     }

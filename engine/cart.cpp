@@ -71,7 +71,7 @@ struct Heap {
     const size_t bytes = size_t{16} << c;
     if (!top || top + bytes > end) {
       if (nblocks == kMaxBlocks) return nullptr;
-      auto* b = static_cast<uint8_t*>(host->alloc(kBlock));
+      auto* b = static_cast<uint8_t*>(host->alloc_lua(kBlock));
       if (!b) return nullptr;
       // What was left of the last block goes to the free lists, largest pieces first.
       for (int k = kClasses - 1; top && k >= 0; --k)
@@ -94,12 +94,12 @@ struct Heap {
       *static_cast<void**>(p) = free_[c];
       free_[c] = p;
     } else {
-      host->release(p);
+      host->release_lua(p);
     }
   }
-  void* get(size_t n) { return n <= kSmallMax ? small(class_of(n)) : host->alloc(n); }
+  void* get(size_t n) { return n <= kSmallMax ? small(class_of(n)) : host->alloc_lua(n); }
   void close() {
-    for (int i = 0; i < nblocks; ++i) host->release(blocks[i]);
+    for (int i = 0; i < nblocks; ++i) host->release_lua(blocks[i]);
     nblocks = 0;
   }
 };
@@ -1853,6 +1853,188 @@ int traceback(lua_State* L) {
   return 1;
 }
 
+
+// ---- reloading: new code into a running cart, its data kept (Cart::reload) -----------------------
+//
+// The Lua side (kReloadLua) decides what to keep; these give it what a cart never gets: upvalues
+// (a cart's top-level locals live in its functions' upvalues) and which functions a chunk's top level made.
+const Proto* proto_of(lua_State* L, int i) {
+  const TValue* o = arg(L, i);
+  return ttisLclosure(o) ? clLvalue(o)->p : nullptr;
+}
+int h_up(lua_State* L) {  // up(f, i): the upvalue's name and value, or nothing
+  const char* name = lua_getupvalue(L, 1, static_cast<int>(luaL_checkinteger(L, 2)));
+  if (!name) return 0;
+  lua_pushstring(L, name);
+  lua_insert(L, -2);
+  return 2;
+}
+int h_setup(lua_State* L) {  // setup(f, i, v)
+  lua_settop(L, 3);
+  lua_setupvalue(L, 1, static_cast<int>(luaL_checkinteger(L, 2)));
+  return 0;
+}
+int h_id(lua_State* L) {  // id(f, i): the upvalue's cell (two functions share a local when they share it)
+  lua_pushlightuserdata(L, lua_upvalueid(L, 1, static_cast<int>(luaL_checkinteger(L, 2))));
+  return 1;
+}
+int h_join(lua_State* L) {  // join(f1, i1, f2, i2): f1's upvalue i1 becomes f2's i2
+  lua_upvaluejoin(L, 1, static_cast<int>(luaL_checkinteger(L, 2)), 3, static_cast<int>(luaL_checkinteger(L, 4)));
+  return 0;
+}
+int h_top(lua_State* L) {  // top(f, main): f was made by main's top level (its prototype is one of main's)
+  const Proto *p = proto_of(L, 1), *m = proto_of(L, 2);
+  bool top = false;
+  for (int i = 0; p && m && i < m->sizep && !top; ++i) top = m->p[i] == p;
+  lua_pushboolean(L, top);
+  return 1;
+}
+int h_getmt(lua_State* L) {  // the metatable, whatever its __metatable says
+  if (!lua_getmetatable(L, 1)) lua_pushnil(L);
+  return 1;
+}
+
+// What stays and what changes when new code comes to a running cart. At the start (begin, after
+// the cart's top level) it notes what the code set up: each global the cart made and each
+// top-level local, copied. At a reload the new top level runs into a table of its own, then each
+// of its values is merged into the running one: functions always the new code's; any other value
+// the new one where the game left it as the old code set it up, the game's where it changed it;
+// tables patched in place (so whatever holds one, a scene, an object's metatable, sees the new
+// code), key by key by the same rule. New top-level locals take over the old ones' cells.
+constexpr char kReloadLua[] = R"lua(
+local H, G = ...
+local next, type, rawget, rawset, rawequal, setmetatable = next, type, rawget, rawset, rawequal, setmetatable
+local up, setup, id, join, top, getmt = H.up, H.setup, H.id, H.join, H.top, H.getmt
+local builtin, init_g, init_up, init_mt, main = {}, {}, {}, setmetatable({}, {__mode = "k"}), nil
+
+local function copy(v, memo)
+  if type(v) ~= "table" then return v end
+  local c = memo[v]
+  if c then return c end
+  c = {}
+  memo[v] = c
+  init_mt[c] = getmt(v)
+  for k, x in next, v do rawset(c, k, copy(x, memo)) end
+  return c
+end
+
+local function same(a, b, memo)
+  if rawequal(a, b) then return true end
+  if type(a) ~= "table" or type(b) ~= "table" then return false end
+  memo = memo or {}
+  if memo[a] == b then return true end
+  memo[a] = b
+  for k, x in next, a do if not same(x, rawget(b, k), memo) then return false end end
+  for k in next, b do if rawget(a, k) == nil then return false end end
+  return true
+end
+
+local function merge(old, init, new, seen)
+  if type(new) == "table" and type(old) == "table" then
+    if rawequal(old, new) or seen[old] then return old end
+    seen[old] = true
+    local it = type(init) == "table" and init or nil
+    for k, nv in next, new do rawset(old, k, merge(rawget(old, k), it and rawget(it, k), nv, seen)) end
+    if it then
+      for k, ov in next, old do
+        if rawget(new, k) == nil and rawget(it, k) ~= nil and same(ov, rawget(it, k)) then rawset(old, k, nil) end
+      end
+    end
+    local om, nm = getmt(old), getmt(new)
+    if om == nil and nm ~= nil then setmetatable(old, nm)
+    elseif type(om) == "table" and type(nm) == "table" then merge(om, it and init_mt[it], nm, seen) end
+    return old
+  end
+  if type(new) == "function" then
+    if old == nil or rawequal(old, init) then return new end
+    return old
+  end
+  if (old == nil and init == nil) or same(old, init) then return new end
+  return old
+end
+
+-- Every function `m`'s top level made that can be reached from `roots` (through tables and other
+-- functions' upvalues), each top-level local they use: name -> {f, i, cell, uses = {{f, i}...}}.
+-- A name two locals share is false (no telling them apart).
+local function locals(roots, m)
+  local out, seen, stack = {}, {}, {}
+  for _, r in next, roots do stack[#stack + 1] = r end
+  while #stack > 0 do
+    local v = stack[#stack]
+    stack[#stack] = nil
+    if (type(v) == "table" or type(v) == "function") and not seen[v] then
+      seen[v] = true
+      if type(v) == "table" then
+        for k, x in next, v do stack[#stack + 1] = k; stack[#stack + 1] = x end
+        local mt = getmt(v)
+        if mt then stack[#stack + 1] = mt end
+      else
+        local is_top = top(v, m)
+        local i = 1
+        while true do
+          local name, x = up(v, i)
+          if not name then break end
+          stack[#stack + 1] = x
+          if is_top and name ~= "_ENV" and name ~= "" then
+            local cell, l = id(v, i), out[name]
+            if l == nil then
+              out[name] = {f = v, i = i, cell = cell, value = x, uses = {{v, i}}}
+            elseif l and l.cell == cell then
+              l.uses[#l.uses + 1] = {v, i}
+            else
+              out[name] = false
+            end
+          end
+          i = i + 1
+        end
+      end
+    end
+  end
+  return out
+end
+
+local R = {}
+function R.before()  -- before the cart's top level: what's there is the runtime's
+  for k, v in next, G do builtin[k] = v end
+end
+function R.begin(m)  -- after it: what the code set up
+  main = m
+  local memo = {}
+  for k, v in next, G do if not rawequal(builtin[k], v) then init_g[k] = copy(v, memo) end end
+  init_up = {}
+  for name, l in next, locals({G}, m) do
+    if l then init_up[name] = {f = l.f, i = l.i, init = copy(l.value, memo)} end
+  end
+end
+function R.reload(m, P)
+  local memo = {}
+  local new_g = {}
+  for k, v in next, P do new_g[k] = copy(v, memo) end
+  local roots = {P}
+  for k, v in next, P do roots[#roots + 1] = v end
+  local new_l = locals(roots, m)
+  local new_up = {}
+  for name, l in next, new_l do if l then new_up[name] = {f = l.f, i = l.i, init = copy(l.value, memo)} end end
+  local seen = {}
+  for k, v in next, P do rawset(G, k, merge(rawget(G, k), init_g[k], v, seen)) end
+  for k, v in next, init_g do
+    if rawget(P, k) == nil and same(rawget(G, k), v) then rawset(G, k, nil) end
+  end
+  for name, l in next, new_l do
+    local o = l and init_up[name]
+    if o then
+      local _, now = up(o.f, o.i)
+      setup(o.f, o.i, merge(now, o.init, l.value, seen))
+      for _, u in next, l.uses do join(u[1], u[2], o.f, o.i) end
+      new_up[name] = {f = o.f, i = o.i, init = new_up[name].init}
+    end
+  end
+  setup(m, 1, G)  -- the new code's globals are the cart's (its top level ran into P)
+  init_g, init_up, main = new_g, new_up, m
+end
+return R
+)lua";
+
 }  // namespace
 
 // ---- Cart ------------------------------------------------------------------------
@@ -1983,7 +2165,7 @@ void Cart::interrupt() {
   if (L_ && in_call_) lua_sethook(L_, deadline_hook, LUA_MASKCOUNT, kDeadlineGrace);
 }
 
-bool Cart::run(int nargs, int64_t limit_us, const char* where) {
+bool Cart::run(int nargs, int64_t limit_us, const char* where, std::string* failed) {
   Impl& I = *impl_;
   I.limit_us = limit_us;
   I.frame_t0 = host_.now_us();
@@ -2006,6 +2188,10 @@ bool Cart::run(int nargs, int64_t limit_us, const char* where) {
   std::string msg = lua_tostring(L_, -1) ? lua_tostring(L_, -1) : "error";
   lua_pop(L_, 1);
   if (rc == LUA_ERRMEM) msg = "the cart used more than 1 MB of memory";
+  if (failed) {  // the caller decides (reload(): the old code goes on)
+    *failed = std::string("in ") + where + ": " + msg;
+    return false;
+  }
   stop(std::string("in ") + where + ": " + msg);
   return false;
 }
@@ -2132,13 +2318,32 @@ bool Cart::start(std::string_view name, std::string_view src) {
     return false;
   }
   if (!run(0, kStartLimitUs, "the runtime's ui.lua")) return false;
+  // What reload() needs (its helpers, and what the runtime set up before the cart's code ran).
+  if (luaL_loadbufferx(L_, kReloadLua, sizeof(kReloadLua) - 1, "=reload", "t") != LUA_OK) {
+    stop(std::string("the runtime's reload code doesn't load: ") + (lua_tostring(L_, -1) ? lua_tostring(L_, -1) : "?"));
+    return false;
+  }
+  static const luaL_Reg kHelpers[] = {{"up", h_up}, {"setup", h_setup}, {"id", h_id}, {"join", h_join},
+                                      {"top", h_top}, {"getmt", h_getmt}, {nullptr, nullptr}};
+  luaL_newlib(L_, kHelpers);
+  lua_pushglobaltable(L_);
+  if (lua_pcall(L_, 2, 1, 0) != LUA_OK) {
+    stop(std::string("the runtime's reload code doesn't run: ") + (lua_tostring(L_, -1) ? lua_tostring(L_, -1) : "?"));
+    return false;
+  }
+  lua_setfield(L_, LUA_REGISTRYINDEX, "luanette.reload");
+  call_reload("before", 0);
   if (luaL_loadbufferx(L_, src.data(), src.size(), "=cart", "t") != LUA_OK) {
     std::string msg = lua_tostring(L_, -1) ? lua_tostring(L_, -1) : "?";
     lua_pop(L_, 1);
     stop("doesn't load: " + msg);
     return false;
   }
+  lua_pushvalue(L_, -1);
+  lua_setfield(L_, LUA_REGISTRYINDEX, "luanette.main");
   if (!run(0, kStartLimitUs, "the top of the cart")) return false;
+  lua_getfield(L_, LUA_REGISTRYINDEX, "luanette.main");
+  reloadable_ = call_reload("begin", 1);  // (a cart that runs out of memory here still runs: it just can't reload)
   lua_getglobal(L_, "_update60");
   update60_ = lua_isfunction(L_, -1);
   lua_pop(L_, 1);
@@ -2150,6 +2355,69 @@ bool Cart::start(std::string_view name, std::string_view src) {
   }
   make_shown();
   return true;
+}
+
+// R[fn](the nargs values on the stack), R the reload code's table; false (the values popped) when it fails.
+bool Cart::call_reload(const char* fn, int nargs) {
+  lua_getfield(L_, LUA_REGISTRYINDEX, "luanette.reload");
+  lua_getfield(L_, -1, fn);
+  lua_remove(L_, -2);
+  lua_insert(L_, -(nargs + 1));
+  std::string failed;
+  return run(nargs, kStartLimitUs, "reload", &failed);
+}
+
+std::string Cart::reload(std::string_view src) {
+  if (!running()) return "the cart isn't running";
+  if (!reloadable_) return "this cart can't take new code while it runs (it ran out of memory as it started)";
+  Impl& I = *impl_;
+  S = impl_;
+  std::string stripped;
+  if (src.size() > kMaxSource) {
+    stripped = shipped(src);
+    src = stripped;
+  }
+  if (src.size() > kMaxSource) return "the cart is " + std::to_string(src.size()) + " bytes without its comments; the limit is " + std::to_string(kMaxSource);
+  if (const std::string api = header(src, "api"); !api.empty() && std::strtol(api.c_str(), nullptr, 10) > kApiVersion)
+    return "it needs API " + api + "; this runtime has " + std::to_string(kApiVersion);
+  if (luaL_loadbufferx(L_, src.data(), src.size(), "=cart", "t") != LUA_OK) {
+    std::string msg = lua_tostring(L_, -1) ? lua_tostring(L_, -1) : "?";
+    lua_pop(L_, 1);
+    return "doesn't load: " + msg;
+  }
+  // Its top level runs into a table of its own (reading the cart's globals through it), so a
+  // failure there leaves the running cart as it was.
+  lua_newtable(L_);  // P
+  lua_newtable(L_);
+  lua_pushglobaltable(L_);
+  lua_setfield(L_, -2, "__index");
+  lua_setmetatable(L_, -2);
+  lua_pushvalue(L_, -1);
+  lua_insert(L_, -3);  // P, chunk, P
+  lua_setupvalue(L_, -2, 1);  // the chunk's _ENV
+  lua_pushvalue(L_, -1);
+  lua_insert(L_, -3);  // chunk, P, chunk
+  std::string failed;
+  if (!run(0, kStartLimitUs, "the new code's top", &failed)) {
+    lua_pop(L_, 2);
+    return failed;
+  }
+  // chunk, P on the stack: merge (a failure from here on leaves the cart half old, half new: it stops)
+  if (!call_reload("reload", 2)) {
+    stop("in reload: the new code couldn't be merged in (out of memory?)");
+    return error_;
+  }
+  lua_pushnil(L_);
+  lua_setfield(L_, LUA_REGISTRYINDEX, "luanette.main");
+  I.map_read = false;  // MAP may be another table now
+  lua_getglobal(L_, "_update60");
+  const bool u60 = lua_isfunction(L_, -1);
+  lua_pop(L_, 1);
+  if (u60 != update60_) {
+    update60_ = u60;
+    if (!rate_set_) fps_ = update60_ ? 60 : 30;
+  }
+  return "";
 }
 
 bool Cart::frame(const Input& in) {

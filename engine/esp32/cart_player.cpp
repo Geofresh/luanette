@@ -1536,6 +1536,14 @@ void begin(Device& device, store::Library& library, const Config& config) {
   g_cfg = config;
 }
 bool open(const std::string& name) { return cart_open(name); }
+std::string reload(const std::string& src) {
+  if (!g_cart) return "no cart is open";
+  const int64_t t0 = esp_timer_get_time();
+  std::string why = g_cart->cart.reload(src);
+  ESP_LOGI(kTag, "cart %s: new code (%u bytes) %s in %d ms", g_open_name.c_str(), static_cast<unsigned>(src.size()),
+           why.empty() ? "went in" : ("didn't go in: " + why).c_str(), static_cast<int>((esp_timer_get_time() - t0) / 1000));
+  return why;
+}
 void close() { cart_close(); }
 bool running() { return g_cart != nullptr; }
 const std::string& name() { return g_open_name; }

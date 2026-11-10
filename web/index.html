@@ -163,6 +163,12 @@
   .runbar button { height: 36px; white-space: nowrap; }
   #pause .when-paused, #pause.paused .when-running { display: none; }
   #pause.paused .when-paused { display: inline; }
+  .timeline { display: flex; align-items: center; gap: 8px; width: min(370px, 82vw); color: var(--muted); }
+  .timeline input[type="range"] { flex: 1; min-width: 0; accent-color: var(--accent); }
+  #scrub-at { font: 12px var(--mono); min-width: 4.5em; text-align: right; }
+  .timeline .live { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--text); cursor: pointer; }
+  .replay-bar { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--accent); }
+  .replay-bar[hidden] { display: none; }
   .meter { display: flex; flex-direction: column; align-items: center; gap: 4px; width: min(370px, 82vw); }
   .meter-track { width: 100%; height: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 3px; overflow: hidden; }
   #meter-bar { height: 100%; width: 0; background: #3fb950; transition: width 0.2s; }
@@ -396,6 +402,7 @@
       <div class="menu-list right" hidden>
         <button id="share">Copy a share link <span class="aside">code, sounds, song</span></button>
         <button id="share-play">Copy a link to play it <span class="aside">opens in play mode</span></button>
+        <button id="share-replay">Copy a link to this run <span class="aside">replays what you played</span></button>
         <button id="gif">Record a 5 s GIF <span class="aside">downloads</span></button>
         <hr>
         <button id="submit">Submit to the gallery… <span class="aside">GitHub</span></button>
@@ -489,6 +496,16 @@
         <input type="range" id="volume" min="0" max="100" step="5" aria-label="The page's volume">
         <span id="volume-pct"></span>
       </label>
+    </div>
+    <div class="timeline">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M11 6l-7 6 7 6M20 6l-7 6 7 6"/></svg>
+      <input type="range" id="scrub" min="0" max="0" value="0" disabled aria-label="Rewind: drag back through the last few minutes of play" title="Rewind: drag back through the last few minutes; play goes on from the frame shown">
+      <span id="scrub-at">0:00</span>
+      <label class="live" title="Live: code you change goes into the running cart, which keeps its state (the score, where you are). Run starts it over."><input type="checkbox" id="live" checked> Live</label>
+    </div>
+    <div class="replay-bar" id="replay-bar" hidden>
+      <span>Watching a replay</span>
+      <button id="take-over" title="Play on yourself from this frame">Take over</button>
     </div>
     <div class="meter" title="Lua instructions this frame, against the 30,000 a frame may have">
       <div class="meter-track"><div id="meter-bar"></div></div>
@@ -719,6 +736,7 @@
 <script src="vendor/codemirror/search.js"></script>
 <script src="gif.js"></script>
 <script src="board.js"></script>
+<script src="timeline.js"></script>
 <script src="playground.js"></script>
 <script src="tables.js"></script>
 <script src="sound-editor.js"></script>
