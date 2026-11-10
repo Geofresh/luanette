@@ -3,17 +3,20 @@
 -- about: drive over a checkered map in perspective (arrows turn and move); hold A for the map from above, turned and zoomed (the mode7 library)
 -- api: 7
 
--- lib: mode7 1, api 7: the map as a floor in perspective (F-Zero, Mario Kart), a map turned and zoomed, and sprites standing on the floor
+-- lib: mode7 2, api 7: the map as a floor in perspective (F-Zero, Mario Kart), a map turned and zoomed, and sprites standing on the floor
 -- A camera looks along the map from (mode7.x, mode7.y), in map pixels, `height` pixels above it,
 -- turned `angle` turns (0 looks up the map, 0.25 to the right). In _draw: mode7.floor() draws the
 -- floor below the horizon, row by row with tline(); mode7.sprite() stands a sprite on it. Draw the
 -- sky above the horizon yourself (rowpal() makes a gradient of one color).
 local mode7 = {x = 0, y = 0, angle = 0, height = 24, horizon = 40, focal = 96, far = 1200}
 
--- Where the camera looks: forward is (fx, fy), right is (rx, ry), in map pixels.
-local fx, fy, rx, ry = 0, -1, 1, 0
+-- Where the camera looks: forward is (fx, fy), right is (rx, ry), in map pixels (worked out again
+-- only when the angle changes: project() is called for every sprite).
+local fx, fy, rx, ry, seen = 0, -1, 1, 0, nil
 local function axes()
-  local s, c = -sin(mode7.angle), cos(mode7.angle)  -- (sin() is PICO-8's, upside down)
+  if mode7.angle == seen then return end
+  seen = mode7.angle
+  local s, c = -sin(seen), cos(seen)  -- (sin() is PICO-8's, upside down)
   fx, fy, rx, ry = s, -c, c, s
 end
 
@@ -22,14 +25,12 @@ end
 -- those sprite flags (map()'s layer).
 function mode7.floor(y1, layer)
   axes()
-  local x, y, h, f = mode7.x, mode7.y, mode7.height, mode7.focal
-  for row = mode7.horizon + 1, y1 or 127 do
-    local d = h * f / (row - mode7.horizon)  -- how far ahead this row is
-    if d <= mode7.far then
-      local s = d / f                         -- map pixels a screen pixel, at that distance
-      local cx, cy = x + fx * d - rx * s * 64, y + fy * d - ry * s * 64
-      tline(0, row, 127, row, cx / 8, cy / 8, rx * s / 8, ry * s / 8, layer)
-    end
+  local x, y, hf, hz, far = mode7.x / 8, mode7.y / 8, mode7.height * mode7.focal, mode7.horizon, mode7.far
+  local lx, ly = (fx * mode7.focal - rx * 64) / 8, (fy * mode7.focal - ry * 64) / 8  -- the row's left end, per unit of s
+  local sx, sy = rx / 8, ry / 8
+  for row = max(hz + 1, flr(hz + hf / far) + 1), y1 or 127 do  -- (rows nearer the horizon are farther than far)
+    local s = hf / (row - hz) / mode7.focal  -- map pixels a screen pixel, at the distance this row sees
+    tline(0, row, 127, row, x + lx * s, y + ly * s, sx * s, sy * s, layer)
   end
 end
 
@@ -52,7 +53,7 @@ function mode7.sprite(n, wx, wy, size, w, h, flip)
   w, h = w or 1, h or 1
   local ph = (size or 8) * k
   local pw = ph * w / h
-  if ph < 1 or ph > 400 then return nil end
+  if ph < 1 or ph > 160 then return nil end
   sspr(n, sx - pw / 2, sy - ph, pw, ph, flip, false, w, h)
   return depth
 end

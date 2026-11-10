@@ -782,6 +782,56 @@ int f_tline(lua_State* L) {
   Cart::Impl::Sprite tmp;
   const unsigned clear = S->clear;
   const int64_t mw = static_cast<int64_t>(S->map_w) << 16, mh = static_cast<int64_t>(S->map_h) << 16;
+  // A row left to right (the floor in perspective: a hundred of these a frame) the quick way, with
+  // the same pixels: clipped first, 32-bit sums (64-bit ones are slow on the S3), and the map read
+  // again only where the line moves into another cell.
+  if (y0 == y1 && x0 <= x1) {
+    const int y = y0 - S->cam_y;
+    int xa = x0 - S->cam_x, xb = x1 - S->cam_x;
+    if (y < S->clip_y0 || y >= S->clip_y1) return 0;
+    if (xa < S->clip_x0) {
+      mx += dmx * (S->clip_x0 - xa);
+      my += dmy * (S->clip_x0 - xa);
+      xa = S->clip_x0;
+    }
+    xb = std::min(xb, S->clip_x1 - 1);
+    const int64_t n = xb - xa;
+    const auto fits = [](int64_t v) { return v > -(int64_t{1} << 30) && v < (int64_t{1} << 30); };
+    if (xb >= xa && fits(mx) && fits(my) && fits(mx + dmx * n) && fits(my + dmy * n) && fits(dmx) && fits(dmy)) {
+      int32_t ux = static_cast<int32_t>(mx), uy = static_cast<int32_t>(my);
+      const int32_t sx = static_cast<int32_t>(dmx), sy = static_cast<int32_t>(dmy);
+      const uint32_t w32 = static_cast<uint32_t>(mw), h32 = static_cast<uint32_t>(mh);
+      uint8_t* row = S->fb + y * kW;
+      const uint8_t* pm = S->pmap;
+      int last = -1;
+      const uint8_t* p = nullptr;
+      for (int x = xa; x <= xb; ++x, ux += sx, uy += sy) {
+        if (static_cast<uint32_t>(ux) >= w32 || static_cast<uint32_t>(uy) >= h32) continue;
+        const int cell = (uy >> 16) * Cart::Impl::kMapW + (ux >> 16);
+        if (cell != last) {
+          last = cell;
+          const int t = S->map_cells[cell];
+          p = nullptr;
+          if (t != Cart::Impl::kNoTile) {
+            if (layer && shown[t] < 0) shown[t] = (flags_of(L, "tline", flags, t) & layer) != 0;
+            if (!layer || shown[t]) {
+              if (!got[t] && !(got[t] = sprite_pixels(L, sprites, t, tmp)))
+                return luaL_error(L, "tline: cell (%d, %d) is sprite %d, and SPRITES[%d] isn't 64 hex digits", ux >> 16, uy >> 16, t, t);
+              p = got[t];
+            }
+          }
+        }
+        if (!p) continue;
+        const int v = p[((uy >> 13) & 7) * 8 + ((ux >> 13) & 7)];
+        if (!(clear >> v & 1)) row[x] = pm[v];
+      }
+      lua_settop(L, sprites - 1);
+      return 0;
+    }
+    // (map points far out of reach: the long way, from the line's own start)
+    mx = fixed(5, 0);
+    my = fixed(6, 0);
+  }
   const int dx = std::abs(x1 - x0), dy = -std::abs(y1 - y0);
   const int sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
   int err = dx + dy;
