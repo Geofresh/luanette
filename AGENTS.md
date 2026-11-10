@@ -31,7 +31,8 @@ claude mcp add luanette -- npx -y luanette mcp
 
 1. Start from a template (`new`): it already uses the whole screen, sprites, sounds and `log()`.
    For a bigger platformer, start from `examples/hilltop.lua` instead: three levels, enemies, hazards,
-   springs, scenes and lives, built on the libraries.
+   springs, scenes and lives, built on the libraries. For a racer or anything with a floor in
+   perspective, start from `examples/drift.lua` (the `mode7` library).
 2. Change it. Keep the header lines.
 3. `check` after every change. Fix any `error` (it names the line and the frame) before anything else.
 4. `run` it with input that plays it (below) and look at the shots: does it show what you meant?
@@ -73,8 +74,8 @@ function _draw()          -- every frame: draw it all again
 end
 ```
 
-- `-- title:`, `-- by:` and `-- about:` are required, in the first 12 lines. `-- api: 6` says which
-  API the cart needs (6 is the newest: use it). `-- canvas: full` gives the cart the whole screen.
+- `-- title:`, `-- by:` and `-- about:` are required, in the first 12 lines. `-- api: 7` says which
+  API the cart needs (7 is the newest: use it). `-- canvas: full` gives the cart the whole screen.
 - The picture is 128 x 128 pixels, (0, 0) at the top left, 16 colors by number: 0 black, 1 dark
   blue, 2 dark purple, 3 dark green, 4 brown, 5 dark gray, 6 light gray, 7 white, 8 red,
   9 orange, 10 yellow, 11 green, 12 blue, 13 lavender, 14 pink, 15 peach.
@@ -170,6 +171,13 @@ platformer template uses all of it. For a world bigger than 128 x 64 cells, keep
 and make `MAP` only the blocks around the player, rebuilt as they walk: `examples/overworld.lua`
 does a 4096 x 4096 px world that way. Maps need `-- api: 5`; flags, `palt`, `sspr`, blocks and
 sprites past 63 need `-- api: 6`.
+
+`tline(x0, y0, x1, y1, mx, my, mdx, mdy)` draws a line whose pixels come from the map (map point
+`mx, my` in cells, stepping `mdx, mdy` a pixel). A line a row with the steps changing per row is a
+floor in perspective: don't write that yourself, add the `mode7` library (`mode7.floor()`,
+`mode7.sprite()`, `mode7.turned()`). `rowpal(y, c, 0xRRGGBB)` shows color `c` as another color in row
+`y` only (a sky gradient from one color), and `rowshift(y, dx)` shows row `y` moved sideways (water,
+heat haze). These need `-- api: 7`.
 
 ## Libraries
 
