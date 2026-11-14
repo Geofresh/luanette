@@ -11,6 +11,7 @@
 #include "freertos/task.h"
 #include "hd.hpp"
 #include "hg/crypto.hpp"
+#include "miniz.h"
 #include "nvs.h"
 
 namespace carts::store {
@@ -32,12 +33,14 @@ std::string_view find(std::string_view name) {
 // a few ms); written only when one arrives (the erase pauses both cores ~100 ms: never mid-game).
 namespace cartstore {
 // "HGC2": 36 KB slots for 32 KB carts. The 20 KB slots of "HGC1" (16 KB carts) read as empty.
-constexpr uint32_t kMagic = 0x32434748;
+// "HGC3": the same slots, a packed cart (firmware 0.10 on): its inflated size (4 bytes), then the
+// code compressed. len and crc cover both.
+constexpr uint32_t kMagic = 0x32434748, kMagicPacked = 0x33434748;
 struct Header {
   uint32_t magic, seq, len, crc;
   char name[48];
 };
-static_assert(sizeof(Header) + carts::kMaxSource <= kSlot, "a slot holds a header and the largest cart");
+static_assert(sizeof(Header) + carts::kMaxPacked + 4 <= kSlot, "a slot holds a header and the largest cart");
 
 const esp_partition_t* part() {
   static const esp_partition_t* p = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY, "assets");
@@ -45,7 +48,8 @@ const esp_partition_t* part() {
 }
 
 bool read_header(int i, Header& h) {
-  return esp_partition_read(part(), i * kSlot, &h, sizeof h) == ESP_OK && h.magic == kMagic && h.len <= carts::kMaxSource &&
+  return esp_partition_read(part(), i * kSlot, &h, sizeof h) == ESP_OK &&
+         ((h.magic == kMagic && h.len <= carts::kMaxPacked) || (h.magic == kMagicPacked && h.len > 4 && h.len <= carts::kMaxPacked + 4)) &&
          memchr(h.name, 0, sizeof h.name);
 }
 
@@ -61,6 +65,19 @@ void load_all(std::vector<Entry>& out) {
     if (esp_partition_read(part(), i * kSlot + sizeof h, src.data(), h.len) != ESP_OK ||
         esp_rom_crc32_le(0, reinterpret_cast<const uint8_t*>(src.data()), h.len) != h.crc) {
       ESP_LOGW(kTag, "carts: slot %d (%s) is damaged; skipped", i, h.name);
+      continue;
+    }
+    if (h.magic == kMagicPacked) {  // kept packed; inflated once here for its title and about, and again when opened
+      uint32_t size;
+      std::memcpy(&size, src.data(), 4);
+      std::string packed = src.substr(4);
+      const std::string code = size <= carts::kMaxSource ? inflate(packed, size) : "";
+      if (code.empty()) {
+        ESP_LOGW(kTag, "carts: slot %d (%s) doesn't inflate; skipped", i, h.name);
+        continue;
+      }
+      Entry e{h.name, carts::Cart::header(code, "title"), carts::Cart::header(code, "about"), std::move(packed), h.seq, true, size};
+      out.push_back(std::move(e));
       continue;
     }
     out.push_back({h.name, carts::Cart::header(src, "title"), carts::Cart::header(src, "about"), std::move(src), h.seq});
@@ -84,11 +101,13 @@ bool save(const Entry& e) {
     }
   }
   if (slot < 0) slot = empty >= 0 ? empty : oldest;
+  std::string body = e.src;  // a packed cart: its inflated size first
+  if (e.packed) body.insert(0, reinterpret_cast<const char*>(&e.size), 4);
   Header h{};
-  h.magic = kMagic;
+  h.magic = e.packed ? kMagicPacked : kMagic;
   h.seq = e.seq;
-  h.len = static_cast<uint32_t>(e.src.size());
-  h.crc = esp_rom_crc32_le(0, reinterpret_cast<const uint8_t*>(e.src.data()), h.len);
+  h.len = static_cast<uint32_t>(body.size());
+  h.crc = esp_rom_crc32_le(0, reinterpret_cast<const uint8_t*>(body.data()), h.len);
   std::strncpy(h.name, e.name.c_str(), sizeof h.name - 1);
   // The source first, the header last: a slot cut off mid-write reads as empty. The slot is erased
   // a 4 KB sector at a time, with a breath between: an erase stalls the flash, and with it both
@@ -98,7 +117,7 @@ bool save(const Entry& e) {
     err = esp_partition_erase_range(part(), slot * kSlot + at, 0x1000);
     vTaskDelay(1);
   }
-  if (err == ESP_OK) err = esp_partition_write(part(), slot * kSlot + sizeof h, e.src.data(), h.len);
+  if (err == ESP_OK) err = esp_partition_write(part(), slot * kSlot + sizeof h, body.data(), h.len);
   if (err == ESP_OK) err = esp_partition_write(part(), slot * kSlot, &h, sizeof h);
   if (err != ESP_OK) ESP_LOGE(kTag, "carts: saving %s failed: %s", e.name.c_str(), esp_err_to_name(err));
   return err == ESP_OK;
@@ -117,6 +136,21 @@ bool erase(const std::string& name) {
   return found;
 }
 }  // namespace cartstore
+
+std::string inflate(const std::string& packed, size_t size) {
+  std::string out(size, '\0');
+  // (the decompressor's state is ~11 KB: on the heap, not the caller's stack)
+  auto* d = static_cast<tinfl_decompressor*>(malloc(sizeof(tinfl_decompressor)));
+  if (!d) return "";
+  tinfl_init(d);
+  size_t in_len = packed.size(), out_len = size;
+  const tinfl_status st = tinfl_decompress(d, reinterpret_cast<const mz_uint8*>(packed.data()), &in_len,
+                                           reinterpret_cast<mz_uint8*>(out.data()), reinterpret_cast<mz_uint8*>(out.data()), &out_len,
+                                           TINFL_FLAG_USING_NON_WRAPPING_OUTPUT_BUF);
+  free(d);
+  if (st != TINFL_STATUS_DONE || out_len != size) return "";
+  return out;
+}
 
 // Carts' images (carts/pack_images.py bundles), in the assets partition after the cart slots: a
 // bundle takes a run of 32 KB blocks, its header at the start of its first. Each cart has at most
@@ -336,8 +370,10 @@ std::string Library::source(std::string_view name) const {
   for (const auto& e : pushed_)
     if (e.name == name) {
       std::string src = e.src;
+      const bool packed = e.packed;
+      const size_t size = e.size;
       xSemaphoreGive(m_);
-      return src;
+      return packed ? inflate(src, size) : src;  // ("" if it doesn't inflate: the player says it won't open)
     }
   xSemaphoreGive(m_);
   for (const auto& [n, src] : hidden_)
@@ -448,12 +484,26 @@ bool Library::on_message(const hg::json::Value& msg, Outcome& out) {
       return true;
     }
     const std::string name(msg["name"].str_or(""));
-    const std::string& src = msg["lua"].as_string();
-    if (name.empty() || src.empty() || src.size() > carts::kMaxSource) {
+    // Its code as it is ("lua"), or compressed ("lua_z": raw deflate, base64; "size" bytes inflated).
+    std::string src = msg["lua"].as_string(), packed;
+    if (msg["lua_z"].is_string()) {
+      std::vector<uint8_t> z;
+      const size_t size = static_cast<size_t>(msg["size"].as_int(0));
+      if (hg::crypto::base64_decode(msg["lua_z"].str_or(""), z) && z.size() <= carts::kMaxPacked && size <= carts::kMaxSource) {
+        packed.assign(z.begin(), z.end());
+        src = inflate(packed, size);
+      }
+      if (src.empty()) {
+        ESP_LOGW(kTag, "cart message refused: %s's compressed code doesn't inflate to %d bytes", name.c_str(), static_cast<int>(size));
+        return true;
+      }
+    }
+    if (name.empty() || src.empty() || (packed.empty() && src.size() > carts::kMaxPacked)) {
       ESP_LOGW(kTag, "cart message refused: name '%s', %u bytes", name.c_str(), static_cast<unsigned>(src.size()));
       return true;
     }
-    Entry e{name, carts::Cart::header(src, "title"), carts::Cart::header(src, "about"), src, 1};
+    Entry e{name, carts::Cart::header(src, "title"), carts::Cart::header(src, "about"), packed.empty() ? src : packed, 1, !packed.empty(),
+            static_cast<uint32_t>(src.size())};
     xSemaphoreTake(m_, portMAX_DELAY);
     for (const auto& p : pushed_) e.seq = std::max(e.seq, p.seq + 1);
     xSemaphoreGive(m_);

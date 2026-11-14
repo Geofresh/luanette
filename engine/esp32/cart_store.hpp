@@ -18,8 +18,12 @@ namespace carts::store {
 
 struct Entry {
   std::string name, title, about, src;
-  uint32_t seq;  // the store's order: newer is higher
+  uint32_t seq;          // the store's order: newer is higher
+  bool packed = false;   // src is the code compressed (raw deflate), `size` bytes once inflated
+  uint32_t size = 0;
 };
+// A packed cart's code, inflated (the ROM's tinfl); "" when it doesn't come out at `size` bytes.
+std::string inflate(const std::string& packed, size_t size);
 
 // The carts the firmware carries. The firmware defines these (Luanette's: firmware/main/builtin_carts.cpp).
 namespace builtin {

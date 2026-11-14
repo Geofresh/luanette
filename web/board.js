@@ -232,15 +232,25 @@ const Board = (() => {
   // tools (the installer, push.py) can have it.
   // live: new code for the cart if it's the one running there, which keeps its state (firmware 0.9 on;
   // an older board opens it afresh). Then the answer's `live` is "" when it went in, else why not.
-  async function sendCart(port, { name, title, lua, live }) {
+  // packed: the code compressed (raw deflate), for a cart over 32 KB: it goes as "lua_z", which a board
+  // with firmware 0.10 on keeps compressed (an older one refuses it).
+  async function sendCart(port, { name, title, lua, packed, live }) {
     const link = new Link(port);
     await link.open();
     try {
       await link.ask(`time ${Math.floor(Date.now() / 1000)}`);
       const tz = posixTz();
       if (/^[A-Za-z<>+\-0-9,./:]+$/.test(tz)) await link.ask(`tz ${tz}`);
-      const before = live ? await status(link) : null;
-      const back = await link.message({ type: "cart", name, title, lua, run: true, live: !!live });
+      const before = live || packed ? await status(link) : null;
+      if (packed) {  // only firmware 0.10 on takes a compressed cart
+        const v = /^v?(\d+)\.(\d+)/.exec((before && before.firmware) || "");
+        if (v && Number(v[1]) === 0 && Number(v[2]) < 10)
+          throw new BoardError(`This cart is over 32 KB, which needs firmware 0.10 or newer; the board has ${before.firmware}. Install the latest firmware first (Board, Install).`);
+      }
+      const code = packed
+        ? { lua_z: base64(packed), size: new TextEncoder().encode(lua).length }
+        : { lua };
+      const back = await link.message({ type: "cart", name, title, ...code, run: true, live: !!live });
       if (live && before && typeof before.reloads === "number") {  // (a board that says how its live sends went)
         let now = null;
         await settled(link, async () => { now = await status(link); return now && now.reloads > before.reloads; }, "take the new code");

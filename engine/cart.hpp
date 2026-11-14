@@ -13,6 +13,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 #include "hg/json.hpp"
@@ -27,7 +28,11 @@ constexpr int kW = 128, kH = 128;
 // that stopped at the window's edge met the black margin in a hard vertical edge, which this
 // AMOLED's subpixel layout draws as a colored zig-zag (a full-width scene never has one).
 constexpr int kStageW = 410, kStageX = 12;
-constexpr size_t kMaxSource = 32 * 1024;  // 16 KB until 2026-10-14: the dice cart outgrew it
+// A cart's code without its comments: at most kMaxSource bytes, and at most kMaxPacked once
+// compressed (raw deflate), which is what a board keeps in flash. A cart of kMaxPacked or less goes as
+// it is (to any board); a bigger one goes compressed (firmware 0.10 on). 32 KB plain before API 8.
+constexpr size_t kMaxSource = 128 * 1024;
+constexpr size_t kMaxPacked = 32 * 1024;
 // check.py holds carts to 30,000 Lua instructions a frame; the board counts none (a count hook puts
 // Lua's VM in trace mode: every instruction pays a call, ~35% of a frame measured). It stops a frame
 // that runs too long instead: the host arms a deadline, and Cart::interrupt() hooks the VM then.
@@ -54,8 +59,9 @@ struct Input {
 // 2: the layer (hd), its images, caps(), touch(true); 3: the cart's own sounds and music (SOUNDS,
 // MUSIC, sfx 8-63, music()); 4: log(), and spaces in sprite strings; 5: maps; 6: sprites 0-255,
 // spr()'s blocks, sspr(), palt(), sprite flags (FLAGS, fget(), fset(), map()'s layer); 7: tline(),
-// rowshift(), rowpal().
-constexpr int kApiVersion = 7;
+// rowshift(), rowpal(); 8: carts over 32 KB (sent and kept compressed), maps of all 256 sprites,
+// up to 256 x 256 cells, and several at once.
+constexpr int kApiVersion = 8;
 constexpr int kLogLine = 200;   // a log() line's characters, at most (the rest is cut)
 constexpr int kLogLines = 20;   // log() lines a frame, at most (then one saying more were dropped)
 
@@ -136,6 +142,24 @@ class Host {
   // tools/check.py counts them (every 100); 0: not counted. The playground counts, so a cart that
   // passes there passes check.py too; the board relies on its time limit instead.
   virtual int frame_budget() const { return 0; }
+};
+
+// Where a cart's frames went (Cart::profile), since profiling was turned on: Lua instructions by the
+// cart's line and by its functions (each by the line it's defined on), sampled every 100 as the
+// frame budget counts them (only hosts that count: the playground, the command-line tool), and each
+// drawing call's calls and the pixels it drew (pixels: a build with LUANETTE_PROFILE).
+enum DrawCall { kDrawCls, kDrawPset, kDrawLine, kDrawRect, kDrawRectfill, kDrawCirc, kDrawCircfill, kDrawPrint, kDrawSpr,
+                kDrawSspr, kDrawMap, kDrawTline, kDrawTrifill, kDrawCalls };
+constexpr const char* kDrawNames[kDrawCalls] = {"cls", "pset", "line", "rect", "rectfill", "circ", "circfill",
+                                                "print", "spr", "sspr", "map", "tline", "trifill"};
+struct Profile {
+  bool on = false;
+  int frames = 0;
+  int64_t ops = 0, other = 0;  // other: outside the cart's own code (the ui helpers)
+  std::unordered_map<int, int64_t> lines, functions;
+  struct Calls {
+    int64_t calls = 0, pixels = 0;
+  } draw[kDrawCalls];
 };
 
 struct Frame {
@@ -220,6 +244,11 @@ class Cart {
     period_us_ = period_us;
   }
 
+  // Profiling (Profile): on clears what was gathered; off stops gathering, keeping it.
+  void profile(bool on);
+  const Profile& profile() const { return profile_; }
+  Profile& profile_data() { return profile_; }
+
   // The header comments (`-- title: ...`), "" when missing.
   static std::string header(std::string_view src, std::string_view key);
 
@@ -252,6 +281,7 @@ class Cart {
   uint16_t row_mask_[kH] = {};      // rowpal(): a bit per color a row shows its own way
   uint32_t row_rgb_[kH][16] = {};
   uint32_t rows_ver_ = 0;
+  Profile profile_;
   Impl* impl_ = nullptr;
 };
 

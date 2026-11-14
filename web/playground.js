@@ -971,10 +971,18 @@ async function send() {
     say("The board wants these at the top first: " + missing.map((k) => `-- ${k}: ...`).join(", "), true);
     return;
   }
-  const bytes = new TextEncoder().encode(src).length;
+  const raw = new TextEncoder().encode(src), bytes = raw.length;
   if (bytes > lw.max_source()) {
     say(`The cart is ${bytes} bytes without its comments; the board takes ${lw.max_source()}.`, true);
     return;
+  }
+  let packed = null;  // over 32 KB it goes compressed, and has to fit the board's slot that way
+  if (bytes > lw.max_packed()) {
+    packed = await through(raw, new CompressionStream("deflate-raw"));
+    if (packed.length > lw.max_packed()) {
+      say(`The cart is ${packed.length} bytes compressed (${bytes} without its comments); the board keeps at most ${lw.max_packed()}.`, true);
+      return;
+    }
   }
   const title = /^--\s*title\s*:\s*(.+)$/m.exec(head)[1].trim();
   let port;
@@ -983,7 +991,7 @@ async function send() {
   $("send").disabled = true;
   say(`Sending ${title} to the board…`);
   try {
-    const back = await Board.sendCart(port, { name: plainName(current), title, lua: src, live });
+    const back = await Board.sendCart(port, { name: plainName(current), title, lua: src, packed, live });
     const kept = `It stays in its flash` + (isExample(current) ? ", in place of the built-in one." : " until you remove it.");
     if (back.live === "") say(`Live: the change went into ${title} as it runs on the board, its state kept. ${kept}`);
     else if (back.live && back.live !== "it wasn't running, so it started") say(`${title} is on the board, but the change didn't go into the running cart: ${back.live.split("\n")[0]}. Open it again there to start it over.`, true);
@@ -1492,6 +1500,7 @@ async function main() {
     error: mod.cwrap("lw_error", "string", []),
     shipped: mod.cwrap("lw_shipped", "string", ["string"]),
     max_source: mod.cwrap("lw_max_source", "number", []),
+    max_packed: mod.cwrap("lw_max_packed", "number", []),
     audio_start: mod.cwrap("lw_audio_start", null, ["number"]),
     audio_busy: mod.cwrap("lw_audio_busy", "number", []),
     audio_render: mod.cwrap("lw_audio_render", "number", ["number"]),

@@ -27,6 +27,7 @@ jobs:
       - run: for c in tests/carts/primitives.lua tests/carts/triangles.lua tests/carts/lazy.lua tests/carts/sounds.lua tests/carts/log.lua tests/carts/sprites.lua tests/carts/map.lua tests/carts/api.lua tests/carts/sprites2.lua tests/carts/raster.lua; do python tests/parity.py "$c"; done
       - run: python tests/hang.py  # a cart's own pcall can't keep a stopped frame running
       - run: python tests/extra.py  # a port's own calls (Host::extra_api, check.py's EXTRA) reach a cart alike
+      - run: python tests/big.py  # carts over 32 KB: checked compressed, run, sent compressed
       - run: python tools/check.py tests/carts/api.lua > /tmp/api.json && python tools/api_check.py /tmp/api.json  # every name documented
 
   firmware:

@@ -23,6 +23,7 @@ import os
 import random
 import re
 import subprocess
+import zlib
 import sys
 import tempfile
 import time
@@ -36,11 +37,12 @@ from cartsrc import shipped  # the cart as it ships: comments out
 
 W = H = 128
 SCALE = 3
-MAX_SOURCE = 32 * 1024
+MAX_SOURCE = 128 * 1024  # engine/cart.hpp kMaxSource: the code without its comments (32 KB before API 8)
+MAX_PACKED = 32 * 1024   # kMaxPacked: that, compressed (raw deflate), as a board keeps it
 BUDGET = 30_000
 MAX_SAVE = 2048
-API_VERSION = 7  # engine/cart.hpp kApiVersion: 1 before the full-color layer, 2 with it, 3 with sound and music, 4 with log() and spaced sprites, 5 with maps, 6 with sprites 0-255, blocks, sspr, palt and flags, 7 with tline, rowshift and rowpal
-MAP_W, MAP_H = 128, 64  # the most a map has, in cells (engine/cart.cpp)
+API_VERSION = 8  # engine/cart.hpp kApiVersion: 1 before the full-color layer, 2 with it, 3 with sound and music, 4 with log() and spaced sprites, 5 with maps, 6 with sprites 0-255, blocks, sspr, palt and flags, 7 with tline, rowshift and rowpal, 8 with carts over 32 KB and the bigger maps
+MAP_MAX = 256  # the most a map has, in cells each way (engine/cart.cpp kMapMax; 128 x 64 before API 8)
 TILES = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ+/"  # a map cell's character: sprites 0-63
 # The board's runtime built for this computer (engine/host/cartrun.cpp): a 3D cart's preview
 # is drawn by it (the stage's own code), and it must agree that the cart runs.
@@ -132,9 +134,9 @@ class Cart:
         self.used_map = False          # map(), mget(), mset() or msize() (API 5)
         self.used_api6 = set()         # what it used of API 6 (sprites past 63, blocks, sspr, palt, flags)
         self.used_api7 = set()         # what it used of API 7 (tline, rowshift, rowpal)
-        self.map_cells: list[list[int | None]] = []  # MAP read: rows of sprite numbers, None empty
-        self.map_w = 0
-        self.map_table = None          # the MAP table read (another one is read again)
+        self.maps: list[dict] = []     # the maps read: {table, rows, hex, cells (rows of sprite numbers, None empty), w, epoch}
+        self.map_epoch = 1             # moves each frame: a map read before is checked against its table again
+        self.used_api8 = set()         # what it used of API 8 (hex maps, several maps, bigger maps)
         self.log_frame, self.log_count = -1, 0
         self.scene = None  # a 3D cart's, once it makes anything 3D
         self.hd = None  # the full-color layer's calls, once the cart draws on it
@@ -423,52 +425,86 @@ class Cart:
         flags[n] = v
 
     # -- the map (API 5), as engine/cart.cpp's read_map, map, mget, mset, msize --
-    def _read_map(self, who):
+    def _map(self, who, m=None, at=0):
+        """As engine/cart.cpp's get_map: the map (MAP, or the table given as argument `at`), read when it's
+        new or its rows have changed since; a character a cell (0-63), or two hex digits with hex = true."""
         self.used_map = True
-        m = self.env["MAP"] if self.env is not None else None
-        if m is None or self.lua.globals().type(m) != "table":
-            raise ValueError(f"{who}: no MAP table")
-        if self.map_table is not None and self.lua.globals().rawequal(m, self.map_table):
-            return
-        rows = self.lua.globals().rawlen(m)
-        if rows > MAP_H:
-            raise ValueError(f"{who}: MAP has {rows} rows; a map has at most {MAP_H}")
-        cells, w = [], 0
-        for r in range(rows):
-            row = self.lua.globals().rawget(m, r + 1)
+        g = self.lua.globals()
+        if m is None:
+            m = self.env["MAP"] if self.env is not None else None
+            if m is None or g.type(m) != "table":
+                raise ValueError(f"{who}: no MAP table")
+            label = lambda r: f"MAP[{r}]"
+        else:
+            if g.type(m) != "table":
+                raise ValueError(f"{who}: argument {at} should be a map (a table of rows)")
+            self.used_api8.add("several maps")
+            label = lambda r: f"the map's row {r}"
+        e = next((e for e in self.maps if g.rawequal(e["table"], m)), None)
+        if e is not None and e["epoch"] == self.map_epoch:
+            return e
+        n = g.rawlen(m)
+        rows = [g.rawget(m, r + 1) for r in range(n)]
+        hexed = self._true(m["hex"])
+        if e is not None and rows == e["rows"] and hexed == e["hex"]:
+            e["epoch"] = self.map_epoch
+            return e
+        if n > MAP_MAX:
+            raise ValueError(f"{who}: the map has {n} rows; a map has at most {MAP_MAX}")
+        per = 2 if hexed else 1
+        w = 0
+        for r, row in enumerate(rows):
             if not isinstance(row, str):
-                raise ValueError(f"{who}: MAP[{r + 1}] isn't a string of cells")
-            if len(row) > MAP_W:
-                raise ValueError(f"{who}: MAP[{r + 1}] is {len(row)} cells wide; a map has at most {MAP_W}")
-            out = []
-            for c, ch in enumerate(row):
-                if ch == ".":
-                    out.append(None)
-                elif ch in TILES:
-                    out.append(TILES.index(ch))
+                raise ValueError(f"{who}: {label(r + 1)} isn't a string of cells")
+            if hexed and len(row) % 2:
+                raise ValueError(f"{who}: {label(r + 1)} is {len(row)} characters: a hex map's cells are two each")
+            if len(row) // per > MAP_MAX:
+                raise ValueError(f"{who}: {label(r + 1)} is {len(row) // per} cells wide; a map has at most {MAP_MAX}")
+            w = max(w, len(row) // per)
+        cells = []
+        for r, row in enumerate(rows):
+            out = [None] * w
+            for c in range(len(row) // per):
+                if hexed:
+                    cell = row[2 * c:2 * c + 2]
+                    if cell == "..":
+                        continue
+                    if not re.fullmatch(r"[0-9a-fA-F]{2}", cell):
+                        raise ValueError(f"{who}: {label(r + 1)} has '{cell}' at cell {c}; a cell is '..' or a sprite, 00 to ff")
+                    out[c] = int(cell, 16)
                 else:
-                    raise ValueError(f"{who}: MAP[{r + 1}] has '{ch}' at cell {c}; a cell is '.' or a sprite, "
-                                     "0-9 a-z A-Z + / for 0 to 63")
+                    ch = row[c]
+                    if ch == ".":
+                        continue
+                    if ch not in TILES:
+                        raise ValueError(f"{who}: {label(r + 1)} has '{ch}' at cell {c}; a cell is '.' or a sprite, "
+                                         "0-9 a-z A-Z + / for 0 to 63 (hex = true for more)")
+                    out[c] = TILES.index(ch)
             cells.append(out)
-            w = max(w, len(row))
-        self.map_cells = [row + [None] * (w - len(row)) for row in cells]
-        self.map_w = w
-        self.map_table = m
+        if hexed:
+            self.used_api8.add("hex maps")
+        if w > 128 or n > 64:
+            self.used_api8.add("maps over 128 x 64")
+        if e is None:
+            e = {"table": m}
+            self.maps.append(e)
+        e.update(rows=rows, hex=hexed, cells=cells, w=w, epoch=self.map_epoch)
+        return e
 
-    def map(self, cx=0, cy=0, sx=0, sy=0, cw=None, ch=None, layer=None):
-        self._read_map("map")
+    def map(self, cx=0, cy=0, sx=0, sy=0, cw=None, ch=None, layer=None, m=None):
+        mp = self._map("map", m, 8)
         f = lambda v: int(math.floor(v or 0))
         cx, cy, sx, sy, layer = f(cx), f(cy), f(sx), f(sy), f(layer)
         if layer:
             self.used_api6.add("map's layer")
         flags = self._flags_table() if layer else None
         shown = {}
-        cw = self.map_w if cw is None else f(cw)
-        ch = len(self.map_cells) if ch is None else f(ch)
+        cw = mp["w"] if cw is None else f(cw)
+        ch = len(mp["cells"]) if ch is None else f(ch)
         sprites = None
-        for r in range(max(cy, 0), min(cy + ch, len(self.map_cells))):
-            for c in range(max(cx, 0), min(cx + cw, self.map_w)):
-                t = self.map_cells[r][c]
+        for r in range(max(cy, 0), min(cy + ch, len(mp["cells"]))):
+            for c in range(max(cx, 0), min(cx + cw, mp["w"])):
+                t = mp["cells"][r][c]
                 if t is None:
                     continue
                 if layer:
@@ -486,10 +522,10 @@ class Cart:
                     raise ValueError(f"map: cell ({c}, {r}) is sprite {t}, and SPRITES[{t}] isn't 64 hex digits")
                 self._blit8([int(h, 16) for h in s], sx + (c - cx) * 8, sy + (r - cy) * 8, False, False)
 
-    def tline(self, x0, y0, x1, y1, mx=None, my=None, mdx=None, mdy=None, layer=None):
+    def tline(self, x0, y0, x1, y1, mx=None, my=None, mdx=None, mdy=None, layer=None, m=None):
         """As engine/cart.cpp's f_tline: line()'s pixels, each from the map, stepping in 16.16 fixed point."""
         self.used_api7.add("tline")
-        self._read_map("tline")
+        mp = self._map("tline", m, 10)
         f = lambda v: int(math.floor(v))
         x0, y0, x1, y1 = f(x0), f(y0), f(x1), f(y1)
 
@@ -508,14 +544,14 @@ class Cart:
             raise ValueError("tline: no SPRITES table")
         flags = self._flags_table() if layer else None
         got, shown = {}, {}
-        mw, mh = self.map_w << 16, len(self.map_cells) << 16
+        mw, mh = mp["w"] << 16, len(mp["cells"]) << 16
         dx, dy = abs(x1 - x0), -abs(y1 - y0)
         sx, sy = (1 if x0 < x1 else -1), (1 if y0 < y1 else -1)
         err = dx + dy
         while True:
             if 0 <= mx < mw and 0 <= my < mh:
                 c, r = mx >> 16, my >> 16
-                t = self.map_cells[r][c]
+                t = mp["cells"][r][c]
                 if t is not None:
                     draw = True
                     if layer:
@@ -544,27 +580,37 @@ class Cart:
             mx += dmx
             my += dmy
 
-    def mget(self, cx, cy):
-        self._read_map("mget")
+    def mget(self, cx, cy, m=None):
+        mp = self._map("mget", m, 3)
         c, r = int(math.floor(cx)), int(math.floor(cy))
-        if 0 <= r < len(self.map_cells) and 0 <= c < self.map_w:
-            return self.map_cells[r][c]
+        if 0 <= r < len(mp["cells"]) and 0 <= c < mp["w"]:
+            return mp["cells"][r][c]
         return None
 
-    def mset(self, cx, cy, n=None):
-        self._read_map("mset")
+    def mset(self, cx, cy, n=None, m=None):
+        """As engine/cart.cpp's f_mset: the cell, and its row's string in the map's table (API 8)."""
+        mp = self._map("mset", m, 4)
         c, r = int(math.floor(cx)), int(math.floor(cy))
-        if not (0 <= r < len(self.map_cells) and 0 <= c < self.map_w):
-            raise ValueError(f"mset: ({c}, {r}) is off the map, which is {self.map_w} x {len(self.map_cells)} cells")
+        if not (0 <= r < len(mp["cells"]) and 0 <= c < mp["w"]):
+            raise ValueError(f"mset: ({c}, {r}) is off the map, which is {mp['w']} x {len(mp['cells'])} cells")
+        hexed = mp["hex"]
         if n is not None:
             n = int(math.floor(n))
-            if not 0 <= n <= 63:
-                raise ValueError(f"mset: {n} isn't a sprite of the map's, 0-63")
-        self.map_cells[r][c] = n
+            if not 0 <= n <= (255 if hexed else 63):
+                raise ValueError(f"mset: {n} isn't a sprite, 0-255" if hexed
+                                 else f"mset: {n} isn't a sprite of the map's, 0-63 (a hex map takes 0-255)")
+        per = 2 if hexed else 1
+        row = mp["rows"][r]
+        row = row + "." * max(0, (c + 1) * per - len(row))
+        cell = "." * per if n is None else (f"{n:02x}" if hexed else TILES[n])
+        row = row[:c * per] + cell + row[(c + 1) * per:]
+        self.lua.globals().rawset(mp["table"], r + 1, row)
+        mp["rows"][r] = row
+        mp["cells"][r][c] = n
 
-    def msize(self):
-        self._read_map("msize")
-        return self.map_w, len(self.map_cells)
+    def msize(self, m=None):
+        mp = self._map("msize", m, 1)
+        return mp["w"], len(mp["cells"])
 
     # palette(i, 0xRRGGBB) / palette(i) / palette(): what each index shows (the preview uses it).
     def palette(self, i=None, rgb=None):
@@ -744,6 +790,7 @@ class Cart:
         if self.fps != self.clock_rate:
             self.base_us, self.base_n, self.clock_rate = self.time_us(), f - 1, self.fps
         self.frame = f
+        self.map_epoch += 1
 
     def settle_rate(self):  # after a frame, as Cart::frame: a lazy cart's next rate
         if self.idle:
@@ -1545,6 +1592,12 @@ def song_problem(start: int, pattern_text, sound_text) -> str:
     return ""
 
 
+def packed_size(src: str) -> int:
+    """The code compressed as push.py sends a cart over 32 KB: raw deflate, the best zlib does."""
+    c = zlib.compressobj(9, zlib.DEFLATED, -15)
+    return len(c.compress(src.encode()) + c.flush())
+
+
 def shipped_src(path: Path) -> str:
     return shipped(path.read_text())
 
@@ -1558,6 +1611,12 @@ def check(path: Path, frames: int, preview: Path | None, theme: str, dump_input:
     if res["bytes"] > MAX_SOURCE:
         res["error"] = f"cart is {res['bytes']} bytes without its comments; the limit is {MAX_SOURCE}"
         return res
+    if res["bytes"] > MAX_PACKED:  # sent and kept compressed (API 8): that has to fit a board's slot
+        res["packed_bytes"] = packed_size(src)
+        if res["packed_bytes"] > MAX_PACKED:
+            res["error"] = (f"cart is {res['packed_bytes']} bytes compressed ({res['bytes']} without its comments); "
+                            f"a board keeps at most {MAX_PACKED}")
+            return res
     head = "\n".join(src.splitlines()[:12])
     missing = [k for k in ("title", "by", "about") if not re.search(rf"^--\s*{k}\s*:\s*\S", head, re.M)]
     if missing:
@@ -1724,6 +1783,14 @@ def check(path: Path, frames: int, preview: Path | None, theme: str, dump_input:
         res.setdefault("warnings", []).append(
             "it has a map (API 5): add '-- api: 5' to its header, so a board with older firmware says it needs "
             "an update instead of failing at its first map call")
+    if api < 8 and cart.used_api8:
+        res.setdefault("warnings", []).append(
+            f"it uses API 8 ({', '.join(sorted(cart.used_api8))}): add '-- api: 8' to its header, so a board with older "
+            "firmware says it needs an update instead of failing at its first call")
+    if api < 8 and res["bytes"] > MAX_PACKED:
+        res.setdefault("warnings", []).append(
+            f"it's {res['bytes']} bytes without its comments, over the 32 KB a board took before API 8: add '-- api: 8' "
+            "to its header, so a board with older firmware says it needs an update instead of refusing it")
     if api < 7 and cart.used_api7:
         res.setdefault("warnings", []).append(
             f"it uses API 7 ({', '.join(sorted(cart.used_api7))}): add '-- api: 7' to its header, so a board with older "

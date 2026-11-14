@@ -33,7 +33,9 @@ export const PLAYGROUND = "https://geofresh.github.io/luanette/";
 const Gif = require(path.join(LIB, "gif.js"));
 const Tables = require(path.join(LIB, "tables.js"));
 
-export const BUDGET = 30000, MAX_SOURCE = 32 * 1024, API_VERSION = 7;
+export const BUDGET = 30000, MAX_SOURCE = 128 * 1024, MAX_PACKED = 32 * 1024, API_VERSION = 8;
+// A cart's code compressed as it goes to a board when it's over MAX_PACKED (raw deflate, zlib's best).
+export const packedSize = (code) => zlib.deflateRawSync(Buffer.from(code), { level: 9 }).length;
 const W = 410, H = 502;  // the glass
 const BUTTONS = { left: 1, right: 2, up: 4, down: 8, a: 16, b: 32 };
 
@@ -179,6 +181,10 @@ export async function check(src, name, opts = {}) {
   const shipped = e.shipped(src);
   const res = { ok: false, cart: opts.file || name, bytes: Buffer.byteLength(shipped), source_bytes: Buffer.byteLength(src) };
   if (res.bytes > MAX_SOURCE) return { ...res, error: `cart is ${res.bytes} bytes without its comments; the limit is ${MAX_SOURCE}` };
+  if (res.bytes > MAX_PACKED) {  // sent and kept compressed (API 8): that has to fit a board's slot
+    res.packed_bytes = packedSize(shipped);
+    if (res.packed_bytes > MAX_PACKED) return { ...res, error: `cart is ${res.packed_bytes} bytes compressed (${res.bytes} without its comments); a board keeps at most ${MAX_PACKED}` };
+  }
   const head = shipped.split("\n").slice(0, 12).join("\n");
   const missing = ["title", "by", "about"].filter((k) => !new RegExp(`^--\\s*${k}\\s*:\\s*\\S`, "m").test(head));
   if (missing.length) return { ...res, error: "missing header comment(s) at the top: " + missing.map((k) => `-- ${k}: ...`).join(", ") };
@@ -226,6 +232,7 @@ export async function check(src, name, opts = {}) {
   // API 6, by what the source shows (check.py also sees sprites past 63 and spr's blocks as they run)
   const api6 = [[/\bsspr\s*\(/, "sspr"], [/\bpalt\s*\(/, "palt"], [/\bf(get|set)\s*\(|^\s*FLAGS\s*=/m, "flags"]].filter(([re]) => re.test(code)).map(([, w]) => w);
   const api7 = [[/\btline\s*\(/, "tline"], [/\browshift\s*\(/, "rowshift"], [/\browpal\s*\(/, "rowpal"]].filter(([re]) => re.test(code)).map(([, w]) => w);
+  if (api < 8 && res.bytes > MAX_PACKED) warn(`it's ${res.bytes} bytes without its comments, over the 32 KB a board took before API 8: add '-- api: 8' to its header, so a board with older firmware says it needs an update instead of refusing it`);
   if (api < 7 && api7.length) warn(`it uses API 7 (${api7.join(", ")}): add '-- api: 7' to its header, so a board with older firmware says it needs an update instead of failing at its first call`);
   if (api < 6 && api6.length) warn(`it uses API 6 (${api6.join(", ")}): add '-- api: 6' to its header, so a board with older firmware says it needs an update instead of failing at its first call`);
   if (api < 4 && run.log.length) warn("it calls log() (API 4): add '-- api: 4' to its header, so a board with older firmware says it needs an update instead of failing at its first log call");

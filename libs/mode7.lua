@@ -1,4 +1,4 @@
--- lib: mode7 2, api 7: the map as a floor in perspective (F-Zero, Mario Kart), a map turned and zoomed, and sprites standing on the floor
+-- lib: mode7 3, api 7: the map as a floor in perspective (F-Zero, Mario Kart), a map turned and zoomed, and sprites standing on the floor
 -- A camera looks along the map from (mode7.x, mode7.y), in map pixels, `height` pixels above it,
 -- turned `angle` turns (0 looks up the map, 0.25 to the right). In _draw: mode7.floor() draws the
 -- floor below the horizon, row by row with tline(); mode7.sprite() stands a sprite on it. Draw the
@@ -17,15 +17,15 @@ end
 
 -- The floor: every row from the horizon down to y1 (127), each a line across the map at the
 -- distance that row sees. Rows farther than mode7.far are left for the sky. layer: only cells with
--- those sprite flags (map()'s layer).
-function mode7.floor(y1, layer)
+-- those sprite flags (map()'s layer); m: another map than MAP (a table of rows, API 8).
+function mode7.floor(y1, layer, m)
   axes()
   local x, y, hf, hz, far = mode7.x / 8, mode7.y / 8, mode7.height * mode7.focal, mode7.horizon, mode7.far
   local lx, ly = (fx * mode7.focal - rx * 64) / 8, (fy * mode7.focal - ry * 64) / 8  -- the row's left end, per unit of s
   local sx, sy = rx / 8, ry / 8
   for row = max(hz + 1, flr(hz + hf / far) + 1), y1 or 127 do  -- (rows nearer the horizon are farther than far)
     local s = hf / (row - hz) / mode7.focal  -- map pixels a screen pixel, at the distance this row sees
-    tline(0, row, 127, row, x + lx * s, y + ly * s, sx * s, sy * s, layer)
+    tline(0, row, 127, row, x + lx * s, y + ly * s, sx * s, sy * s, layer, m)
   end
 end
 
@@ -54,14 +54,15 @@ function mode7.sprite(n, wx, wy, size, w, h, flip)
 end
 
 -- The map turned and zoomed, seen from above: map point (cx, cy), in pixels, at the middle of the
--- screen, turned `angle` turns, `zoom` screen pixels a map pixel. Rows y0 to y1 (0 to 127).
-function mode7.turned(cx, cy, angle, zoom, y0, y1, layer)
+-- screen, turned `angle` turns, `zoom` screen pixels a map pixel. Rows y0 to y1 (0 to 127); layer
+-- and m as floor()'s.
+function mode7.turned(cx, cy, angle, zoom, y0, y1, layer, m)
   local s, c = -sin(angle), cos(angle)
   local k = 1 / zoom
   for row = y0 or 0, y1 or 127 do
     local dy = (row - 64) * k
     local mx, my = cx - c * 64 * k - s * dy, cy - s * 64 * k + c * dy
-    tline(0, row, 127, row, mx / 8, my / 8, c * k / 8, s * k / 8, layer)
+    tline(0, row, 127, row, mx / 8, my / 8, c * k / 8, s * k / 8, layer, m)
   end
 end
 -- end lib: mode7

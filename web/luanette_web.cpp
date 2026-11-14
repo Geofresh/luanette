@@ -431,6 +431,7 @@ EMSCRIPTEN_KEEPALIVE const char* lw_shipped(const char* src) {
   return out.c_str();
 }
 EMSCRIPTEN_KEEPALIVE int lw_max_source() { return static_cast<int>(carts::kMaxSource); }
+EMSCRIPTEN_KEEPALIVE int lw_max_packed() { return static_cast<int>(carts::kMaxPacked); }  // compressed, as a board keeps it
 
 // ---- the cart's own sounds and song, and the sound editor's -------------------------------
 // The page has audio at `rate` (its AudioContext's): a synth for the cart's sounds and song.

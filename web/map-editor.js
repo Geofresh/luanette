@@ -1,20 +1,22 @@
 // The playground's map editor. It reads a map table from the code (MAP, or any table of rows such
-// as LEVEL1, a string a row, a character a cell), lets you paint it with the cart's sprites, and
-// writes it back after each stroke. map() draws it; mget() and mset() read and change its cells.
+// as LEVEL1, a string a row: a character a cell, or two hex digits with hex = true), lets you paint
+// it with the cart's sprites, and writes it back after each stroke. map() draws it; mget() and mset()
+// read and change its cells. Painting a sprite past 63 makes a map hex (API 8).
 // Uses the playground's globals: $, code, lw, say, typing; and Tables (web/tables.js).
 "use strict";
 
 const MapEditor = (() => {
   const { readTable, readNumbers, withApi } = Tables;
   const TILES = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ+/";  // sprites 0-63; "." is empty
-  const MAX_W = 128, MAX_H = 64, NEW_W = 32, NEW_H = 16;
+  const MAX_W = 256, MAX_H = 256, NEW_W = 32, NEW_H = 16;
   const INTRO = "the map: a character a cell, \".\" empty, else a sprite (the playground's map editor writes this table)";
-  // NAME = { then a row a line, "....", then } at the start of a line.
-  const TABLE = /^([A-Za-z_]\w*)[ \t]*=[ \t]*\{[ \t]*\n((?:[ \t]*"[.0-9a-zA-Z+/]*",?[ \t]*(?:--[^\n]*)?\n)*)\}/gm;
+  // NAME = { then maybe hex = true, then a row a line, "....", then } at the start of a line.
+  const TABLE = /^([A-Za-z_]\w*)[ \t]*=[ \t]*\{[ \t]*\n([ \t]*hex[ \t]*=[ \t]*true,?[ \t]*(?:--[^\n]*)?\n)?((?:[ \t]*"[.0-9a-zA-Z+/]*",?[ \t]*(?:--[^\n]*)?\n)*)\}/gm;
 
   let maps = [];      // [{name, rows}] found in the code
   let name = null;    // the one being edited
-  let rows = [];      // its rows: strings of cells, all the same width
+  let rows = [];      // its rows: arrays of sprite numbers (-1 empty), all the same width
+  let hex = false;    // written two hex digits a cell (sprites 0-255), not a character
   let tile = 1, tool = "paint", zoom = 0;
   let sprites = new Map(), colors = [];
   let flags = new Map(), showFlag = -1;  // FLAGS; the flag whose cells are marked (-1: none)
@@ -25,19 +27,26 @@ const MapEditor = (() => {
   function find(src) {
     const out = [];
     for (const m of src.matchAll(TABLE)) {
-      const r = [...m[2].matchAll(/"([.0-9a-zA-Z+/]*)"/g)].map((x) => x[1]);
-      out.push({ name: m[1], rows: r, index: m.index, length: m[0].length });
+      const r = [...m[3].matchAll(/"([.0-9a-zA-Z+/]*)"/g)].map((x) => x[1]);
+      out.push({ name: m[1], hex: !!m[2], rows: r, index: m.index, length: m[0].length });
     }
     // MAP first: it's the one map() draws
     return out.sort((a, b) => (b.name === "MAP") - (a.name === "MAP"));
   }
   const width = (r) => Math.max(1, ...r.map((s) => s.length));
-  const square = (r) => { const w = width(r); return r.map((s) => s.padEnd(w, ".")); };
+  // A row's string as cells, and back.
+  const decode = (s, isHex) => isHex
+    ? Array.from({ length: s.length >> 1 }, (_, i) => { const c = s.slice(2 * i, 2 * i + 2); return c === ".." ? -1 : parseInt(c, 16); })
+    : [...s].map((ch) => (ch === "." ? -1 : TILES.indexOf(ch)));
+  const encode = (r, isHex) => r.map((n) => (isHex ? (n < 0 ? ".." : n.toString(16).padStart(2, "0")) : n < 0 ? "." : TILES[n])).join("");
+  const square = (r) => { const w = width(r); return r.map((c) => c.concat(Array(w - c.length).fill(-1))); };
 
   function load() {
     maps = find(code.value);
     if (!maps.some((m) => m.name === name)) name = maps.length ? maps[0].name : null;
-    rows = name ? square(maps.find((m) => m.name === name).rows) : [];
+    const m = name && maps.find((x) => x.name === name);
+    hex = !!(m && m.hex);
+    rows = m ? square(m.rows.map((s) => decode(s, hex))) : [];
     if (code.value !== written) {
       past = [];
       future = [];
@@ -48,17 +57,17 @@ const MapEditor = (() => {
     sprites = new Map();
     for (const [n, s] of t.map || []) {
       const d = s.text.replace(/\s+/g, "");
-      if (/^[0-9a-fA-F]{64}$/.test(d) && n >= 0 && n < 64) sprites.set(n, { px: [...d].map((h) => parseInt(h, 16)), name: s.name });
+      if (/^[0-9a-fA-F]{64}$/.test(d) && n >= 0 && n < 256) sprites.set(n, { px: [...d].map((h) => parseInt(h, 16)), name: s.name });
     }
     flags = readNumbers(code.value, "FLAGS").map || new Map();
     if (!sprites.has(tile) && sprites.size) tile = [...sprites.keys()].sort((a, b) => a - b).find((n) => n > 0) ?? [...sprites.keys()][0];
   }
-  const block = (n, r) => `${n} = {\n${r.map((s) => `  "${s}",`).join("\n")}\n}`;
+  const block = (n, r, isHex) => `${n} = {\n${isHex ? "  hex = true,\n" : ""}${r.map((s) => `  "${s}",`).join("\n")}\n}`;
   function save() {
     const src = code.value, m = find(src).find((x) => x.name === name);
     if (!m) return;
-    let out = src.slice(0, m.index) + block(name, rows) + src.slice(m.index + m.length);
-    out = withApi(out, 5);  // maps need API 5
+    let out = src.slice(0, m.index) + block(name, rows.map((r) => encode(r, hex)), hex) + src.slice(m.index + m.length);
+    out = withApi(out, hex || width(rows) > 128 || rows.length > 64 ? 8 : 5);  // maps need API 5; hex ones and big ones 8
     written = out;
     if (out === src) return;
     code.value = out;
@@ -67,7 +76,7 @@ const MapEditor = (() => {
   // A new MAP table, after SPRITES (or the header), and the api it needs.
   function create() {
     const src = code.value, r = Array.from({ length: NEW_H }, () => ".".repeat(NEW_W));
-    const text = `-- ${INTRO}\n${block("MAP", r)}\n`;
+    const text = `-- ${INTRO}\n${block("MAP", r, false)}\n`;
     const sp = /^SPRITES\s*=\s*\{[^]*?^\}\n?/m.exec(src);
     let out;
     if (sp) out = src.slice(0, sp.index + sp[0].length) + text + src.slice(sp.index + sp[0].length);
@@ -86,7 +95,7 @@ const MapEditor = (() => {
   }
 
   // ---- undo ---------------------------------------------------------------------------------------
-  const snapshot = () => JSON.stringify({ name, rows });
+  const snapshot = () => JSON.stringify({ name, rows, hex });
   function remember() {
     past.push(snapshot());
     if (past.length > 100) past.shift();
@@ -97,6 +106,7 @@ const MapEditor = (() => {
     const d = JSON.parse(state);
     name = d.name;
     rows = d.rows;
+    hex = d.hex;
     save();
     show();
   }
@@ -105,7 +115,7 @@ const MapEditor = (() => {
 
   // ---- drawing ----------------------------------------------------------------------------------
   const cell = () => zoom || (matchMedia("(max-width: 600px)").matches ? 16 : 24);
-  const at = (x, y) => { const ch = rows[y]?.[x]; return ch && ch !== "." ? TILES.indexOf(ch) : -1; };
+  const at = (x, y) => rows[y]?.[x] ?? -1;
   function drawTile(g, n, x, y, size) {  // sprite n, `size` pixels a side
     const s = sprites.get(n), p = size / 8;
     if (!s) {  // a cell naming a sprite SPRITES doesn't have: shown, so it can be fixed
@@ -167,9 +177,9 @@ const MapEditor = (() => {
     const y = Math.floor((e.clientY - r.top) / (r.height / ($("map-canvas").height / c)));
     return x >= 0 && y >= 0 && x < width(rows) && y < rows.length ? [x, y] : null;
   }
-  function set(x, y, ch) {
-    if (rows[y][x] === ch) return false;
-    rows[y] = rows[y].slice(0, x) + ch + rows[y].slice(x + 1);
+  function set(x, y, n) {
+    if (rows[y][x] === n) return false;
+    rows[y][x] = n;
     return true;
   }
   function fill(x, y, ch) {  // the area of one kind of cell around (x, y), 4 ways
@@ -199,7 +209,11 @@ const MapEditor = (() => {
       return;
     }
     const erase = tool === "erase" || e.button === 2 || (e.buttons & 2);
-    const ch = erase ? "." : TILES[tile];
+    const ch = erase ? -1 : tile;
+    if (!erase && tile > 63 && !hex) {  // a sprite past 63: the map's cells become two hex digits
+      hex = true;
+      say(`${name} is now a hex map (hex = true: two hex digits a cell, for sprites 0-255). It needs API 8.`);
+    }
     if (tool === "fill" && !erase) {
       if (first) { fill(x, y, ch); draw(); stroke.changed = true; }
       return;
@@ -218,7 +232,8 @@ const MapEditor = (() => {
     $("map-tiles").replaceChildren(...list.map((n) => {
       const b = document.createElement("button");
       b.className = "tile" + (n === tile && tool !== "erase" ? " on" : "");
-      b.title = `sprite ${n}${sprites.get(n).name ? ": " + sprites.get(n).name : ""} (its character: ${TILES[n]})`;
+      b.title = `sprite ${n}${sprites.get(n).name ? ": " + sprites.get(n).name : ""} ` +
+        (hex ? `(in the map: ${n.toString(16).padStart(2, "0")})` : n < 64 ? `(its character: ${TILES[n]})` : "(painting it makes the map hex)");
       const c = document.createElement("canvas");
       c.width = c.height = 24;
       drawTile(c.getContext("2d"), n, 0, 0, 24);
@@ -237,8 +252,8 @@ const MapEditor = (() => {
   function sizes() {
     $("map-w").value = width(rows);
     $("map-h").value = rows.length;
-    const bytes = rows.reduce((s, r) => s + r.length + 5, 0);
-    $("map-size").textContent = `${width(rows) * 8} x ${rows.length * 8} pixels, about ${bytes.toLocaleString()} bytes of the cart's 32 KB`;
+    const bytes = rows.reduce((s, r) => s + r.length * (hex ? 2 : 1) + 5, 0);
+    $("map-size").textContent = `${width(rows) * 8} x ${rows.length * 8} pixels${hex ? ", hex" : ""}, about ${bytes.toLocaleString()} bytes of the cart's 128 KB`;
   }
   function show() {
     load();
@@ -249,14 +264,14 @@ const MapEditor = (() => {
     sel.replaceChildren(...maps.map((m) => new Option(m.name, m.name)));
     sel.value = name;
     $("map-which-label").hidden = maps.length < 2;
-    $("map-call").textContent = name === "MAP" ? "map()" : `MAP = ${name}  then  map()`;
+    $("map-call").textContent = name === "MAP" ? "map()" : `map(0, 0, 0, 0, nil, nil, 0, ${name})`;
     palette();
     buttons();
     sizes();
     draw();
     if (name !== opened) {  // a map just opened: a level with sky at the top and ground at the bottom shows its ground
       opened = name;
-      const used = (r) => /[^.]/.test(r || "");
+      const used = (r) => (r || []).some((n) => n >= 0);
       $("map-canvas").parentElement.scrollTop = !used(rows[0]) && used(rows[rows.length - 1]) ? 1e6 : 0;
     }
   }
@@ -265,7 +280,7 @@ const MapEditor = (() => {
     const h = Math.max(1, Math.min(MAX_H, Math.floor(Number($("map-h").value)) || 1));
     if (w === width(rows) && h === rows.length) { sizes(); return; }
     remember();
-    rows = Array.from({ length: h }, (_, y) => (rows[y] || "").padEnd(w, ".").slice(0, w));
+    rows = Array.from({ length: h }, (_, y) => (rows[y] || []).concat(Array(w).fill(-1)).slice(0, w));
     save();
     show();
   }

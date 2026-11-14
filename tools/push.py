@@ -151,8 +151,13 @@ def messages(path: Path, run: bool = True, images: Path | None = None, live: boo
         fail(f"{path.name} doesn't pass check.py: " + res.get("error", "?"))
     name = path.stem
     bundle, info = pack_images.pack(name, images or path.parent / "images" / name)
-    body = {"type": "cart", "name": name, "title": res.get("title", name), "lua": check.shipped(path.read_text()),
-            "run": run}
+    code = check.shipped(path.read_text())
+    body = {"type": "cart", "name": name, "title": res.get("title", name), "lua": code, "run": run}
+    if len(code.encode()) > check.MAX_PACKED:  # over 32 KB: compressed (firmware 0.10 on keeps it that way)
+        c = zlib.compressobj(9, zlib.DEFLATED, -15)
+        z = c.compress(code.encode()) + c.flush()
+        del body["lua"]
+        body.update({"lua_z": base64.b64encode(z).decode(), "size": len(code.encode())})
     if live:  # new code for the cart if it's the one running: it keeps its state (Cart::reload)
         body["live"] = True
     msgs = []
