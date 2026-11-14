@@ -23,7 +23,7 @@ add_library(luanette_objs OBJECT ${CMAKE_CURRENT_LIST_DIR}/luanette_web.cpp ${RO
             ${ROOT}/support/src/json.cpp ${ROOT}/support/src/crypto.cpp ${LUA_SRCS} ${JET_SRCS})
 target_include_directories(luanette_objs PRIVATE ${ROOT}/engine ${ROOT}/engine/lua ${ROOT}/engine/jet ${ROOT}/support
                            "${CMAKE_CURRENT_BINARY_DIR}/gen")
-target_compile_definitions(luanette_objs PRIVATE LUA_32BITS=1)
+target_compile_definitions(luanette_objs PRIVATE LUA_32BITS=1 LUANETTE_PROFILE=1)  # (and pixels counted for the profiler)
 target_compile_options(luanette_objs PRIVATE -O3)
 set(LW_LINK -O3 -sMODULARIZE=1 -sEXPORT_NAME=Luanette -sALLOW_MEMORY_GROWTH=1
     "-sEXPORTED_RUNTIME_METHODS=['ccall','cwrap','HEAPU8','HEAP16','HEAPF32']"

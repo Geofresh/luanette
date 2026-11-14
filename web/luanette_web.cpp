@@ -320,6 +320,36 @@ EMSCRIPTEN_KEEPALIVE uint32_t lw_picture_hash() {
   for (int i = 0; i < carts::kW * carts::kH; ++i) h = (h ^ p[i]) * 16777619u;
   return h;
 }
+// The profiler (Cart::profile): on starts gathering afresh, off stops. lw_profile_json: what it has,
+// {"frames", "ops", "other", "lines": [[line, ops]...], "functions": [[line defined, ops]...],
+// "draw": [[call, calls, pixels]...]}, the biggest first.
+EMSCRIPTEN_KEEPALIVE void lw_profile(int on) {
+  if (g_cart) g_cart->profile(on != 0);
+}
+EMSCRIPTEN_KEEPALIVE const char* lw_profile_json() {
+  static std::string out;
+  out.clear();
+  if (!g_cart) return "{}";
+  const carts::Profile& p = g_cart->profile();
+  const auto list = [](const std::unordered_map<int, int64_t>& m) {
+    std::vector<std::pair<int, int64_t>> v(m.begin(), m.end());
+    std::sort(v.begin(), v.end(), [](const auto& a, const auto& b) { return a.second != b.second ? a.second > b.second : a.first < b.first; });
+    std::string s = "[";
+    for (size_t i = 0; i < v.size(); ++i) s += (i ? "," : "") + ("[" + std::to_string(v[i].first) + "," + std::to_string(v[i].second) + "]");
+    return s + "]";
+  };
+  out = "{\"frames\":" + std::to_string(p.frames) + ",\"ops\":" + std::to_string(p.ops) + ",\"other\":" + std::to_string(p.other) +
+        ",\"lines\":" + list(p.lines) + ",\"functions\":" + list(p.functions) + ",\"draw\":[";
+  bool first = true;
+  for (int i = 0; i < carts::kDrawCalls; ++i) {
+    if (!p.draw[i].calls) continue;
+    out += (first ? "" : ",") + ("[\"" + std::string(carts::kDrawNames[i]) + "\"," + std::to_string(p.draw[i].calls) + "," +
+                                 std::to_string(p.draw[i].pixels) + "]");
+    first = false;
+  }
+  out += "]}";
+  return out.c_str();
+}
 // While on, the cart's sounds and log() lines go nowhere (frames being run again).
 EMSCRIPTEN_KEEPALIVE void lw_quiet(int on) { g_host.quiet = on != 0; }
 // New code into the running cart, its data kept (Cart::reload): "" when it worked, else why not.

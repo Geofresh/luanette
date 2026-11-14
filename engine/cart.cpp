@@ -33,6 +33,12 @@ extern "C" {
 
 namespace carts {
 
+#ifdef LUANETTE_PROFILE
+#define PROFILE_PIXELS(n) (S->pixels += (n))
+#else
+#define PROFILE_PIXELS(n) ((void)0)
+#endif
+
 // ---- the heap ------------------------------------------------------------------
 //
 // Lua passes the old size to its allocator, so blocks need no header: small ones come from
@@ -291,11 +297,19 @@ struct Cart::Impl {
     clip_y1 = kH;
   }
 
+  // Pixels drawn, for the profile (Cart::profile): counted only in a build with LUANETTE_PROFILE (the
+  // playground's, the command-line tool's), so the board's drawing pays nothing for it.
+  int64_t pixels = 0;
   // A pixel in cart coordinates (the camera applied here), clipped, through the palette map.
   __attribute__((always_inline)) inline void px(int x, int y, int c) {
     x -= cam_x;
     y -= cam_y;
-    if (x >= clip_x0 && x < clip_x1 && y >= clip_y0 && y < clip_y1) fb[y * kW + x] = pmap[c];
+    if (x >= clip_x0 && x < clip_x1 && y >= clip_y0 && y < clip_y1) {
+      fb[y * kW + x] = pmap[c];
+#ifdef LUANETTE_PROFILE
+      ++pixels;
+#endif
+    }
   }
   // A row span x0..x1 inclusive (cart coordinates), clipped.
   __attribute__((always_inline)) inline void hspan(int x0, int x1, int y, int c) {
@@ -303,7 +317,12 @@ struct Cart::Impl {
     if (y < clip_y0 || y >= clip_y1) return;
     x0 = std::max(x0 - cam_x, clip_x0);
     x1 = std::min(x1 - cam_x, clip_x1 - 1);
-    if (x1 >= x0) std::memset(fb + y * kW + x0, pmap[c], static_cast<size_t>(x1 - x0 + 1));
+    if (x1 >= x0) {
+      std::memset(fb + y * kW + x0, pmap[c], static_cast<size_t>(x1 - x0 + 1));
+#ifdef LUANETTE_PROFILE
+      pixels += x1 - x0 + 1;
+#endif
+    }
   }
   void line(int x0, int y0, int x1, int y1, int c) {
     const int dx = std::abs(x1 - x0), dy = -std::abs(y1 - y0);
@@ -384,6 +403,14 @@ namespace {
 
 Cart::Impl* S = nullptr;  // the running cart (one at a time)
 
+// A drawing call, for the profile: counted, and the pixels it drew (Profile).
+struct ProfileCall {
+  int id;
+  int64_t p0;
+  explicit ProfileCall(int i);
+  ~ProfileCall();
+};
+
 // Argument i of a C function, straight off the stack (nil when absent).
 __attribute__((always_inline)) inline const TValue* arg(lua_State* L, int i) {
   const StkId o = L->ci->func.p + i;
@@ -420,12 +447,23 @@ inline void push_num(lua_State* L, float v) {
   else lua_pushnumber(L, v);
 }
 
+ProfileCall::ProfileCall(int i) : id(i), p0(S->pixels) {}
+ProfileCall::~ProfileCall() {
+  Profile& p = S->cart->profile_data();
+  if (!p.on) return;
+  ++p.draw[id].calls;
+  p.draw[id].pixels += S->pixels - p0;
+}
+
 int f_cls(lua_State* L) {
+  ProfileCall prof(kDrawCls);
   const int c = lua_isnoneornil(L, 1) ? 0 : coord(L, 1) & 15;
   std::memset(S->fb, c, kW * kH);
+  PROFILE_PIXELS(kW * kH);
   return 0;
 }
 int f_pset(lua_State* L) {
+  ProfileCall prof(kDrawPset);
   const int x = coord(L, 1), y = coord(L, 2);
   S->px(x, y, color_arg(L, 3));
   return 0;
@@ -436,11 +474,13 @@ int f_pget(lua_State* L) {
   return 1;
 }
 int f_line(lua_State* L) {
+  ProfileCall prof(kDrawLine);
   const int x0 = coord(L, 1), y0 = coord(L, 2), x1 = coord(L, 3), y1 = coord(L, 4);
   S->line(x0, y0, x1, y1, color_arg(L, 5));
   return 0;
 }
 int f_rect(lua_State* L) {
+  ProfileCall prof(kDrawRect);
   const int x0 = coord(L, 1), y0 = coord(L, 2), x1 = coord(L, 3), y1 = coord(L, 4), c = color_arg(L, 5);
   S->line(x0, y0, x1, y0, c);
   S->line(x1, y0, x1, y1, c);
@@ -449,6 +489,7 @@ int f_rect(lua_State* L) {
   return 0;
 }
 int f_rectfill(lua_State* L) {
+  ProfileCall prof(kDrawRectfill);
   int x0 = coord(L, 1), y0 = coord(L, 2), x1 = coord(L, 3), y1 = coord(L, 4);
   const int c = color_arg(L, 5);
   if (x0 > x1) std::swap(x0, x1);
@@ -458,16 +499,19 @@ int f_rectfill(lua_State* L) {
   return 0;
 }
 int f_circ(lua_State* L) {
+  ProfileCall prof(kDrawCirc);
   const int x = coord(L, 1), y = coord(L, 2), r = coord(L, 3);
   S->circle(x, y, r, color_arg(L, 4), false);
   return 0;
 }
 int f_circfill(lua_State* L) {
+  ProfileCall prof(kDrawCircfill);
   const int x = coord(L, 1), y = coord(L, 2), r = coord(L, 3);
   S->circle(x, y, r, color_arg(L, 4), true);
   return 0;
 }
 int f_print(lua_State* L) {
+  ProfileCall prof(kDrawPrint);
   // The arguments first: the text conversion pushes onto the stack (an absent 4th would read it).
   const int x = opt_coord(L, 2, 0), y = opt_coord(L, 3, 0), c = color_arg(L, 4);
   size_t n = 0;
@@ -536,6 +580,7 @@ inline void blit8(const uint8_t* p, int x, int y, bool fx, bool fy) {
 // spr(n, x, y, [fx], [fy]): sprite n at (x, y). spr(n, x, y, w, h, [fx], [fy]) (API 6, a number
 // fourth): the w x h block of sprites from n, n + 1, ... row by row; flipping flips the whole block.
 int f_spr(lua_State* L) {
+  ProfileCall prof(kDrawSpr);
   const int n = coord(L, 1), x = coord(L, 2), y = coord(L, 3);
   const bool block = lua_type(L, 4) == LUA_TNUMBER;
   const int w = block ? coord(L, 4) : 1, h = block ? opt_coord(L, 5, 1) : 1;
@@ -561,6 +606,7 @@ int f_spr(lua_State* L) {
 // to dw x dh pixels at (x, y), nearest pixel: the pixel at (i, j) of the box is the source's
 // (i * sw // dw, j * sh // dh), sw and sh the source's size in pixels.
 int f_sspr(lua_State* L) {
+  ProfileCall prof(kDrawSspr);
   const int n = coord(L, 1), x = coord(L, 2), y = coord(L, 3), dw = coord(L, 4), dh = coord(L, 5);
   const bool fx = lua_toboolean(L, 6), fy = lua_toboolean(L, 7);
   const int w = opt_coord(L, 8, 1), h = opt_coord(L, 9, 1);
@@ -594,7 +640,10 @@ int f_sspr(lua_State* L) {
     for (int i = i0; i < i1; ++i) {
       const int u = col[i - i0];
       const int c = srow[u >> 3][vr + (u & 7)];
-      if (!(clear >> c & 1)) out[i] = pmap[c];
+      if (!(clear >> c & 1)) {
+        out[i] = pmap[c];
+        PROFILE_PIXELS(1);
+      }
     }
   }
   lua_pop(L, 1);
@@ -814,6 +863,7 @@ Cart::Impl::Map& get_map(lua_State* L, const char* who, int at) {
 // those flags (fget(n) & layer ~= 0); 0 is every cell. Only the cells the camera and clip can show
 // are drawn.
 int f_map(lua_State* L) {
+  ProfileCall prof(kDrawMap);
   const Cart::Impl::Map& m = get_map(L, "map", 8);
   const int cx = opt_coord(L, 1, 0), cy = opt_coord(L, 2, 0), sx = opt_coord(L, 3, 0), sy = opt_coord(L, 4, 0);
   const int cw = opt_coord(L, 5, m.w), ch = opt_coord(L, 6, m.h);
@@ -859,6 +909,7 @@ int f_map(lua_State* L) {
 // add up the same everywhere. A row a line, mdx and mdy changing with the row: a floor in
 // perspective (libs/mode7.lua), a map turned and zoomed.
 int f_tline(lua_State* L) {
+  ProfileCall prof(kDrawTline);
   const Cart::Impl::Map& m = get_map(L, "tline", 10);
   int x0 = coord(L, 1), y0 = coord(L, 2);
   const int x1 = coord(L, 3), y1 = coord(L, 4);
@@ -924,7 +975,10 @@ int f_tline(lua_State* L) {
         }
         if (!p) continue;
         const int v = p[((uy >> 13) & 7) * 8 + ((ux >> 13) & 7)];
-        if (!(clear >> v & 1)) row[x] = pm[v];
+        if (!(clear >> v & 1)) {
+          row[x] = pm[v];
+          PROFILE_PIXELS(1);
+        }
       }
       lua_settop(L, sprites - 1);
       return 0;
@@ -1406,6 +1460,7 @@ int f_cos(lua_State* L) {
 // trifill: a pixel is filled when its center is inside, with the top-left rule on the edges, in
 // sixteenths of a pixel (integers, so check.py's preview is exact): solid 3D from a cart.
 int f_trifill(lua_State* L) {
+  ProfileCall prof(kDrawTrifill);
   auto sub = [&](int i) -> int64_t {  // a coordinate in 1/16 px, floored
     const lua_Number v = luaL_checknumber(L, i);
     if (!(v > -2048.0f)) return -2048 * 16;
@@ -1460,7 +1515,10 @@ int f_trifill(lua_State* L) {
         else last = std::min<int64_t>(last, x0 + E[e] / -step);
       }
     }
-    if (first <= last) std::memset(S->fb + py * kW + first, col, static_cast<size_t>(last - first + 1));
+    if (first <= last) {
+      std::memset(S->fb + py * kW + first, col, static_cast<size_t>(last - first + 1));
+      PROFILE_PIXELS(last - first + 1);
+    }
   }
   return 0;
 }
@@ -2012,6 +2070,15 @@ void poll_hook(lua_State* L, lua_Debug*) {
 constexpr int kCountEvery = 100;
 void count_hook(lua_State* L, lua_Debug* ar) {
   S->ops += kCountEvery;
+  if (Profile& p = S->cart->profile_data(); p.on && lua_getinfo(L, "Sl", ar)) {  // whose these were: the cart's line and function
+    p.ops += kCountEvery;
+    if (ar->source && std::strcmp(ar->source, "=cart") == 0) {
+      p.lines[ar->currentline] += kCountEvery;
+      p.functions[ar->linedefined] += kCountEvery;
+    } else {
+      p.other += kCountEvery;
+    }
+  }
   if (S->budget && S->ops > S->budget - kCountEvery) {
     luaL_where(L, 0);  // the cart's line it was on ("cart:4: "): in a hook, luaL_error's level 1 is no one
     lua_pushfstring(L, "over budget: more than %d Lua instructions in one frame", S->budget);
@@ -2607,6 +2674,7 @@ bool Cart::frame(const Input& in) {
   I.was = I.in;
   I.in = in;
   ++I.map_epoch;  // the maps checked against their tables again, once this frame
+  if (profile_.on) ++profile_.frames;
   const int64_t t0 = host_.now_us();
   const size_t freed0 = I.heap.freed;
   I.ops = I.polls = I.count_left = I.logs = 0;
@@ -2631,6 +2699,11 @@ bool Cart::frame(const Input& in) {
     fps_ = now < hot_until_us_ ? active_ : idle_;
   }
   return ok;
+}
+
+void Cart::profile(bool on) {
+  if (on) profile_ = Profile();
+  profile_.on = on;
 }
 
 void Cart::set_rate(int active, int idle) {

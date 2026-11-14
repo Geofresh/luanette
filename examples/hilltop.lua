@@ -409,7 +409,7 @@ local function touching(f)
 end
 
 local function load_level(n)
-  MAP = {table.unpack(LEVELS[n])}  -- a copy: picking up coins (mset) changes the map
+  MAP = {hex = LEVELS[n].hex, table.unpack(LEVELS[n])}  -- a copy (with its hex mark): picking up coins (mset) changes the map
   slimes = {}
   local w, h = msize()
   for cy = 0, h - 1 do

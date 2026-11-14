@@ -15,7 +15,8 @@ In the repository, after `web/build.sh`, `node cli/luanette.mjs` is the same too
 
 Checks a cart the way `tools/check.py` does, and prints JSON:
 
-- **The header:** size (32 KB without comments), the three header lines, `-- api:` and `-- canvas:`.
+- **The header:** size (128 KB without comments, and 32 KB of that compressed: `packed_bytes`, for a
+  cart over 32 KB), the three header lines, `-- api:` and `-- canvas:`.
 - **Running it:** that it loads, then runs its top level, `_init` and N frames (150), with
   `check.py`'s scripted input (buttons, taps, a drag and a slow tilt on a 120-frame cycle) or yours
   (`--input`), inside the 30,000-instruction frame budget.
@@ -44,6 +45,23 @@ cart:12: ...`, `error in _init: ...`, or `error in frame 37: cart:40: ...` (then
   `check.py` and `push.py` for carts with images.
 
 It exits 0 when `ok`, 1 when not.
+
+### `profile CART [--frames N] [--input FILE]`
+
+Where a cart's frames go, as the playground's Profile panel shows it: it runs N frames (150) with
+`check.py`'s input or yours, and prints JSON with the Lua instructions a frame by function (named
+from the line each is defined on) and by line, counted every 100 as the frame budget is, and each
+drawing call's calls and pixels a frame. Look here first when a cart is over budget, or slow on a
+board: a function at the top of the list, or a drawing call with many pixels.
+
+```json
+{
+ "ok": true, "frames": 600, "ops_per_frame": 6733, "ui_share": 0,
+ "functions": [{"name": "mode7.floor", "line": 27, "ops_per_frame": 1668, "share": 24.8}, "..."],
+ "lines": [{"line": 34, "code": "tline(0, row, 127, row, ...)", "ops_per_frame": 1199, "share": 17.8}, "..."],
+ "draw": [{"call": "tline", "calls_per_frame": 86.3, "pixels_per_frame": 9450}, "..."]
+}
+```
 
 ### `run CART [--frames N] [--input FILE] [--shots 1,30,90] [--out DIR] [--gif]`
 

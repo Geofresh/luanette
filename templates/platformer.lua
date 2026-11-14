@@ -75,7 +75,7 @@ local function solid(x, y)
 end
 
 local function start()
-  MAP = {table.unpack(LEVEL)}  -- a fresh copy: picking up coins (mset) changes the map
+  MAP = {hex = LEVEL.hex, table.unpack(LEVEL)}  -- a fresh copy (with its hex mark): picking up coins (mset) changes the map
   local w, h = msize()
   left = 0
   for y = 0, h - 1 do

@@ -16,6 +16,7 @@ npx luanette run mygame.lua --input play.json --shots 1,30,90 --out shots   # PN
 npx luanette sound "C4 pulse 5, E4 slide, G4 saw 7 fadeout"                # SOUNDS text
 npx luanette link mygame.lua                    # a link that opens it in the playground
 npx luanette add actor cam mygame.lua           # put libraries in it (npx luanette libs lists them)
+npx luanette profile mygame.lua                 # where its frames go: functions, lines, drawing
 ```
 
 Or as MCP tools (`check_cart`, `run_cart` with images back, `render_sound`, `make_sound`,
@@ -74,8 +75,8 @@ function _draw()          -- every frame: draw it all again
 end
 ```
 
-- `-- title:`, `-- by:` and `-- about:` are required, in the first 12 lines. `-- api: 7` says which
-  API the cart needs (7 is the newest: use it). `-- canvas: full` gives the cart the whole screen.
+- `-- title:`, `-- by:` and `-- about:` are required, in the first 12 lines. `-- api: 8` says which
+  API the cart needs (8 is the newest: use it). `-- canvas: full` gives the cart the whole screen.
 - The picture is 128 x 128 pixels, (0, 0) at the top left, 16 colors by number: 0 black, 1 dark
   blue, 2 dark purple, 3 dark green, 4 brown, 5 dark gray, 6 light gray, 7 white, 8 red,
   9 orange, 10 yellow, 11 green, 12 blue, 13 lavender, 14 pink, 15 peach.
@@ -119,8 +120,8 @@ SPRITES = {
 }
 ```
 
-Sprites are 0 to 255; a map's cells can only be 0 to 63, so keep tiles there and characters and
-items above. The playground's Sprites tab reads and writes this exact layout. More:
+Sprites are 0 to 255. A map of a character a cell takes 0 to 63; for more, make it a hex map
+(below). The playground's Sprites tab reads and writes this exact layout. More:
 
 - `spr(n, x, y, w, h, [flip_x], [flip_y])` draws a block of `w` x `h` sprites, `n`, `n + 1`, ...
   row by row: a 16 x 16 character is four sprites in a row of the table, `spr(32, x, y, 2, 2)`.
@@ -134,7 +135,9 @@ items above. The playground's Sprites tab reads and writes this exact layout. Mo
 
 For levels bigger than the screen, or any grid of tiles: a `MAP` table of rows, top to bottom, a
 string each with a character a cell. `.` is empty; `0`-`9`, `a`-`z`, `A`-`Z`, `+`, `/` are sprites 0
-to 63 (`3` is sprite 3, `a` is 10). Up to 128 x 64 cells; a cell is 8 x 8 pixels.
+to 63 (`3` is sprite 3, `a` is 10). Up to 256 x 256 cells; a cell is 8 x 8 pixels. With
+`hex = true` in the table, each cell is two hex digits instead (`..` empty, `00`-`ff`): all 256
+sprites. Hex maps and maps over 128 x 64 need `-- api: 8`.
 
 ```lua
 MAP = {
@@ -165,9 +168,11 @@ flags): draw the ground, then the player, then the treetops in front.
 
 `mget(cx, cy)` is the sprite in a cell (nil if empty or off the map), `mset(cx, cy, n)` changes it
 (`mset(cx, cy)` empties it: picking up a coin), `msize()` is the width and height in cells.
-`MAP = LEVEL2` switches maps; `MAP = {table.unpack(LEVEL)}` starts a level over after `mset`. A map
-is a byte a cell of the 32 KB. Never draw tiles with `spr` in a loop: `map()` is one call. The
-platformer template uses all of it. For a world bigger than 128 x 64 cells, keep it as a grid of blocks
+`MAP = LEVEL2` switches maps; `MAP = {hex = LEVEL.hex, table.unpack(LEVEL)}` starts a level over after
+`mset` (which changes the map's rows), keeping a hex map hex. `map`, `tline`, `mget`, `mset` and
+`msize` take another map table as their last argument: `map(0, 0, 0, 0, nil, nil, 0, SKY)` draws a
+background map behind `map()` (API 8). A map is a byte a cell (two in a hex map) and compresses well. Never draw tiles with `spr` in a loop: `map()` is one call. The
+platformer template uses all of it. For a world bigger than 256 x 256 cells, keep it as a grid of blocks
 and make `MAP` only the blocks around the player, rebuilt as they walk: `examples/overworld.lua`
 does a 4096 x 4096 px world that way. Maps need `-- api: 5`; flags, `palt`, `sspr`, blocks and
 sprites past 63 need `-- api: 6`.
@@ -253,9 +258,11 @@ moves a finger and works the d-pad from its direction.
 
 ## Limits
 
-- 32 KB of source, not counting comments (comment freely).
+- 128 KB of source, not counting comments (comment freely), and 32 KB of that once compressed:
+  `check` reports `bytes` and, over 32 KB, `packed_bytes`. A cart over 32 KB needs `-- api: 8`.
 - 30,000 Lua instructions a frame (`_update` and `_draw` together). Drawing calls are cheap; loops
-  over thousands of things aren't. `check` reports `max_ops`.
+  over thousands of things aren't. `check` reports `max_ops`; `npx luanette profile CART` says which
+  functions and lines they go to, and what each drawing call drew.
 - 1 MB of Lua memory. 2 KB of saved data (`save(t)`).
 - Numbers are 32-bit: integers to about ±2 billion, floats to about 7 digits.
 

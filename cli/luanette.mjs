@@ -4,6 +4,7 @@
 //
 //   luanette check CART.lua [--frames N] [--input FILE]     what check.py says, as JSON
 //   luanette run CART.lua [--frames N] [--input FILE] [--shots 1,30,90] [--out DIR] [--gif]
+//   luanette profile CART.lua [--frames N] [--input FILE]   where its frames go: functions, lines, drawing
 //   luanette sound "C4 pulse 5, E4 slide, -, G4 saw 7 fadeout" [--speed N] [--loop A-B]
 //   luanette sound CART.lua N --wav OUT.wav                 a cart's sound, as a WAV
 //   luanette song CART.lua [--from N] --wav OUT.wav         its song
@@ -64,6 +65,8 @@ export async function loadEngine() {
     renderAudio: c("lw_render_audio", "string", ["string", "number", "number", "number", "number"]),
     pcmData: c("lw_pcm_data", "number", []),
     pcmLen: c("lw_pcm_len", "number", []),
+    profile: c("lw_profile", null, ["number"]),
+    profileJson: c("lw_profile_json", "string", []),
     colors: () => m.ccall("lw_colors", "string", [], []).split(" ").map((h) => "#" + h),
     glass: () => new Uint8Array(m.HEAPU8.buffer, engine.pixels(), W * H * 4),
   };
@@ -143,7 +146,7 @@ function startError(e) {
 
 // Runs `frames` frames of the cart, its clock a frame's time each (as check.py's and cartrun's), and
 // calls onFrame(f, input) after each. {error?, frame?, log: [{frame, line}], ops: [...], fps}
-export async function runCart(src, name, frames, input, onFrame) {
+export async function runCart(src, name, frames, input, onFrame, opts = {}) {
   const e = await loadEngine();
   const log = [], ops = [];
   const drain = (f) => { for (let n = e.logCount(); n > 0; n--) log.push({ frame: f, line: e.log() }); };
@@ -153,6 +156,7 @@ export async function runCart(src, name, frames, input, onFrame) {
     return { error: startError(e.error()), log, ops, fps: e.fps() };
   }
   drain(0);
+  if (opts.profile) e.profile(1);  // (after the top of the cart and _init: the frames' own)
   let baseUs = 0, baseN = 0, rate = e.fps(), cur = 0;
   const timeUs = () => baseUs + Math.floor((cur - baseN) * 1e6 / rate);
   for (let f = 1; f <= frames; f++) {
@@ -170,6 +174,29 @@ export async function runCart(src, name, frames, input, onFrame) {
     if (onFrame) onFrame(f, i);
   }
   return { log, ops, fps: rate };
+}
+
+// ---- profile -------------------------------------------------------------------------------------
+// Where a cart's frames go (the playground's Profile panel): Lua instructions a frame by function and
+// by line (counted every 100, as the budget is), and each drawing call's calls and pixels a frame.
+const fnName = (lines, line) => {
+  const text = (lines[line - 1] || "").trim();
+  const m = /function\s+([\w.:]+)/.exec(text) || /([\w.:\[\]"]+)\s*=\s*function/.exec(text);
+  return m ? m[1] : line ? `function at line ${line}` : "the top of the cart";
+};
+export async function profile(src, name, opts = {}) {
+  const e = await loadEngine();
+  const frames = opts.frames || 150;
+  const run = await runCart(src, name, frames, opts.input || checkInput(), null, { profile: true });
+  if (run.error) return { ok: false, error: run.error, frame: run.frame };
+  const p = JSON.parse(e.profileJson()), n = Math.max(1, p.frames), ops = Math.max(1, p.ops);
+  const lines = src.split("\n"), per = (v) => Math.round(v / n), share = (v) => Math.round((v / ops) * 1000) / 10;
+  return {
+    ok: true, frames: p.frames, ops_per_frame: per(p.ops), ui_share: share(p.other),
+    functions: p.functions.slice(0, 12).map(([l, v]) => ({ name: fnName(lines, l), line: l, ops_per_frame: per(v), share: share(v) })),
+    lines: p.lines.slice(0, 12).map(([l, v]) => ({ line: l, code: (lines[l - 1] || "").trim().slice(0, 80), ops_per_frame: per(v), share: share(v) })),
+    draw: p.draw.sort((a, b) => b[2] - a[2]).map(([call, calls, pixels]) => ({ call, calls_per_frame: Math.round((calls / n) * 10) / 10, pixels_per_frame: per(pixels) })),
+  };
 }
 
 // ---- check -----------------------------------------------------------------------------------------
@@ -463,6 +490,11 @@ async function main() {
     const shots = opt.shots ? String(opt.shots).split(",").map(Number) : null;
     const res = await run(src, name, { frames: Number(opt.frames) || 90, input: readInput(opt.input), shots, out: opt.out, gif: !!opt.gif });
     print(res.ops.length > 20 ? { ...res, ops: undefined } : res);
+    process.exitCode = res.ok ? 0 : 1;
+  } else if (cmd === "profile") {
+    const { src, name } = readCart(pos[0]);
+    const res = await profile(src, name, { frames: Number(opt.frames) || 150, input: readInput(opt.input) });
+    print(res);
     process.exitCode = res.ok ? 0 : 1;
   } else if (cmd === "sound" && pos[0] && pos[0].endsWith(".lua")) {
     const { src } = readCart(pos[0]);

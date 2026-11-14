@@ -175,13 +175,18 @@ changes cheap: a clock's seconds cost a few thousand pixels, not a frame.
 ## Storage and delivery (`esp32/cart_store.*`)
 
 Sent carts survive a restart. They live in the `assets` partition (4 MB): 48 slots of
-36 KB for sources, then 32 KB blocks for image bundles (about 2.3 MB). When images need room,
+36 KB for sources, then 32 KB blocks for image bundles (about 2.3 MB). A slot holds a cart's code
+as it is (up to 32 KB, "HGC2"), or compressed (raw deflate, "HGC3": its size, then the deflated
+code, up to 32 KB of it) for a cart over 32 KB. A compressed one stays that way in memory too, and
+is inflated (the S3's ROM `tinfl`) when it's opened. When images need room,
 the bundles of carts that are gone go first, then those opened least recently. Writes put the
 header last, so a slot cut off mid-write reads as empty.
 
 Carts arrive as JSON messages:
 
-- `{"type": "cart", "name", "lua", "run"?, "images"?}`: a cart (opened at once unless `run` is false)
+- `{"type": "cart", "name", "lua", "run"?, "live"?, "images"?}`: a cart (opened at once unless `run` is false;
+  `live`: new code for the cart running, if it's this one). Over 32 KB, `"lua_z"` (the code deflated, base64)
+  and `"size"` (its length inflated) instead of `"lua"`.
 - `{"type": "cart.images", "name", "size", "crc", "off", "b64"}`: its images, in parts, before it
 - `{"type": "cart.image", "name", "b64"}` or `{..., "missing": true}`: a live image the cart asked for
 - `{"type": "cart", "open": name}`, `{"close": true}`, `{"delete": name}`

@@ -192,6 +192,16 @@
   #console-lines { max-height: 200px; overflow-y: auto; background: var(--panel); border: 1px solid var(--line);
                    border-radius: 8px; padding: 6px 10px; font: 12px/1.5 var(--mono); white-space: pre-wrap; }
   #console-lines .at { color: #6e7681; }
+  #profile-body { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 13px; }
+  #profile-body h3 { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin: 10px 0 4px; }
+  #profile-body h3:first-of-type { margin-top: 4px; }
+  #profile-body table { width: 100%; border-collapse: collapse; font: 12px var(--mono); }
+  #profile-body td { padding: 2px 4px; white-space: nowrap; }
+  #profile-body td.what { width: 100%; max-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  #profile-body td.num { text-align: right; color: var(--muted); }
+  #profile-body tr.go { cursor: pointer; }
+  #profile-body tr.go:hover td.what { color: var(--accent); }
+  #profile-body .bar { display: inline-block; height: 8px; background: var(--accent); border-radius: 2px; vertical-align: middle; }
   #status { font: 13px/1.5 var(--mono); color: var(--muted); white-space: pre-wrap; min-height: 1.5em; }
   #status.error { color: var(--danger); }
   @media (pointer: coarse) { .desk { display: none; } }
@@ -673,6 +683,12 @@
       <div class="console-head"><span class="note">What the cart log()s, with the frame number first.</span>
         <button id="console-clear">Clear</button></div>
       <div id="console-lines"></div>
+    </details>
+    <details id="profile" class="console">
+      <summary>Profile</summary>
+      <div class="console-head"><span class="note">Where the frames go, gathered while this is open: Lua instructions by function and by line, and what each drawing call drew.</span>
+        <button id="profile-clear">Start over</button></div>
+      <div id="profile-body"><p class="note">Run the cart: the numbers come in as it plays.</p></div>
     </details>
   </section>
 </main>

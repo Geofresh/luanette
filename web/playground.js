@@ -1120,6 +1120,7 @@ function run(src, from) {
   drainLog();  // what the top of the cart and _init logged: frame 0
   colorStrip();
   Timeline.begin(lw.mod, { name, src, clock, unix, save });
+  Profiler.start();
   scrubber();
   if (!ok) { running = false; say(lw.error(), true); return; }
   say(from ? `A replay: ${mmss(from.frames)} played by someone, frame for frame. Take over to play on from any point.` : "");
@@ -1195,6 +1196,7 @@ function seek(n) {
   lw.quiet(0);
   if (!ok) return;
   frameNo = n;
+  if ($("profile").open) lw.profile(1);  // (the memory put back had the profiler as it was then: it starts afresh)
   clock = n ? Timeline.clocks[n - 1] : Timeline.start.clock;
   lw.clock(clock);
   lw.compose();
@@ -1258,6 +1260,56 @@ async function shareReplay() {
   $("sharebox").hidden = copied;
   say(copied ? `Link copied: ${mmss(r.frames)} of your run (${url.length} characters). It opens the cart and plays what you played, frame for frame.` : "Copy this link: it replays your run.");
 }
+
+// ---- the profiler: where the frames go (Cart::profile), while its panel is open -----------------
+const Profiler = {
+  timer: 0,
+  start() { if (lw && $("profile").open) lw.profile(1); },
+  // A function's name from the line it's defined on ("function world(t)", "local function sky()",
+  // "function race.update()", "name = function"), else its line.
+  name(line) {
+    const text = (code.value.split("\n")[line - 1] || "").trim();
+    const m = /function\s+([\w.:]+)/.exec(text) || /([\w.:\[\]"]+)\s*=\s*function/.exec(text);
+    return m ? m[1] : `function at line ${line}`;
+  },
+  show() {
+    if (!lw || !$("profile").open) return;
+    let p;
+    try { p = JSON.parse(lw.profile_json()); } catch { return; }
+    const box = $("profile-body");
+    if (!p.frames) { box.replaceChildren(Object.assign(document.createElement("p"), { className: "note", textContent: "Run the cart: the numbers come in as it plays." })); return; }
+    const per = (v) => Math.round(v / p.frames).toLocaleString();
+    const row = (what, share, num, line) => {
+      const tr = document.createElement("tr");
+      if (line) { tr.className = "go"; tr.title = `Show line ${line}`; tr.onclick = () => showLine(line); }
+      const a = document.createElement("td"), b = document.createElement("td"), c = document.createElement("td");
+      a.className = "what"; a.textContent = what;
+      b.className = "num"; b.innerHTML = share === null ? "" : `<span class="bar" style="width:${Math.max(2, Math.round(share * 60))}px"></span> ${Math.round(share * 100)}%`;
+      c.className = "num"; c.textContent = num;
+      tr.append(a, b, c);
+      return tr;
+    };
+    const table = (title, rows) => {
+      const h = document.createElement("h3"), t = document.createElement("table");
+      h.textContent = title;
+      t.append(...rows);
+      return [h, t];
+    };
+    const ops = Math.max(1, p.ops);
+    const out = [Object.assign(document.createElement("p"), { className: "note",
+      textContent: `${p.frames.toLocaleString()} frames, ${per(p.ops)} Lua instructions a frame of the 30,000` +
+        (p.other ? `; ${Math.round(p.other / ops * 100)}% of them in the ui helpers` : "") + ". Counted every 100." })];
+    out.push(...table("Functions: instructions a frame", p.functions.slice(0, 8).map(([l, n]) => row(l ? this.name(l) : "the top of the cart", n / ops, per(n), l || null))));
+    out.push(...table("Lines: instructions a frame", p.lines.slice(0, 8).map(([l, n]) =>
+      row(`${l}: ${(code.value.split("\n")[l - 1] || "").trim().slice(0, 60)}`, n / ops, per(n), l))));
+    if (p.draw.length) {
+      const px = Math.max(1, ...p.draw.map((d) => d[2]));
+      out.push(...table("Drawing: calls and pixels a frame", p.draw.sort((a, b) => b[2] - a[2]).map(([name, calls, pixels]) =>
+        row(`${name}() × ${per(calls)}`, pixels / px, `${per(pixels)} px`, null))));
+    }
+    box.replaceChildren(...out);
+  },
+};
 
 // ---- run controls: pause, a frame at a time, restart; the frame's cost against the budget ------
 let paused = false;
@@ -1460,6 +1512,13 @@ async function main() {
   $("restart").onclick = () => { sound.unlock(); run(code.value); };
   setInterval(() => { if (lw && running) colorStrip(); }, 1000);  // palette() may change them as the cart runs
   $("console-clear").onclick = clearLog;
+  $("profile").addEventListener("toggle", () => {
+    if (!lw) return;
+    lw.profile($("profile").open ? 1 : 0);
+    clearInterval(Profiler.timer);
+    if ($("profile").open) { Profiler.timer = setInterval(() => Profiler.show(), 500); Profiler.show(); }
+  });
+  $("profile-clear").onclick = () => { Profiler.start(); Profiler.show(); };
   $("console").addEventListener("toggle", () => { if (!$("console").open) $("console").dataset.closed = "1"; });
   $("submit").onclick = submitToGallery;
   $("sharelink").onfocus = () => $("sharelink").select();
@@ -1518,6 +1577,8 @@ async function main() {
     quiet: mod.cwrap("lw_quiet", null, ["number"]),
     reload: mod.cwrap("lw_reload", "string", ["string"]),
     picture_hash: mod.cwrap("lw_picture_hash", "number", []),
+    profile: mod.cwrap("lw_profile", null, ["number"]),
+    profile_json: mod.cwrap("lw_profile_json", "string", []),
     ccall: mod.ccall,
   };
   requestAnimationFrame(tick);

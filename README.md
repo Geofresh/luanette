@@ -66,6 +66,9 @@ the rest. `?` lists the keys.
 - **Running it.** Under the screen are Pause, Step (one frame at a time), Restart, the page's volume,
   and a meter of how much of the frame's 30,000 Lua instructions the cart used. What the cart
   `log()`s shows in the Console, with the frame it came in.
+- **Profile.** The Profile panel under the Console shows where the frames go while it's open: the
+  Lua instructions a frame by function and by line, and what each drawing call drew, in calls and
+  pixels. Click a row for its line. `npx luanette profile` prints the same.
 - **Rewind.** The timeline under the screen goes back through the last few minutes of play, frame
   by frame: drag it back and the screen shows that frame exactly as it was played. Press play and
   the game goes on from there, a new future.
