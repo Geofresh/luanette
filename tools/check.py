@@ -136,6 +136,7 @@ class Cart:
         self.used_api7 = set()         # what it used of API 7 (tline, rowshift, rowpal)
         self.maps: list[dict] = []     # the maps read: {table, rows, hex, cells (rows of sprite numbers, None empty), w, epoch}
         self.map_epoch = 1             # moves each frame: a map read before is checked against its table again
+        self.map_bytes = 0             # the maps' cells, counted against the memory limit as the runtime counts them
         self.used_api8 = set()         # what it used of API 8 (hex maps, several maps, bigger maps)
         self.log_frame, self.log_count = -1, 0
         self.scene = None  # a 3D cart's, once it makes anything 3D
@@ -440,7 +441,15 @@ class Cart:
                 raise ValueError(f"{who}: argument {at} should be a map (a table of rows)")
             self.used_api8.add("several maps")
             label = lambda r: f"the map's row {r}"
-        e = next((e for e in self.maps if g.rawequal(e["table"], m)), None)
+        # The tables read, held weakly in a Lua table (a map nothing uses any more can go, and its cells with it).
+        if getattr(self, "map_slots", None) is None:
+            self.map_slots = self.lua.eval("setmetatable({}, {__mode = 'v'})")
+            self.map_next = 0
+        e = None
+        for x in self.maps:
+            if g.rawequal(g.rawget(self.map_slots, x["slot"]), m):
+                e = x
+                break
         if e is not None and e["epoch"] == self.map_epoch:
             return e
         n = g.rawlen(m)
@@ -486,10 +495,37 @@ class Cart:
         if w > 128 or n > 64:
             self.used_api8.add("maps over 128 x 64")
         if e is None:
-            e = {"table": m}
+            self._drop_gone_maps()
+            self.map_next += 1
+            e = {"slot": self.map_next, "bytes": 0}
+            g.rawset(self.map_slots, e["slot"], m)
             self.maps.append(e)
-        e.update(rows=rows, hex=hexed, cells=cells, w=w, epoch=self.map_epoch)
+        bytes_ = w * n * 2  # the cells count against the 1 MB, as the runtime's (a map's room only grows)
+        if bytes_ > e["bytes"]:
+            limit = getattr(self, "mem_max", 0)
+            over = lambda: limit and self.lua.get_memory_used() + self.map_bytes - e["bytes"] + bytes_ > limit
+            if over():  # first what's garbage (maps no one has any more among it), as the runtime does
+                g.collectgarbage("collect")
+                self._drop_gone_maps()
+            if over():
+                raise ValueError(f"{who}: a {w} x {n} map would take the cart past its 1 MB of memory")
+            self.map_bytes += bytes_ - e["bytes"]
+            e["bytes"] = bytes_
+            if limit:
+                self.lua.set_max_memory(limit - self.map_bytes)
+        e.update(rows=rows, hex=hexed, cells=cells, w=w, epoch=self.map_epoch)  # (the table itself only in map_slots: weakly)
         return e
+
+    def _drop_gone_maps(self):
+        """The maps whose tables have been collected: their cells given back."""
+        g = self.lua.globals()
+        for x in list(self.maps):
+            if g.rawget(self.map_slots, x["slot"]) is None:
+                self.map_bytes -= x["bytes"]
+                self.maps.remove(x)
+        limit = getattr(self, "mem_max", 0)
+        if limit:
+            self.lua.set_max_memory(limit - self.map_bytes)
 
     def map(self, cx=0, cy=0, sx=0, sy=0, cw=None, ch=None, layer=None, m=None):
         mp = self._map("map", m, 8)
@@ -604,7 +640,8 @@ class Cart:
         row = row + "." * max(0, (c + 1) * per - len(row))
         cell = "." * per if n is None else (f"{n:02x}" if hexed else TILES[n])
         row = row[:c * per] + cell + row[(c + 1) * per:]
-        self.lua.globals().rawset(mp["table"], r + 1, row)
+        g = self.lua.globals()
+        g.rawset(g.rawget(self.map_slots, mp["slot"]), r + 1, row)
         mp["rows"][r] = row
         mp["cells"][r][c] = n
 
@@ -1661,6 +1698,10 @@ def check(path: Path, frames: int, preview: Path | None, theme: str, dump_input:
         res["images"] = {"count": len(image_info), "bytes": len(bundle)}
     fps = 60 if re.search(r"function\s+_update60\b", src) else 30
     cart = Cart(lua, fps)
+    try:
+        cart.mem_max = lua.get_max_memory() or 0  # (the maps take theirs out of it: Cart._map)
+    except AttributeError:
+        cart.mem_max = 0
     cart.cart_name = path.stem
     if full:
         cart.full, cart.hd_w, cart.hd_h = True, GLASS_W, GLASS_H

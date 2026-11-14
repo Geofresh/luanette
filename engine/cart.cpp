@@ -751,9 +751,39 @@ Cart::Impl::Map& get_map(lua_State* L, const char* who, int at) {
   const int t = lua_gettop(L);
   const void* id = lua_topointer(L, t);
   Cart::Impl& I = *S;
+  // The tables read, by slot, held weakly (a map nothing uses any more can go, and its cells with it).
+  static const char kKey = 0;
+  if (lua_rawgetp(L, LUA_REGISTRYINDEX, &kKey) != LUA_TTABLE) {
+    lua_pop(L, 1);
+    lua_newtable(L);
+    lua_newtable(L);
+    lua_pushliteral(L, "v");
+    lua_setfield(L, -2, "__mode");
+    lua_setmetatable(L, -2);
+    lua_pushvalue(L, -1);
+    lua_rawsetp(L, LUA_REGISTRYINDEX, &kKey);
+  }
+  const int slots = lua_gettop(L);
+  const auto slot = [&](const Map& e) { return static_cast<lua_Integer>(&e - I.maps) + 1; };
+  // A slot whose table has been collected gives its cells back.
+  const auto drop_gone = [&]() {
+    for (auto& e : I.maps) {
+      if (!e.cells) continue;
+      const bool gone = lua_rawgeti(L, slots, slot(e)) == LUA_TNIL;
+      lua_pop(L, 1);
+      if (!gone) continue;
+      I.host->release(e.cells);
+      I.heap.used -= e.cap * sizeof(uint16_t);
+      e = Map();
+    }
+  };
   Map* m = nullptr;
   for (auto& e : I.maps)
-    if (e.table == id) m = &e;
+    if (e.table == id) {  // (the same address may be a new table, the old one gone: the slot says)
+      lua_rawgeti(L, slots, slot(e));
+      if (lua_rawequal(L, -1, t)) m = &e;
+      lua_pop(L, 1);
+    }
   ++I.map_clock;
   const auto label = [&](int r) {  // a row, as the cart names it
     return global ? "MAP[" + std::to_string(r) + "]" : "the map's row " + std::to_string(r);
@@ -779,20 +809,13 @@ Cart::Impl::Map& get_map(lua_State* L, const char* who, int at) {
       lua_settop(L, base);
       return *m;
     }
-  } else {  // new: the slot used longest ago, and the table held in the registry in its place
+  } else {  // new: a slot whose map is gone, else the one used longest ago
+    drop_gone();
     m = &I.maps[0];
     for (auto& e : I.maps)
       if (e.used < m->used) m = &e;
-    static const char kKey = 0;
-    if (lua_rawgetp(L, LUA_REGISTRYINDEX, &kKey) != LUA_TTABLE) {
-      lua_pop(L, 1);
-      lua_newtable(L);
-      lua_pushvalue(L, -1);
-      lua_rawsetp(L, LUA_REGISTRYINDEX, &kKey);
-    }
     lua_pushvalue(L, t);
-    lua_rawseti(L, -2, static_cast<lua_Integer>(m - I.maps) + 1);
-    lua_pop(L, 1);
+    lua_rawseti(L, slots, slot(*m));
     m->table = id;
   }
   m->table = nullptr;  // (until it's read whole: an error part way leaves no half-read map)
@@ -816,10 +839,22 @@ Cart::Impl::Map& get_map(lua_State* L, const char* who, int at) {
   }
   const size_t need = static_cast<size_t>(w) * rows;
   if (need > m->cap) {
+    // A map's cells count against the cart's 1 MB, as its Lua memory does (the same count: Lua can't
+    // have what the maps hold).
+    const size_t had = m->cap * sizeof(uint16_t), bytes = need * sizeof(uint16_t);
+    if (I.heap.used - had + bytes > kMaxMemory) {  // first what's garbage (maps no one has any more among it)
+      lua_gc(L, LUA_GCCOLLECT);
+      drop_gone();
+    }
+    if (I.heap.used - had + bytes > kMaxMemory)
+      luaL_error(L, "%s: a %d x %d map would take the cart past its 1 MB of memory", who, w, static_cast<int>(rows));
     if (m->cells) I.host->release(m->cells);
-    m->cells = static_cast<uint16_t*>(I.host->alloc(need * sizeof(uint16_t)));
-    m->cap = m->cells ? need : 0;
+    I.heap.used -= had;
+    m->cap = 0;
+    m->cells = static_cast<uint16_t*>(I.host->alloc(bytes));
     if (!m->cells) luaL_error(L, "%s: no memory for a %d x %d map", who, w, static_cast<int>(rows));
+    m->cap = need;
+    I.heap.used += bytes;
   }
   std::fill(m->cells, m->cells + need, Cart::Impl::kNoTile);
   for (int r = 0; r < static_cast<int>(rows); ++r) {

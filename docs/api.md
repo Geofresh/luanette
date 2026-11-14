@@ -207,7 +207,8 @@ Several maps (API 8): `map()`, `tline()`, `mget()`, `mset()` and `msize()` take 
 last argument, `MAP` when it's left out. A background map behind the level, a minimap, each room of a
 house its own table: `map(0, 0, 0, 0, nil, nil, 0, SKY)` then `map()`. The runtime keeps the last 8
 it read and checks each against its table once a frame, so changing a row (`MAP[3] = "..."`) shows
-at the next frame. Assigning another table to `MAP` (`MAP = LEVEL2`) switches maps too.
+at the next frame. A map read takes two bytes a cell of the cart's 1 MB (a 256 x 256 one, 128 KB);
+a map the cart no longer has (an old level's copy) gives them back. Assigning another table to `MAP` (`MAP = LEVEL2`) switches maps too.
 The playground's Map tab paints any of these tables with the cart's sprites and writes them for
 you; painting a sprite past 63 makes the map hex.
 
